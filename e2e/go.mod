@@ -1,10 +1,15 @@
-module soulhelm.invalid/e2e
+// INTERIM (soul-hq episode 0069): pinned wholesale to the PRE-RENAME published
+// composition (soulhelm v0.1.0 inside soulnode v0.3.1) — the renamed tree
+// cannot ride the old product, so the replace is dropped until the product
+// tags v0.8.0 pinning soulstream-shell v0.2.0; the ceremony re-proof lands
+// with that bump.
+module soulstream-shell.invalid/e2e
 
 go 1.26.2
 
 require (
 	github.com/impire-io/soulfold v0.3.4
-	github.com/impire-io/soulhelm v0.0.0
+	github.com/impire-io/soulhelm v0.1.0
 	github.com/impire-io/soulidentity v0.1.0
 	github.com/impire-io/soulnode v0.3.1
 	github.com/impire-io/soulstream v0.7.0
@@ -63,5 +68,3 @@ require (
 	golang.org/x/text v0.40.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 )
-
-replace github.com/impire-io/soulhelm => ../

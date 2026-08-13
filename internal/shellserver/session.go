@@ -1,4 +1,4 @@
-package helmserver
+package shellserver
 
 import (
 	"bytes"
@@ -15,14 +15,14 @@ import (
 	"github.com/nats-io/nats.go"
 	"golang.org/x/oauth2"
 
-	siclient "github.com/impire-io/soulidentity/client"
-	"github.com/impire-io/soulstream/realm"
+	"github.com/impire-io/soulstream-core/realm"
+	siclient "github.com/impire-io/soulstream-identity/client"
 )
 
 // session is one signed-in human: their own NATS admission (sentinel +
 // their fold-issued bearer through the OIDC callout lane), their own
 // realm client, their own signer. Delegated authority, never borrowed
-// identity (S6): the helm signs as no one. Memory only — nothing here
+// identity (S6): the shell signs as no one. Memory only — nothing here
 // touches disk.
 type session struct {
 	Persona string // the admitted persona-shaped id
@@ -38,7 +38,7 @@ type oidcRP struct {
 	pending  map[string]string // oauth state -> PKCE verifier
 }
 
-// newOIDCRP discovers the issuer and registers the helm through
+// newOIDCRP discovers the issuer and registers the shell through
 // RFC 7591 DCR — no pre-provisioned client (design 0001 §6).
 func newOIDCRP(ctx context.Context, opts Options, boundAddr string) (*oidcRP, error) {
 	var provider *oidc.Provider
@@ -66,7 +66,7 @@ func newOIDCRP(ctx context.Context, opts Options, boundAddr string) (*oidcRP, er
 	redirect := "http://" + boundAddr + "/callback"
 	reg, _ := json.Marshal(map[string]any{
 		"redirect_uris":              []string{redirect},
-		"client_name":                "soulhelm",
+		"client_name":                "soulstream-shell",
 		"grant_types":                []string{"authorization_code"},
 		"response_types":             []string{"code"},
 		"token_endpoint_auth_method": "none",

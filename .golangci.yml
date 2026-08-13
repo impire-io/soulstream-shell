@@ -17,4 +17,4 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/impire-io/soulhelm
+        - github.com/impire-io/soulstream-shell

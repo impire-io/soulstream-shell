@@ -1,10 +1,10 @@
-// Package helmserver is the helm's engine: the soulsystem's human
+// Package shellserver is the shell's engine: the soulsystem's human
 // cockpit, rendered server-side over a backend-held realm client and
 // pushed to the browser as Datastar SSE patches (design 0001 §5). The
-// helm is a pure consumer of public component surfaces and custodies
+// shell is a pure consumer of public component surfaces and custodies
 // nothing durable — sessions live in memory, credentials never reach
 // the browser, and the store of record stays the realm's.
-package helmserver
+package shellserver
 
 import (
 	"context"
@@ -18,20 +18,20 @@ import (
 
 	"github.com/nats-io/nats.go"
 
-	siclient "github.com/impire-io/soulidentity/client"
-	"github.com/impire-io/soulstream/identity"
-	"github.com/impire-io/soulstream/realm"
-	"github.com/impire-io/soulstream/topic"
+	"github.com/impire-io/soulstream-core/identity"
+	"github.com/impire-io/soulstream-core/realm"
+	"github.com/impire-io/soulstream-core/topic"
+	siclient "github.com/impire-io/soulstream-identity/client"
 )
 
-// Options configures a helm. The helm never founds or owns anything:
+// Options configures a shell. The shell never founds or owns anything:
 // every field points at surfaces the deployment already runs.
 type Options struct {
-	// Listen is the loopback HTTP address for the helm surface.
+	// Listen is the loopback HTTP address for the shell surface.
 	Listen string
 	// NATSURL reaches the realm's server.
 	NATSURL string
-	// CredsPath is the helm's own read lane — an ordinary creds file
+	// CredsPath is the shell's own read lane — an ordinary creds file
 	// the deployment supplies (a soulnode plane hands its ops lane).
 	CredsPath string
 	// CredsUser is the principal name that creds file connects as; the
@@ -46,14 +46,14 @@ type Options struct {
 	// account segment).
 	Account string
 	// Issuer is the OIDC authorization server (the bundled fold by
-	// default); the helm registers itself via RFC 7591 DCR at startup.
+	// default); the shell registers itself via RFC 7591 DCR at startup.
 	Issuer string
 	// Ready, when set, is called with the bound listen address once
 	// the surface serves.
 	Ready func(addr string)
 }
 
-// Server is one running helm.
+// Server is one running shell.
 type Server struct {
 	opts Options
 
@@ -70,13 +70,13 @@ type Server struct {
 	httpSrv *http.Server
 }
 
-// Run starts the helm and blocks until ctx is canceled or the surface
+// Run starts the shell and blocks until ctx is canceled or the surface
 // fails. Returned means drained: sessions closed, connections gone.
 func Run(ctx context.Context, opts Options) error {
 	if opts.Listen == "" || opts.NATSURL == "" || opts.Realm == "" ||
 		opts.CredsPath == "" || opts.CredsUser == "" ||
 		opts.SentinelPath == "" || opts.Account == "" || opts.Issuer == "" {
-		return errors.New("helm: every Options field except Ready is required")
+		return errors.New("shell: every Options field except Ready is required")
 	}
 	s := &Server{opts: opts, sessions: map[string]*session{}, keyCache: map[string]string{}}
 
@@ -84,23 +84,23 @@ func Run(ctx context.Context, opts Options) error {
 	s.nc, err = nats.Connect(opts.NATSURL, nats.UserCredentials(opts.CredsPath),
 		nats.MaxReconnects(-1), nats.ReconnectWait(300*time.Millisecond))
 	if err != nil {
-		return fmt.Errorf("helm: read lane: %w", err)
+		return fmt.Errorf("shell: read lane: %w", err)
 	}
 	defer s.nc.Close()
 	s.rc, err = realm.NewClient(ctx, s.nc, realm.Config{Realm: opts.Realm})
 	if err != nil {
-		return fmt.Errorf("helm: realm client: %w", err)
+		return fmt.Errorf("shell: realm client: %w", err)
 	}
 	s.dir = siclient.New(s.nc, opts.Account, opts.CredsUser)
 
 	ln, err := listen(opts.Listen)
 	if err != nil {
-		return fmt.Errorf("helm: listen: %w", err)
+		return fmt.Errorf("shell: listen: %w", err)
 	}
 	boundAddr := ln.Addr().String()
 	if s.oidcState, err = newOIDCRP(ctx, opts, boundAddr); err != nil {
 		_ = ln.Close()
-		return fmt.Errorf("helm: %w", err)
+		return fmt.Errorf("shell: %w", err)
 	}
 
 	mux := http.NewServeMux()

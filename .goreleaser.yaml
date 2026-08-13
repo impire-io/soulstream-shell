@@ -1,8 +1,8 @@
 version: 2
-project_name: soulhelm
+project_name: soulstream-shell
 
 builds:
-  - main: ./cmd/soulhelm
+  - main: ./cmd/soulstream-shell
     env: [CGO_ENABLED=0]
     goos: [linux, darwin]
     goarch: [amd64, arm64]
@@ -27,4 +27,4 @@ changelog:
 release:
   github:
     owner: impire-io
-    name: soulhelm
+    name: soulstream-shell

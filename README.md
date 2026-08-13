@@ -1,15 +1,15 @@
-# soulhelm — the helm
+# soulstream-shell — the shell
 
 The soulsystem's human cockpit: one browser surface where a person
 observes the whole running system — topics, work, signatures, plane
 health — and acts in it, beside the MCP door that serves machines.
 Design and journey live in the ecosystem hq
 ([impire-io/soul-hq](https://github.com/impire-io/soul-hq), design doc
-`02-DESIGN/soulhelm/0001-soulhelm-the-helm.md`).
+`02-DESIGN/soulstream-shell/0001-soulstream-shell-the-shell.md`).
 
 Founding articles, held by the standing e2e gate:
 
-- **Pure consumer.** The helm is built exclusively on public, tagged
+- **Pure consumer.** The shell is built exclusively on public, tagged
   component surfaces — soulstream's realm and topic packages,
   soulidentity's client, any OIDC authorization server (the bundled
   soulfold by default). The e2e module's path sits outside this
@@ -20,20 +20,20 @@ Founding articles, held by the standing e2e gate:
 - **Delegated authority, never borrowed identity.** Every act rides
   the signed-in person's own admission (sentinel + their fold-issued
   bearer through the OIDC callout lane) and their own persona
-  signature. The helm signs as no one.
+  signature. The shell signs as no one.
 
 ## Run
 
-As a soulnode plane (the default distribution): `planes.helm` — see
+As a soulnode plane (the default distribution): `planes.shell` — see
 soulnode. Standalone:
 
 ```
-soulhelm -listen 127.0.0.1:8500 -nats nats://127.0.0.1:4222 \
+soulstream-shell -listen 127.0.0.1:8500 -nats nats://127.0.0.1:4222 \
   -creds <read-lane.creds> -creds-user <name> -sentinel <sentinel.creds> \
   -realm home -account <realm-account-pub> -issuer <fold-or-AS-url>
 ```
 
-The helm registers itself with the issuer via RFC 7591 DCR at startup.
+The shell registers itself with the issuer via RFC 7591 DCR at startup.
 
 ## Develop
 
@@ -45,5 +45,5 @@ All green before every commit; none skipped.
 
 [Sustainable Use License](LICENSE) (fair-code). Use, modify, and
 self-host freely for internal or non-commercial purposes; offering
-soulhelm to others as a paid product or service requires an agreement.
+soulstream-shell to others as a paid product or service requires an agreement.
 See [impire.io/license](https://impire.io/license/).

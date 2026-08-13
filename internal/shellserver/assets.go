@@ -1,4 +1,4 @@
-package helmserver
+package shellserver
 
 import (
 	"embed"
@@ -12,7 +12,7 @@ var assetsFS embed.FS
 
 // Assets is the embedded static tree served under /assets/ — the
 // design-system token source, vendored fonts, the Datastar bundle, and
-// the icon set. Fully self-contained: the helm makes no external
+// the icon set. Fully self-contained: the shell makes no external
 // fetches (design 0001 §7, the offline render gate).
 func Assets() fs.FS {
 	sub, _ := fs.Sub(assetsFS, "assets")
