@@ -1,0 +1,7 @@
+# Local Claude settings never leave the machine.
+.claude/settings.local.json
+.DS_Store
+/bin/
+/dist/
+*.test
+*.out

@@ -1,0 +1,199 @@
+/* ============================================================
+   Soulsystem — the single token/component source (Bar 4 rig)
+   Tokens verbatim from the Soulsystem Design System project;
+   the Google Fonts CDN import is replaced by vendored binaries.
+   ============================================================ */
+
+/* --- tokens/fonts.css (CDN import replaced by vendored @font-face) --- */
+@font-face{font-family:"Archivo";src:url("fonts/archivo-400-800.woff2") format("woff2");font-weight:400 800;font-stretch:62% 125%;font-display:swap}
+@font-face{font-family:"JetBrains Mono";src:url("fonts/jetbrainsmono-400.woff2") format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"JetBrains Mono";src:url("fonts/jetbrainsmono-500.woff2") format("woff2");font-weight:500;font-display:swap}
+@font-face{font-family:"JetBrains Mono";src:url("fonts/jetbrainsmono-700.woff2") format("woff2");font-weight:700;font-display:swap}
+:root{--font-core:"Archivo","Helvetica Neue",Arial,sans-serif;--font-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace}
+
+/* --- tokens/colors.css --- */
+:root{
+--shell-050:#FBF8F1;--shell-100:#F6F2E9;--shell-200:#EFE9DC;--shell-300:#E4DCCB;--shell-400:#D5CAB4;--shell-500:#BFB199;--shell-600:#A2937A;
+--ink-900:#1B1917;--ink-800:#24211D;--ink-700:#33302B;--ink-500:#5A554C;--ink-300:#8C8578;--ink-200:#B8B0A1;
+--amber-700:#9E4610;--amber-600:#C25A11;--amber-500:#E07B26;--amber-400:#F0A03C;--amber-200:#F7CE9B;--amber-100:#FBE7CC;
+--teal-700:#0C4741;--teal-600:#125E58;--teal-500:#1E7A72;--teal-300:#7FB8B2;--teal-100:#D3E7E4;
+--red-600:#A32F1D;--red-500:#C2402B;--red-100:#F6DBD5;
+--green-600:#2F6A2C;--green-500:#3E7A3A;--green-100:#DCEBD8;
+--yellow-500:#D3A21B;--yellow-100:#F7EAC2;
+--surface-page:var(--shell-100);
+--surface-card:var(--shell-050);
+--surface-raised:#FFFDF8;
+--surface-inset:var(--shell-200);
+--surface-well:var(--shell-300);
+--surface-screen:#14201E;
+--surface-tape:var(--ink-800);
+--surface-overlay:rgba(27,25,23,.42);
+--text-body:var(--ink-900);
+--text-secondary:var(--ink-700);
+--text-muted:var(--ink-500);
+--text-faint:var(--ink-300);
+--text-inverse:var(--shell-050);
+--text-screen:#8FE3B0;
+--text-link:var(--teal-600);
+--text-link-hover:var(--amber-600);
+--accent:var(--amber-500);
+--accent-hover:var(--amber-600);
+--accent-press:var(--amber-700);
+--accent-soft:var(--amber-100);
+--accent-alt:var(--teal-500);
+--accent-alt-soft:var(--teal-100);
+--danger:var(--red-500);--danger-soft:var(--red-100);
+--success:var(--green-500);--success-soft:var(--green-100);
+--warning:var(--yellow-500);--warning-soft:var(--yellow-100);
+--border-hairline:#D9D0BE;
+--border-strong:var(--ink-900);
+--border-etch:#C3B79F;
+--focus-ring:var(--teal-500);
+--channel-human:var(--amber-500);
+--channel-machine:var(--teal-500);
+}
+
+/* --- tokens/typography.css --- */
+:root{
+--text-2xs:11px;--text-xs:12px;--text-sm:13px;--text-base:15px;--text-md:17px;--text-lg:20px;--text-xl:25px;--text-2xl:32px;--text-3xl:42px;--text-4xl:56px;--text-5xl:76px;
+--leading-tight:1.06;--leading-snug:1.22;--leading-normal:1.5;--leading-loose:1.7;
+--weight-regular:400;--weight-medium:500;--weight-semibold:600;--weight-bold:700;
+--tracking-label:.14em;--tracking-wide:.04em;--tracking-normal:0;--tracking-tight:-.015em;--tracking-display:-.03em;
+--width-narrow:82;--width-normal:100;--width-wide:118;
+--type-display:var(--weight-bold) var(--text-4xl)/var(--leading-tight) var(--font-core);
+--type-title:var(--weight-semibold) var(--text-2xl)/var(--leading-snug) var(--font-core);
+--type-heading:var(--weight-semibold) var(--text-lg)/var(--leading-snug) var(--font-core);
+--type-body:var(--weight-regular) var(--text-base)/var(--leading-normal) var(--font-core);
+--type-ui:var(--weight-medium) var(--text-sm)/1.3 var(--font-core);
+--type-label:var(--weight-bold) var(--text-2xs)/1.1 var(--font-mono);
+--type-data:var(--weight-regular) var(--text-sm)/1.45 var(--font-mono);
+}
+
+/* --- tokens/spacing.css --- */
+:root{
+--space-0:0px;--space-1:2px;--space-2:4px;--space-3:6px;--space-4:8px;--space-5:12px;--space-6:16px;--space-7:20px;--space-8:24px;--space-9:32px;--space-10:40px;--space-11:56px;--space-12:72px;--space-13:96px;
+--gutter:var(--space-6);
+--pad-control:var(--space-3) var(--space-5);
+--pad-card:var(--space-7);
+--pad-section:var(--space-12) var(--space-9);
+--rail-width:248px;
+--content-max:1080px;
+--measure:66ch;
+}
+
+/* --- tokens/surfaces.css --- */
+:root{
+--radius-none:0px;--radius-xs:2px;--radius-sm:3px;--radius-md:5px;--radius-lg:8px;--radius-xl:12px;--radius-pill:999px;
+--border-width:1px;--border-width-thick:2px;
+--bevel-raised:inset 0 1px 0 #FFFFFF, inset 0 -1px 0 rgba(27,25,23,.10);
+--bevel-inset:inset 0 1px 2px rgba(27,25,23,.18), inset 0 -1px 0 #FFFFFF;
+--shadow-key:0 1px 0 var(--border-etch);
+--shadow-card:0 1px 0 var(--border-etch), 0 2px 6px rgba(27,25,23,.06);
+--shadow-panel:0 2px 0 var(--border-etch), 0 8px 20px rgba(27,25,23,.10);
+--shadow-modal:0 3px 0 var(--shell-600), 0 24px 48px rgba(27,25,23,.22);
+--glow-led:0 0 0 2px rgba(224,123,38,.18), 0 0 8px rgba(224,123,38,.55);
+--glow-screen:inset 0 0 40px rgba(143,227,176,.12);
+--engrave-dark:0 -1px 0 rgba(0,0,0,.42), 0 1px 0 rgba(255,255,255,.20);
+--engrave-light:0 1px 0 rgba(255,255,255,.85), 0 -1px 0 rgba(27,25,23,.16);
+--texture-rib:repeating-linear-gradient(90deg,rgba(27,25,23,.05) 0 1px,transparent 1px 4px);
+--texture-scanline:repeating-linear-gradient(180deg,rgba(0,0,0,.14) 0 1px,transparent 1px 3px);
+--texture-grain:repeating-linear-gradient(45deg,rgba(27,25,23,.028) 0 1px,transparent 1px 3px);
+}
+
+/* --- tokens/motion.css --- */
+:root{
+--dur-instant:70ms;--dur-fast:120ms;--dur-base:180ms;--dur-slow:280ms;--dur-spool:900ms;
+--ease-mech:cubic-bezier(.2,.8,.3,1);
+--ease-detent:cubic-bezier(.5,0,.2,1);
+--ease-linear:linear;
+--transition-control:background var(--dur-fast) var(--ease-mech),color var(--dur-fast) var(--ease-mech),box-shadow var(--dur-fast) var(--ease-mech),transform var(--dur-instant) var(--ease-detent);
+--press-shift:translateY(1px);
+}
+@media (prefers-reduced-motion:reduce){:root{
+--dur-instant:0ms;--dur-fast:0ms;--dur-base:0ms;--dur-slow:0ms;--dur-spool:0ms;
+}}
+
+/* --- tokens/base.css --- */
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--surface-page);color:var(--text-body);font:var(--type-body);-webkit-font-smoothing:antialiased}
+a{color:var(--text-link);text-decoration:none;border-bottom:1px solid currentColor;transition:color var(--dur-fast) var(--ease-mech)}
+a:hover{color:var(--text-link-hover)}
+::selection{background:var(--amber-200);color:var(--ink-900)}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+
+/* ============================================================
+   Shared component layer — consumed by BOTH surfaces unchanged.
+   Written in the system's idiom: molded keys, label strips,
+   LED pips, segmented meters, one CRT surface.
+   ============================================================ */
+
+body{background-image:var(--texture-grain)}
+
+/* Transport bar — the ink housing every surface hangs from */
+.tbar{display:flex;align-items:center;gap:var(--space-6);background:var(--ink-900);background-image:var(--texture-rib);color:var(--text-inverse);padding:var(--space-5) var(--space-8);border-bottom:var(--border-width-thick) solid var(--border-etch)}
+.tbar .wordmark{font-family:var(--font-core);font-weight:var(--weight-bold);font-size:22px;letter-spacing:-.035em;color:var(--amber-400);font-variation-settings:'wdth' 88;text-shadow:var(--engrave-dark)}
+.tbar .spacer{flex:1}
+.tbar .who{font:var(--type-data);font-size:var(--text-xs);color:var(--shell-400)}
+
+/* Label strips — the label-maker register; component identity lives here */
+.strip{display:inline-block;font:var(--type-label);letter-spacing:var(--tracking-label);text-transform:uppercase;background:var(--ink-800);color:var(--shell-200);padding:3px 8px;border-radius:var(--radius-xs);text-shadow:var(--engrave-dark)}
+.strip.shell{background:var(--surface-inset);color:var(--text-secondary);text-shadow:var(--engrave-light);border:var(--border-width) solid var(--border-etch)}
+
+/* LED pips */
+.led{width:8px;height:8px;border-radius:var(--radius-pill);background:var(--accent);box-shadow:var(--glow-led);display:inline-block}
+.led.machine{background:var(--channel-machine);box-shadow:0 0 0 2px rgba(30,122,114,.18),0 0 8px rgba(30,122,114,.55)}
+.led.off{background:var(--shell-400);box-shadow:none}
+
+/* Cards — molded panels */
+.card{background:var(--surface-card);border:var(--border-width) solid var(--border-hairline);border-radius:var(--radius-md);box-shadow:var(--shadow-card);padding:var(--pad-card)}
+.card.raised{background:var(--surface-raised);box-shadow:var(--shadow-panel)}
+.card .head{display:flex;align-items:center;gap:var(--space-4);margin-bottom:var(--space-5)}
+.card h1,.card h2{margin:0}
+h1{font:var(--type-title);letter-spacing:var(--tracking-display)}
+h2{font:var(--type-heading)}
+.lede{font:var(--type-body);color:var(--text-muted);margin:var(--space-2) 0 0;max-width:var(--measure)}
+
+/* Molded keys */
+.btn{font:var(--type-ui);font-weight:var(--weight-semibold);color:var(--text-inverse);text-shadow:var(--engrave-dark);background:var(--accent-hover);border:var(--border-width) solid var(--border-strong);border-radius:var(--radius-sm);box-shadow:var(--bevel-raised),var(--shadow-key);padding:var(--pad-control);cursor:pointer;transition:var(--transition-control);display:inline-flex;align-items:center;gap:var(--space-4)}
+.btn:hover{background:var(--accent-press)}
+.btn:active{transform:var(--press-shift);box-shadow:var(--bevel-inset)}
+.btn.ghost{background:var(--surface-card);color:var(--text-body);text-shadow:var(--engrave-light)}
+.btn.ghost:hover{background:var(--surface-inset)}
+.btn svg{width:16px;height:16px}
+
+/* Fields */
+label.field{display:flex;flex-direction:column;gap:var(--space-2);font:var(--type-label);letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--text-muted)}
+input,textarea,select{background:var(--surface-raised);border:var(--border-width) solid var(--border-hairline);border-radius:var(--radius-sm);box-shadow:var(--bevel-inset);color:var(--text-body);padding:var(--space-3) var(--space-5);font:var(--type-body);transition:var(--transition-control)}
+input:focus,textarea:focus{outline:0;border-color:var(--focus-ring);box-shadow:var(--bevel-inset),0 0 0 2px var(--accent-alt-soft)}
+input[readonly]{color:var(--text-muted);background:var(--surface-inset)}
+input::placeholder{color:var(--text-faint)}
+
+/* Pills & badges — status, channels */
+.pill{display:inline-flex;align-items:center;gap:var(--space-3);font:var(--type-label);letter-spacing:var(--tracking-wide);text-transform:uppercase;border:var(--border-width) solid var(--border-hairline);border-radius:var(--radius-pill);padding:2px 9px;color:var(--text-muted);background:var(--surface-card)}
+.pill.ok{color:var(--green-600);border-color:var(--green-500);background:var(--success-soft)}
+.pill.warn{color:var(--amber-700);border-color:var(--amber-500);background:var(--accent-soft)}
+.pill.human{color:var(--amber-700);border-color:var(--channel-human);background:var(--accent-soft)}
+.pill.machine{color:var(--teal-700);border-color:var(--channel-machine);background:var(--accent-alt-soft)}
+
+/* Segmented VU meter — the house readout */
+.meter{position:relative;height:12px;background:var(--surface-inset);border:var(--border-width) solid var(--border-etch);border-radius:var(--radius-xs);box-shadow:var(--bevel-inset);overflow:hidden}
+.meter .fill{position:absolute;inset:0;background:linear-gradient(90deg,var(--teal-500),var(--teal-300))}
+.meter .fill.human{background:linear-gradient(90deg,var(--amber-600),var(--amber-400))}
+.meter .fill.hot{background:linear-gradient(90deg,var(--amber-500),var(--red-500))}
+.meter::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0 4px,var(--surface-inset) 4px 6px)}
+
+/* Tables */
+.tablewrap{border:var(--border-width) solid var(--border-hairline);border-radius:var(--radius-md);overflow:hidden;background:var(--surface-card);box-shadow:var(--shadow-card)}
+table{width:100%;border-collapse:collapse;font:var(--type-body);font-size:var(--text-sm)}
+thead th{font:var(--type-label);letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--text-muted);text-align:left;padding:var(--space-4) var(--space-6);background:var(--surface-inset);border-bottom:var(--border-width) solid var(--border-hairline)}
+tbody td{padding:var(--space-4) var(--space-6);border-bottom:var(--border-width) solid var(--border-hairline);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--surface-inset)}
+td.mono,.mono{font:var(--type-data)}
+
+/* The one dark surface — CRT glass */
+.screen{background:var(--surface-screen);background-image:var(--texture-scanline);box-shadow:var(--glow-screen),var(--bevel-inset);border:var(--border-width-thick) solid var(--ink-800);border-radius:var(--radius-md);color:var(--text-screen);font:var(--type-data);padding:var(--space-6) var(--space-7);overflow-x:auto}
+.screen .dim{opacity:.55}
+
+/* Footer line */
+.foot{margin-top:var(--space-8);font:var(--type-label);letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--text-faint)}

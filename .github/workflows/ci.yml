@@ -1,0 +1,37 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # Freshly tagged impire-io modules resolve without proxy lag.
+  GOPRIVATE: github.com/impire-io
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "unformatted files:" >&2
+            echo "$unformatted" >&2
+            exit 1
+          fi
+      - name: build
+        run: go build ./...
+      - name: test
+        run: go test ./...
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest

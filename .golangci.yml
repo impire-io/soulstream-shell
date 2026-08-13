@@ -1,0 +1,20 @@
+version: "2"
+linters:
+  enable:
+    - revive
+    - misspell
+    - unconvert
+  settings:
+    errcheck:
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/impire-io/soulhelm
