@@ -1,18 +1,13 @@
-// INTERIM (soul-hq episode 0069): pinned wholesale to the PRE-RENAME published
-// composition (soulhelm v0.1.0 inside soulnode v0.3.1) — the renamed tree
-// cannot ride the old product, so the replace is dropped until the product
-// tags v0.8.0 pinning soulstream-shell v0.2.0; the ceremony re-proof lands
-// with that bump.
 module soulstream-shell.invalid/e2e
 
 go 1.26.2
 
 require (
-	github.com/impire-io/soulfold v0.3.4
-	github.com/impire-io/soulhelm v0.1.0
-	github.com/impire-io/soulidentity v0.1.0
-	github.com/impire-io/soulnode v0.3.1
-	github.com/impire-io/soulstream v0.7.0
+	github.com/impire-io/soulstream v0.8.0
+	github.com/impire-io/soulstream-core v0.8.0
+	github.com/impire-io/soulstream-identity v0.2.0
+	github.com/impire-io/soulstream-idp v0.4.0
+	github.com/impire-io/soulstream-shell v0.2.0
 	github.com/nats-io/nats.go v1.52.0
 )
 
@@ -35,9 +30,9 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/gowebpki/jcs v1.0.1 // indirect
-	github.com/impire-io/soulrealm v0.1.0 // indirect
-	github.com/impire-io/soulstream-archivist v0.2.0 // indirect
-	github.com/impire-io/soulstream/node v0.7.0 // indirect
+	github.com/impire-io/soulstream-archivist v0.3.0 // indirect
+	github.com/impire-io/soulstream-mcp v0.1.0 // indirect
+	github.com/impire-io/soulstream-workloads v0.2.0 // indirect
 	github.com/klauspost/compress v1.19.1 // indirect
 	github.com/minio/highwayhash v1.0.4 // indirect
 	github.com/modelcontextprotocol/go-sdk v1.6.1 // indirect
@@ -68,3 +63,5 @@ require (
 	golang.org/x/text v0.40.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 )
+
+replace github.com/impire-io/soulstream-shell => ../

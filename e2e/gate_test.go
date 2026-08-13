@@ -29,13 +29,13 @@ import (
 
 	"github.com/nats-io/nats.go"
 
-	"github.com/impire-io/soulfold/authtest"
-	helmembed "github.com/impire-io/soulhelm/embed"
-	siclient "github.com/impire-io/soulidentity/client"
-	"github.com/impire-io/soulnode/ceremony"
-	"github.com/impire-io/soulnode/node"
-	"github.com/impire-io/soulstream/realm"
-	"github.com/impire-io/soulstream/topic"
+	"github.com/impire-io/soulstream-core/realm"
+	"github.com/impire-io/soulstream-core/topic"
+	siclient "github.com/impire-io/soulstream-identity/client"
+	"github.com/impire-io/soulstream-idp/authtest"
+	helmembed "github.com/impire-io/soulstream-shell/embed"
+	"github.com/impire-io/soulstream/ceremony"
+	"github.com/impire-io/soulstream/node"
 )
 
 func reservePort(t *testing.T) string {
