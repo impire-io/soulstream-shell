@@ -107,7 +107,9 @@ func Run(ctx context.Context, opts Options) error {
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /assets/", http.StripPrefix("/assets/", http.FileServerFS(Assets())))
+	mux.HandleFunc("GET /favicon.ico", favicon)
 	mux.HandleFunc("GET /{$}", s.page)
+	mux.HandleFunc("GET /home", s.home)
 	mux.HandleFunc("GET /status", s.status)
 	mux.HandleFunc("GET /live", s.live)
 	mux.HandleFunc("GET /login", s.login)

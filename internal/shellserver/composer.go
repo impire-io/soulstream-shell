@@ -54,7 +54,7 @@ func composerReplyTo(opID, author string) string {
 // The form posts itself as form data — no client-held state to drift
 // from the record.
 func renderComposer(topicPath string) string {
-	return fmt.Sprintf(`<form id="composer" class="dock"`+
+	return fmt.Sprintf(`<form id="composer" class="dock centred"`+
 		` data-on:submit="@post('/act/post-turn?topic=%s', {contentType:'form'})">`+
 		`%s<div class="dock-row">%s`+
 		`<button class="btn send" type="submit">%s<span>Send</span></button></div>`+

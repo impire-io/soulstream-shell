@@ -68,7 +68,8 @@ func startRig(t *testing.T) *rig.Rig {
 }
 
 // signIn walks the ceremony and checks the surface a person lands on is the
-// chat shape: a rail of conversations, one conversation, a docked composer.
+// chat shape: the spine of sections, a rail of conversations, one
+// conversation with the details beside it, a docked composer.
 func signIn(t *testing.T, r *rig.Rig, auth *authtest.Authenticator) *http.Client {
 	t.Helper()
 	cl, body, err := r.SignIn(auth, ceremony.FoundingPersona)
@@ -78,12 +79,12 @@ func signIn(t *testing.T, r *rig.Rig, auth *authtest.Authenticator) *http.Client
 	if !strings.Contains(body, "Sign out") {
 		t.Fatalf("shell page shows no session: %s", body)
 	}
-	// The rail of conversations, the conversation, and the composer docked
-	// under it — the shape, in plain words.
+	// The shape, in plain words.
 	for _, want := range []string{
-		`id="conversations"`, "Conversations", `id="dash"`, `class="thread-body"`,
-		`id="composer"`, `class="dock"`, `id="composer-box"`, "Write a message…",
-		`href="/status?topic=`, "System status",
+		`class="iconrail"`, `href="/home`, "Home", "Conversations",
+		`id="conversations"`, `id="dash"`, `class="thread-body"`,
+		`id="details"`, `id="composer"`, `class="dock centred"`, `id="composer-box"`,
+		"Write a message…", `href="/status`, "System status",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("the signed-in page is not the chat shape (%q missing): %s", want, body)
@@ -292,15 +293,35 @@ func TestShellGate(t *testing.T) {
 			t.Fatalf("the conversation is missing %q:\n%s", want, thread)
 		}
 	}
+	// The details beside the conversation are the stream's third target:
+	// who is in here, read off the record, and nothing waiting yet.
+	details := elementsIn(frameFor(t, patchFrames(t, live), `id="details"`))
+	for _, want := range []string{"People", ceremony.FoundingPersona, "1 message",
+		"Status", "Going on", "Waiting on", "Nothing is waiting on anyone"} {
+		if !strings.Contains(details, want) {
+			t.Fatalf("the details panel is missing %q:\n%s", want, details)
+		}
+	}
+
 	// The house readouts moved off the conversation and onto their own
-	// screen — reachable, no longer the centre.
+	// screens — reachable from the spine, no longer the centre.
 	if strings.Contains(thread, "Storage") {
 		t.Fatalf("the plane readouts are still in the conversation:\n%s", thread)
 	}
 	status := get(t, cl, r.ShellURL+"/status")
-	for _, want := range []string{"Storage", "People &amp; sign-in", "Work", "ops ·"} {
+	for _, want := range []string{"Storage", "People &amp; sign-in", "Work", "ops ·",
+		`class="iconrail"`, `class="ir on" href="/status`} {
 		if !strings.Contains(status, want) {
 			t.Fatalf("the system-status screen is missing %q: %s", want, status)
+		}
+	}
+	// Home is reachable from anywhere and renders inside the same frame: the
+	// house at a glance, and a way into every conversation.
+	overview := get(t, cl, r.ShellURL+"/home")
+	for _, want := range []string{"Your realm at a glance", "Storage", "Conversations",
+		"helm-gate", `class="row" href="/?topic=`, `class="ir on" href="/home`} {
+		if !strings.Contains(overview, want) {
+			t.Fatalf("the overview is missing %q: %s", want, overview)
 		}
 	}
 
@@ -449,6 +470,19 @@ func TestShellGate(t *testing.T) {
 		t.Fatalf("no per-message reply control in the conversation:\n%s", seen)
 	}
 
+	// And the details keep up with it: both voices are in the room, and the
+	// work opened earlier is waiting on somebody.
+	side := elementsIn(frameFor(t, patchFrames(t, stream), `id="details"`))
+	for _, want := range []string{ceremony.FoundingPersona, posted.Author,
+		`<span class="you">you</span>`, "Waiting for someone to pick up"} {
+		if !strings.Contains(side, want) {
+			t.Fatalf("the details panel is missing %q:\n%s", want, side)
+		}
+	}
+	if strings.Contains(side, "<a ") {
+		t.Fatalf("the details panel offers a link that goes nowhere:\n%s", side)
+	}
+
 	// Sign out closes the session.
 	if _, err := cl.Post(r.ShellURL+"/logout", "", nil); err != nil {
 		t.Fatal(err)
@@ -489,6 +523,27 @@ func TestShellGate(t *testing.T) {
 	}
 	if !strings.Contains(string(cssBody), "@font-face") {
 		t.Fatal("token source carries no vendored fonts")
+	}
+	// The conversation is capped and centred rather than run to the width of
+	// whatever screen it is on.
+	for _, want := range []string{"--chat-max:", ".centred{padding-inline:max("} {
+		if !strings.Contains(string(cssBody), want) {
+			t.Fatalf("the token source does not hold the conversation's measure (%q)", want)
+		}
+	}
+	// The icon the browser asks for on its own is served, and vendored: no
+	// 404 in the log, no fetch off the machine.
+	ico, err := http.Get(r.ShellURL + "/favicon.ico")
+	if err != nil {
+		t.Fatal(err)
+	}
+	icoBody, _ := io.ReadAll(ico.Body)
+	ico.Body.Close()
+	if ico.StatusCode != http.StatusOK {
+		t.Fatalf("/favicon.ico = %d", ico.StatusCode)
+	}
+	if len(icoBody) < 4 || !bytes.Equal(icoBody[:4], []byte{0, 0, 1, 0}) {
+		t.Fatalf("/favicon.ico is not an icon: %x", icoBody[:min(8, len(icoBody))])
 	}
 	font, err := http.Get(r.ShellURL + "/assets/fonts/archivo-400-800.woff2")
 	if err != nil {

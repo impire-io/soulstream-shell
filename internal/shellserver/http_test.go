@@ -65,8 +65,30 @@ func TestComposerTargetsAreDistinct(t *testing.T) {
 	if !strings.Contains(page, "contentType:'form'") {
 		t.Error("the composer must post itself as form data — it holds no client state")
 	}
-	if !strings.Contains(page, `class="dock"`) || !strings.Contains(page, composerPrompt) {
+	if !strings.Contains(page, `class="dock centred"`) || !strings.Contains(page, composerPrompt) {
 		t.Errorf("the composer does not dock under the conversation: %s", page)
+	}
+}
+
+// The conversation is held to one reading measure, and the composer is held
+// to the same one: a person writes where they read.
+func TestTheConversationColumnIsCentred(t *testing.T) {
+	thread := renderThread(meView())
+	for _, want := range []string{`class="thread-head centred"`, `class="msgs centred"`} {
+		if !strings.Contains(thread, want) {
+			t.Errorf("the conversation is not held to the measure (%s):\n%s", want, thread)
+		}
+	}
+	if !strings.Contains(renderComposer("home/kitchen"), "centred") {
+		t.Error("the composer is not held to the conversation's measure")
+	}
+	css, err := assetsFS.ReadFile("assets/tokens.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(css), "--chat-max:") ||
+		!strings.Contains(string(css), ".centred{padding-inline:max(") {
+		t.Error("the token source does not cap and centre the conversation")
 	}
 }
 
@@ -272,6 +294,152 @@ func TestUnknownVoicesKeepTheirRecordedName(t *testing.T) {
 		if got := nameOf(v, c.persona); got != c.want {
 			t.Errorf("nameOf(%q) = %q, want %q", c.persona, got, c.want)
 		}
+	}
+}
+
+// The spine holds the few places a person can go, and Home is one of them
+// from every screen. The section they are on is marked, and only that one.
+func TestTheSpineReachesHomeFromAnywhere(t *testing.T) {
+	rail := renderIconRail(sectionChat, "home/kitchen")
+	for _, want := range []string{
+		`href="/home?topic=home%2Fkitchen"`, `<span class="lbl">Home</span>`,
+		`href="/?topic=home%2Fkitchen"`, `<span class="lbl">Conversations</span>`,
+		`href="/status?topic=home%2Fkitchen"`, `<span class="lbl">System status</span>`,
+		`action="/logout"`, `<span class="lbl">Sign out</span>`,
+	} {
+		if !strings.Contains(rail, want) {
+			t.Errorf("the spine is missing %s:\n%s", want, rail)
+		}
+	}
+	if n := strings.Count(rail, `class="ir on"`); n != 1 {
+		t.Errorf("%d spine entries are marked as where the person is, want 1:\n%s", n, rail)
+	}
+	if !strings.Contains(rail, `class="ir on" href="/?topic=home%2Fkitchen"`) {
+		t.Errorf("the conversation screen is not the marked one:\n%s", rail)
+	}
+	if !strings.Contains(renderIconRail(sectionHome, ""), `class="ir on" href="/home"`) {
+		t.Error("the overview does not mark itself")
+	}
+	// Expanding is page-local: a signal and a class, no round-trip.
+	if !strings.Contains(rail, `data-class:open="$rail"`) ||
+		!strings.Contains(rail, `data-on:click="$rail = !$rail"`) {
+		t.Errorf("the spine asks the server to expand itself:\n%s", rail)
+	}
+	if strings.Contains(rail, `id="dash"`) || strings.Contains(rail, `id="conversations"`) ||
+		strings.Contains(rail, `id="details"`) {
+		t.Errorf("the spine writes into a target the live stream owns:\n%s", rail)
+	}
+}
+
+// working is the conversation with work on it: one thing waiting, one in
+// somebody's hands, one finished.
+func working() *topic.MaterializedTopic {
+	mt := convo()
+	mt.Lifecycle = topic.Active
+	t0 := mt.Contributions[0].Timestamp
+	mt.WorkItems = []topic.WorkItem{
+		{ID: "w-1", Author: "avery", Title: "restock the coffee",
+			Status: topic.WorkOpen, Timestamp: t0},
+		{ID: "w-2", Author: "u-me", Owner: "avery", Title: "fix the tap",
+			Status: topic.WorkClaimed, Timestamp: t0.Add(time.Minute)},
+		{ID: "w-3", Author: "avery", Owner: "avery", Title: "wipe the counter",
+			Status: topic.WorkDone, Timestamp: t0.Add(2 * time.Minute)},
+	}
+	mt.Attachments = []topic.Attachment{
+		{OpID: "a-1", Author: "avery", Name: "receipt.txt", Size: 2048},
+		{OpID: "a-2", Author: "avery", Name: "gone.txt", Size: 10, Removed: true},
+	}
+	return mt
+}
+
+// The details panel answers who is in the conversation, where it stands and
+// what is waiting — all of it read off the record, in plain words.
+func TestDetailsPanelReadsTheConversation(t *testing.T) {
+	v := meView()
+	v.Topic = working()
+	got := renderDetails(v)
+	for _, want := range []string{
+		`<span class="who">Avery</span>`, "1 message",
+		`<span class="you">you</span>`, "2 messages",
+		"Going on — people are talking here.",
+		`Waiting for someone to pick up <span class="what">“restock the coffee”</span>`,
+		`<span class="who">Avery</span> is working on <span class="what">“fix the tap”</span>`,
+		"1 thing finished", "receipt.txt",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the details panel is missing %q:\n%s", want, got)
+		}
+	}
+	// A finished item is counted, not listed; a withdrawn attachment is gone.
+	if strings.Contains(got, "wipe the counter") {
+		t.Errorf("a finished item is still listed as waiting:\n%s", got)
+	}
+	if strings.Contains(got, "gone.txt") {
+		t.Errorf("a withdrawn attachment is still listed:\n%s", got)
+	}
+	// Nothing in here pretends to be a way somewhere.
+	if strings.Contains(got, "<a ") || strings.Contains(got, "<button") {
+		t.Errorf("the details panel offers something that does not navigate:\n%s", got)
+	}
+}
+
+// The person's own claim reads as theirs, and an unowned claim names nobody
+// it cannot name.
+func TestDetailsPanelNamesWhoHasTheWork(t *testing.T) {
+	v := meView()
+	for _, c := range []struct{ owner, want string }{
+		{"u-me", `<span class="who">You</span> are working on`},
+		{"", `<span class="who">Someone</span> is working on`},
+	} {
+		got := workWords(v, topic.WorkItem{
+			ID: "w", Title: "the thing", Status: topic.WorkClaimed, Owner: c.owner,
+		})
+		if !strings.Contains(got, c.want) {
+			t.Errorf("owner %q renders %q, want %q", c.owner, got, c.want)
+		}
+	}
+}
+
+// The panel is the live stream's third target: one whole element, and not
+// one of the other two.
+func TestDetailsPanelIsOneWholeTarget(t *testing.T) {
+	v := meView()
+	v.Topic = working()
+	got := renderDetails(v)
+	if !strings.HasPrefix(got, `<aside id="details" class="details">`) ||
+		!strings.HasSuffix(got, "</aside>") {
+		t.Errorf("the details panel is not a whole element:\n%s", got)
+	}
+	if strings.Contains(got, `id="dash"`) || strings.Contains(got, `id="conversations"`) ||
+		strings.Contains(got, `id="composer`) {
+		t.Errorf("the details panel writes into another target:\n%s", got)
+	}
+	// With no conversation open it still fills its target, and says so.
+	blank := renderDetails(view{})
+	if !strings.Contains(blank, `id="details"`) ||
+		!strings.Contains(blank, "Open a conversation") {
+		t.Errorf("the empty details panel says nothing:\n%s", blank)
+	}
+}
+
+// The overview is a way into every conversation and a look at the house.
+func TestOverviewOpensOntoTheConversations(t *testing.T) {
+	got := renderOverview(view{
+		Board:     meView().Board,
+		StreamMsg: 12, StreamMB: 1.5, FoldOK: true,
+	})
+	for _, want := range []string{
+		"Storage", "People &amp; sign-in", "12 ops",
+		`<a class="row" href="/?topic=home%2Fkitchen">`,
+		`<a class="row" href="/?topic=home%2Fattic">`,
+		"2 conversations",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the overview is missing %q:\n%s", want, got)
+		}
+	}
+	if got := renderOverview(view{}); !strings.Contains(got, "No conversations yet") {
+		t.Errorf("the empty overview says nothing:\n%s", got)
 	}
 }
 

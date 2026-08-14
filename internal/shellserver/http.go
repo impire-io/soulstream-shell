@@ -23,9 +23,7 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 	sess := s.currentSession(r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if sess == nil {
-		fmt.Fprintf(w, `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>shell — soulstream</title><link rel="stylesheet" href="/assets/tokens.css"></head>
+		fmt.Fprintf(w, `%s
 <body><main style="max-width:420px;margin:10vh auto 0;padding:0 var(--space-6)">
 <div style="display:flex;align-items:center;gap:var(--space-4);margin-bottom:var(--space-6)">
 <span class="led"></span><span class="tbar-wordmark" style="font-family:var(--font-core);font-weight:var(--weight-bold);font-size:22px;letter-spacing:-.035em;font-variation-settings:'wdth' 88">soulstream</span>
@@ -34,27 +32,24 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 <p class="lede">The cockpit shows your realm — sign in with your passkey.</p>
 <p style="margin-top:var(--space-6)"><a class="btn" style="border-bottom:none" href="/login">%sSign in with the fold</a></p>
 </div><p class="foot">soulstream · shell · realm %s</p></main></body></html>`,
-			Icon("power"), esc(s.opts.Realm))
+			pageHead("shell — soulstream", false), Icon("power"), esc(s.opts.Realm))
 		return
 	}
 	topicPath := r.URL.Query().Get("topic")
-	fmt.Fprintf(w, `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>shell — soulstream</title><link rel="stylesheet" href="/assets/tokens.css">
-<script type="module" src="/assets/datastar.js"></script></head>
-<body class="chat" data-init="@get('/live?topic=%s')">
+	fmt.Fprintf(w, `%s
+<body class="chat" data-signals="{rail:false}" data-init="@get('/live?topic=%s')">
 %s
 <div class="frame">
+%s
 <aside class="rail">
 <div class="rail-head">%s<h2>Conversations</h2></div>
 <nav id="conversations" class="rail-list"><p class="rail-note">loading…</p></nav>
-<div class="rail-foot"><a href="/status?topic=%s">%sSystem status</a>
-<form method="post" action="/logout"><button class="btn ghost">Sign out</button></form></div>
 </aside>
 <section class="thread">
 <div id="dash" class="thread-body"><p class="blank">loading…</p></div>
 %s
 </section>
+<aside id="details" class="details"><p class="det-note">loading…</p></aside>
 </div>
 <script>
 // Keep the newest message in view. The stream morphs the conversation once
@@ -72,8 +67,41 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 })();
 </script>
 </body></html>`,
-		qesc(topicPath), s.topbar(sess.Display), Icon("messages-square"),
-		qesc(topicPath), Icon("gauge"), renderComposer(topicPath))
+		pageHead("shell — soulstream", true), qesc(topicPath), s.topbar(sess.Display),
+		renderIconRail(sectionChat, topicPath), Icon("messages-square"),
+		renderComposer(topicPath))
+}
+
+// sheetPage writes a signed-in screen whose content is one scrolling sheet
+// beside the spine — the shape every screen that is not the conversation
+// takes, so the way back to the others never moves.
+func (s *Server) sheetPage(w http.ResponseWriter, sess *session,
+	section, topicPath, title, body string,
+) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprintf(w, `%s
+<body class="chat" data-signals="{rail:false}">
+%s
+<div class="frame">
+%s
+<main class="sheet"><div class="sheet-in">%s
+<p class="foot">soulstream · shell · your data lives in the realm, not here</p>
+</div></main>
+</div></body></html>`, pageHead(title, true), s.topbar(sess.Display),
+		renderIconRail(section, topicPath), body)
+}
+
+// home is the overview: the house at a glance and the way into every
+// conversation. It is what the Home key on the spine reaches from anywhere.
+func (s *Server) home(w http.ResponseWriter, r *http.Request) {
+	sess := s.currentSession(r)
+	if sess == nil {
+		http.Redirect(w, r, "/", http.StatusFound)
+		return
+	}
+	v := s.observe(r.Context(), r.URL.Query().Get("topic"), sess)
+	s.health(r.Context(), &v)
+	s.sheetPage(w, sess, sectionHome, v.TopicPath, "home — soulstream", renderOverview(v))
 }
 
 // topbar is the ink housing every signed-in screen hangs from.
@@ -95,29 +123,20 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	}
 	v := s.observe(r.Context(), r.URL.Query().Get("topic"), sess)
 	s.health(r.Context(), &v)
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprintf(w, `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>system status — soulstream</title><link rel="stylesheet" href="/assets/tokens.css">
-<script type="module" src="/assets/datastar.js"></script></head>
-<body>
-%s
-<main style="max-width:var(--content-max);margin:0 auto;padding:var(--space-8)">
-<h1 style="margin:0 0 var(--space-7)">System status</h1>
+	body := fmt.Sprintf(`<h1>System status</h1>
+<p class="lede">What the house itself is doing — read live, kept nowhere.</p>
 %s
 <p style="margin-top:var(--space-8)">
 <button class="btn ghost" data-on:click="@post('/act/work-open?topic=%s')">Open work item</button></p>
-<div id="result">—</div>
-<p style="margin-top:var(--space-8)"><a href="/">← Back to conversations</a></p>
-<p class="foot">soulstream · shell · your data lives in the realm, not here</p>
-</main></body></html>`,
-		s.topbar(sess.Display), renderPlanes(v), qesc(v.TopicPath))
+<div id="result">—</div>`, renderPlanes(v), qesc(v.TopicPath))
+	s.sheetPage(w, sess, sectionStatus, v.TopicPath, "system status — soulstream", body)
 }
 
 // live is the Datastar SSE channel: the observed state re-rendered and
-// morphed into the stream's own two targets — the rail of conversations and
-// the conversation itself. Session-gated like every realm-bearing surface,
-// and the session is also what tells the render whose messages are theirs.
+// morphed into the stream's own three targets — the rail of conversations,
+// the conversation itself, and the details beside it. Session-gated like
+// every realm-bearing surface, and the session is also what tells the
+// render whose messages are theirs.
 func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 	sess := s.currentSession(r)
 	if sess == nil {
@@ -136,6 +155,7 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 		v := s.observe(r.Context(), topicPath, sess)
 		writeElements(w, renderRail(v))
 		writeElements(w, renderThread(v))
+		writeElements(w, renderDetails(v))
 		fl.Flush()
 		select {
 		case <-r.Context().Done():

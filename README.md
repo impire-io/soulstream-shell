@@ -1,11 +1,14 @@
 # soulstream-shell — the shell
 
-The soulsystem's human cockpit: one browser surface where a person reads
-the conversations of their realm and writes into them — a rail of
-conversations on the left, one conversation in the middle, a composer
-docked under it — beside the MCP door that serves machines. The house
-readouts (storage, sign-in, work) sit one link away, on the
-system-status screen.
+Soulstream's human cockpit: one browser surface where a person reads the
+conversations of their realm and writes into them — a slim spine of
+sections at the far left, the conversations beside it, one conversation
+held to a reading measure in the middle with a composer docked under
+it, and that conversation's details (who is in it, where it stands,
+what anyone is waiting for) on the right — beside the MCP door that
+serves machines. The house readouts (storage, sign-in, work) live on
+the overview and the system-status screen, both one key away on the
+spine.
 Design and journey live in the ecosystem hq
 ([impire-io/soul-hq](https://github.com/impire-io/soul-hq), design doc
 `02-DESIGN/soulstream-shell/0001-soulstream-shell-the-shell.md`).
@@ -45,9 +48,11 @@ e2e, which boots a real soulnode realm at its published tag), lint.
 All green before every commit; none skipped.
 
 `make screens` stands the same rig up and leaves it running, with a
-seeded conversation and a signed-in session, so the surface can be
-looked at rather than read about. It prints the address and the session
-cookie and blocks until `^C`; nothing outlives the temp dir it founds.
+seeded conversation — two other voices, answers on both sides, and work
+waiting, in hand and finished, so the details panel has something real
+to say — and a signed-in session, so the surface can be looked at
+rather than read about. It prints the address and the session cookie
+and blocks until `^C`; nothing outlives the temp dir it founds.
 
 ## License
 

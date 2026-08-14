@@ -178,10 +178,10 @@ func renderThread(v view) string {
 	} else if v.TopicPath != "" {
 		title, where = v.TopicPath, v.TopicPath
 	}
-	fmt.Fprintf(&b, `<div class="thread-head"><h1>%s</h1><span class="where">%s</span></div>`,
-		esc(title), esc(where))
+	fmt.Fprintf(&b, `<div class="thread-head centred"><h1>%s</h1>`+
+		`<span class="where">%s</span></div>`, esc(title), esc(where))
 
-	b.WriteString(`<div class="msgs">`)
+	b.WriteString(`<div class="msgs centred">`)
 	items := timeline(v.Topic)
 	switch {
 	case v.Err != "":
@@ -213,36 +213,92 @@ func renderThread(v view) string {
 	return b.String()
 }
 
-// renderPlanes is the system-status screen's body — the house readouts
-// that used to sit where the conversation now is.
-func renderPlanes(v view) string {
-	var b strings.Builder
-	b.WriteString(`<div class="planes">`)
-	fmt.Fprintf(&b, `<div class="card plane"><div class="head">%s<h2>Storage</h2></div>`+
-		`<div class="row"><span class="pill ok"><span class="led machine"></span>keeping</span>`+
-		`<span class="mono">%d ops · %.1f MB</span></div></div>`,
-		Icon("cassette-tape"), v.StreamMsg, v.StreamMB)
+// planeCard is one house readout — the same molded panel on the overview
+// and on the system-status screen.
+func planeCard(icon, heading, row string) string {
+	return fmt.Sprintf(`<div class="card plane"><div class="head">%s<h2>%s</h2></div>`+
+		`<div class="row">%s</div></div>`, Icon(icon), heading, row)
+}
+
+// storageRow and signInRow are the two readouts both screens carry.
+func storageRow(v view) string {
+	return fmt.Sprintf(`<span class="pill ok"><span class="led machine"></span>keeping</span>`+
+		`<span class="mono">%d ops · %.1f MB</span>`, v.StreamMsg, v.StreamMB)
+}
+
+func signInRow(v view) string {
 	fold := `<span class="pill warn">unreachable</span>`
 	if v.FoldOK {
 		fold = `<span class="pill ok"><span class="led"></span>serving</span>`
 	}
-	fmt.Fprintf(&b, `<div class="card plane"><div class="head">%s<h2>People &amp; sign-in</h2></div>`+
-		`<div class="row">%s<span class="mono">passkeys</span></div></div>`,
-		Icon("key"), fold)
+	return fold + `<span class="mono">passkeys</span>`
+}
+
+// renderPlanes is the system-status screen's body — the house readouts
+// that used to sit where the conversation now is. The work count is the
+// open conversation's own; the details panel beside that conversation says
+// the same thing in words.
+func renderPlanes(v view) string {
+	var b strings.Builder
+	b.WriteString(`<div class="planes">`)
+	b.WriteString(planeCard("cassette-tape", "Storage", storageRow(v)))
+	b.WriteString(planeCard("key", "People &amp; sign-in", signInRow(v)))
 	open, claimed := 0, 0
 	if v.Topic != nil {
 		for _, w := range v.Topic.WorkItems {
-			switch string(w.Status) {
-			case "open":
+			switch w.Status {
+			case topic.WorkOpen:
 				open++
-			case "claimed":
+			case topic.WorkClaimed:
 				claimed++
 			}
 		}
 	}
-	fmt.Fprintf(&b, `<div class="card plane"><div class="head">%s<h2>Work</h2></div>`+
-		`<div class="row"><span class="mono">open %d · claimed %d</span></div></div>`,
-		Icon("activity"), open, claimed)
+	b.WriteString(planeCard("activity", "Work",
+		fmt.Sprintf(`<span class="mono">open %d · claimed %d</span>`, open, claimed)))
+	b.WriteString(`</div>`)
+	return b.String()
+}
+
+// renderOverview is the Home screen's body: what the house is doing, and
+// the way into every conversation from anywhere.
+func renderOverview(v view) string {
+	var b strings.Builder
+	b.WriteString(`<h1>Your realm at a glance</h1>`)
+	b.WriteString(`<p class="lede">Everything here is read live from your realm — ` +
+		`the shell keeps none of it.</p>`)
+	b.WriteString(`<div class="planes">`)
+	b.WriteString(planeCard("cassette-tape", "Storage", storageRow(v)))
+	b.WriteString(planeCard("key", "People &amp; sign-in", signInRow(v)))
+	rooms := "conversation"
+	if len(v.Board) != 1 {
+		rooms = "conversations"
+	}
+	b.WriteString(planeCard("messages-square", "Talking",
+		fmt.Sprintf(`<span class="mono">%d %s</span>`, len(v.Board), rooms)))
+	b.WriteString(`</div>`)
+
+	b.WriteString(`<h2 class="section">Conversations</h2>`)
+	if v.Err != "" {
+		fmt.Fprintf(&b, `<p class="blank">%s</p>`, esc(v.Err))
+		return b.String()
+	}
+	if len(v.Board) == 0 {
+		b.WriteString(`<p class="blank">No conversations yet.</p>`)
+		return b.String()
+	}
+	b.WriteString(`<div class="rows">`)
+	for i := len(v.Board) - 1; i >= 0; i-- {
+		e := v.Board[i]
+		name := e.Announcement.Name
+		if name == "" {
+			name = e.Path
+		}
+		fmt.Fprintf(&b, `<a class="row" href="/?topic=%s"><span class="name">%s</span>`+
+			`<span class="what">%s</span><span class="state">%s</span></a>`,
+			qesc(e.Path), esc(name), esc(e.Announcement.SubjectMatter),
+			esc(string(e.Lifecycle)))
+	}
 	b.WriteString(`</div>`)
 	return b.String()
 }

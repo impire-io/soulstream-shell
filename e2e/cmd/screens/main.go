@@ -133,7 +133,7 @@ func seedQuiet(ctx context.Context, owner *realm.Client) error {
 // seedConversation writes the transcript the screenshot is of: two other
 // voices on the record, the signed-in person's own messages through the
 // composer they would actually use, answers hanging off messages on both
-// sides, and one work mark.
+// sides, and work in every state the details panel can show.
 func seedConversation(ctx context.Context, r *rig.Rig, cl *http.Client,
 	owner, avery *realm.Client, path string,
 ) error {
@@ -172,11 +172,39 @@ func seedConversation(ctx context.Context, r *rig.Rig, cl *http.Client,
 	if _, err := ah.AddComment(ctx, "You are a hero.", mine); err != nil {
 		return fmt.Errorf("avery's answer: %w", err)
 	}
+	return seedWork(ctx, oh, ah)
+}
+
+// seedWork puts all three states of the work vocabulary on the record, so
+// the details panel beside the conversation has something real to say: one
+// thing waiting for anyone, one somebody already has in hand, one done and
+// quietly counted.
+func seedWork(ctx context.Context, oh, ah *topic.Handle) error {
 	if _, err := oh.Materialise(ctx); err != nil {
 		return err
 	}
 	if _, err := oh.OpenWork(ctx, "restock the coffee", "the good one, not the tin"); err != nil {
-		return fmt.Errorf("the work mark: %w", err)
+		return fmt.Errorf("the waiting work: %w", err)
+	}
+	claimed, err := oh.OpenWork(ctx, "fix the dripping tap", "it has been going all week")
+	if err != nil {
+		return fmt.Errorf("the claimed work: %w", err)
+	}
+	if _, err := ah.Materialise(ctx); err != nil {
+		return err
+	}
+	if _, err := ah.ClaimWork(ctx, claimed); err != nil {
+		return fmt.Errorf("avery takes it on: %w", err)
+	}
+	done, err := oh.OpenWork(ctx, "wipe the counter", "before the coffee dries on")
+	if err != nil {
+		return fmt.Errorf("the finished work: %w", err)
+	}
+	if _, err := oh.ClaimWork(ctx, done); err != nil {
+		return fmt.Errorf("claim the finished work: %w", err)
+	}
+	if _, err := oh.CompleteWork(ctx, done); err != nil {
+		return fmt.Errorf("finish the work: %w", err)
 	}
 	return nil
 }

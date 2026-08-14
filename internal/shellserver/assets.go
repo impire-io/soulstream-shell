@@ -4,6 +4,7 @@ import (
 	"embed"
 	"html/template"
 	"io/fs"
+	"net/http"
 	"regexp"
 	"strings"
 )
@@ -46,3 +47,16 @@ func init() {
 
 // Icon returns the inlined SVG for a vendored icon name ("" if absent).
 func Icon(name string) template.HTML { return icons[name] }
+
+// favicon answers the request every browser makes on its own. The bytes
+// are vendored beside the rest of the assets — the shell fetches nothing.
+func favicon(w http.ResponseWriter, r *http.Request) {
+	raw, err := assetsFS.ReadFile("assets/favicon.ico")
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "image/x-icon")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	_, _ = w.Write(raw)
+}

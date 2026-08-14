@@ -204,15 +204,54 @@ td.mono,.mono{font:var(--type-data)}
 .plane .head svg{width:18px;height:18px;color:var(--text-muted)}
 
 /* ============================================================
-   The chat surface — a rail of conversations, one thread, a
+   The chat surface — a spine of sections, a rail of
+   conversations, one thread with the details beside it, a
    docked composer. Layout only: every colour, face and step
    below is a token from the layers above.
    ============================================================ */
+
+:root{
+--spine-width:56px;   /* the icon spine, collapsed */
+--spine-open:196px;   /* … and with its labels shown */
+--details-width:288px;
+--chat-max:860px;     /* the conversation never grows wider than this */
+}
 
 html{height:100%}
 body.chat{height:100%;display:flex;flex-direction:column;overflow:hidden}
 .tbar.slim{padding:var(--space-4) var(--space-7)}
 .frame{flex:1;display:flex;min-height:0}
+
+/* The spine — the few places a person can go, as icons at the far left.
+   It widens to icons-and-labels on a page-local signal. */
+.iconrail{width:var(--spine-width);flex:none;display:flex;flex-direction:column;gap:var(--space-2);padding:var(--space-4) var(--space-3) var(--space-5);background:var(--ink-900);background-image:var(--texture-rib);border-right:var(--border-width) solid var(--border-strong);overflow:hidden;transition:width var(--dur-base) var(--ease-mech)}
+.iconrail.open{width:var(--spine-open)}
+.iconrail .ir-group{display:flex;flex-direction:column;gap:var(--space-2)}
+.iconrail .ir-foot{margin-top:auto}
+.iconrail form{display:contents}
+.ir{display:flex;align-items:center;gap:var(--space-5);width:100%;padding:var(--space-4);border:var(--border-width) solid transparent;border-radius:var(--radius-md);background:none;color:var(--shell-400);font:var(--type-ui);text-align:left;white-space:nowrap;cursor:pointer;transition:var(--transition-control)}
+a.ir{border-bottom:none}
+.ir:hover{background:var(--ink-700);color:var(--shell-050)}
+.ir.on{background:var(--ink-800);color:var(--amber-400);border-color:var(--ink-700);box-shadow:var(--bevel-raised)}
+.ir svg{width:20px;height:20px;flex:none}
+.ir .lbl{display:none}
+.iconrail.open .lbl{display:inline}
+.ir.toggle{color:var(--ink-300);margin-bottom:var(--space-4)}
+.ir.toggle svg{transition:transform var(--dur-base) var(--ease-mech)}
+.iconrail.open .toggle svg{transform:rotate(180deg)}
+
+/* A screen that is not the conversation: one sheet beside the spine */
+.sheet{flex:1;min-height:0;overflow-y:auto}
+.sheet-in{max-width:var(--content-max);margin:0 auto;padding:var(--space-9) var(--space-8) var(--space-11)}
+.sheet h1{margin:0 0 var(--space-4)}
+.sheet .section{margin:var(--space-10) 0 var(--space-6)}
+.sheet .planes{margin-top:var(--space-8)}
+.rows{display:flex;flex-direction:column;gap:var(--space-4)}
+a.row{display:flex;align-items:baseline;gap:var(--space-5);padding:var(--space-5) var(--space-6);background:var(--surface-card);border:var(--border-width) solid var(--border-hairline);border-radius:var(--radius-md);box-shadow:var(--shadow-key);color:var(--text-body)}
+a.row:hover{background:var(--surface-raised);color:var(--text-body)}
+.row .name{font:var(--type-ui);font-size:var(--text-base);font-weight:var(--weight-semibold)}
+.row .what{flex:1;min-width:0;font:var(--type-body);font-size:var(--text-sm);color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .state{font:var(--type-label);letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--text-faint)}
 
 /* Left rail — the person's conversations */
 .rail{width:var(--rail-width);flex:none;display:flex;flex-direction:column;min-height:0;background:var(--surface-inset);border-right:var(--border-width) solid var(--border-etch)}
@@ -220,11 +259,6 @@ body.chat{height:100%;display:flex;flex-direction:column;overflow:hidden}
 .rail-head h2{margin:0;font:var(--type-heading);font-size:var(--text-base)}
 .rail-head svg{width:16px;height:16px;color:var(--text-muted)}
 .rail-list{flex:1;min-height:0;overflow-y:auto;padding:0 var(--space-4) var(--space-5);display:flex;flex-direction:column;gap:var(--space-2)}
-.rail-foot{display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);padding:var(--space-5) var(--space-6);border-top:var(--border-width) solid var(--border-etch)}
-.rail-foot a{display:inline-flex;align-items:center;gap:var(--space-3);border-bottom:none;font:var(--type-label);letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--text-muted)}
-.rail-foot a:hover{color:var(--text-link-hover)}
-.rail-foot a svg{width:14px;height:14px}
-.rail-foot .btn{padding:var(--space-2) var(--space-4)}
 .rail-note{padding:var(--space-5) var(--space-5);color:var(--text-faint);font:var(--type-data);font-size:var(--text-xs)}
 
 /* One conversation in the rail */
@@ -236,13 +270,17 @@ body.chat{height:100%;display:flex;flex-direction:column;overflow:hidden}
 .conv.on .name{font-weight:var(--weight-bold)}
 .conv.on .state{color:var(--text-muted)}
 
-/* Centre column — the conversation itself */
+/* Centre column — the conversation itself. It is capped and centred in
+   whatever room it is given: a message that runs the width of a large
+   screen is not a conversation, it is a wall. The backgrounds still span
+   the column, so only the reading measure is held. */
 .thread{flex:1;min-width:0;display:flex;flex-direction:column;min-height:0}
 .thread-body{flex:1;min-height:0;overflow-y:auto}
-.thread-head{position:sticky;top:0;z-index:1;display:flex;align-items:baseline;gap:var(--space-5);padding:var(--space-5) var(--space-8);background:var(--surface-page);border-bottom:var(--border-width) solid var(--border-hairline)}
+.centred{padding-inline:max(var(--space-8),calc((100% - var(--chat-max)) / 2))}
+.thread-head{position:sticky;top:0;z-index:1;display:flex;align-items:baseline;gap:var(--space-5);padding-block:var(--space-5);background:var(--surface-page);border-bottom:var(--border-width) solid var(--border-hairline)}
 .thread-head h1{font:var(--type-heading);letter-spacing:var(--tracking-tight)}
 .thread-head .where{font:var(--type-data);font-size:var(--text-xs);color:var(--text-faint)}
-.msgs{display:flex;flex-direction:column;gap:var(--space-6);padding:var(--space-8) var(--space-8) var(--space-9)}
+.msgs{display:flex;flex-direction:column;gap:var(--space-6);padding-block:var(--space-8) var(--space-9)}
 
 /* A message. Alignment is the attribution: mine on the right. */
 .msg{display:flex;flex-direction:column;align-items:flex-start}
@@ -274,11 +312,35 @@ body.chat{height:100%;display:flex;flex-direction:column;overflow:hidden}
 .sysline{align-self:center;padding:var(--space-2) var(--space-5);border:var(--border-width) dashed var(--border-hairline);border-radius:var(--radius-pill);font:var(--type-label);letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--text-faint)}
 .blank{padding:var(--space-12) 0;text-align:center;color:var(--text-muted)}
 
-/* The composer, docked at the foot of the conversation */
-.dock{flex:none;padding:var(--space-5) var(--space-8) var(--space-6);background:var(--surface-card);border-top:var(--border-width) solid var(--border-hairline);box-shadow:0 -2px 10px rgba(27,25,23,.05)}
+/* The composer, docked at the foot of the conversation and centred on the
+   same measure — a person writes where they read. */
+.dock{flex:none;padding-block:var(--space-5) var(--space-6);background:var(--surface-card);border-top:var(--border-width) solid var(--border-hairline);box-shadow:0 -2px 10px rgba(27,25,23,.05)}
 .dock-row{display:flex;align-items:flex-end;gap:var(--space-5)}
 .dock textarea{flex:1;min-height:46px;max-height:180px;padding:var(--space-5) var(--space-6);border-radius:var(--radius-lg);resize:none;font:var(--type-body)}
 .dock .send{height:46px;border-radius:var(--radius-lg);padding:0 var(--space-6)}
 .dock-note{min-height:15px;margin-top:var(--space-3)}
 .reply-state{display:flex;align-items:center;gap:var(--space-4);margin-bottom:var(--space-4)}
 .reply-state .btn{padding:2px var(--space-4)}
+
+/* The details beside the conversation — who is in here, where it stands,
+   what anyone is waiting for. Read from the record, never a link that
+   does not go anywhere. */
+.details{width:var(--details-width);flex:none;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:var(--space-8);padding:var(--space-7) var(--space-6) var(--space-9);background:var(--surface-inset);border-left:var(--border-width) solid var(--border-etch)}
+.det-head{display:flex;align-items:center;gap:var(--space-4);margin-bottom:var(--space-5)}
+.det-head h2{margin:0;font:var(--type-heading);font-size:var(--text-base)}
+.det-head svg{width:16px;height:16px;color:var(--text-muted)}
+.details ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:var(--space-4)}
+.details li{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--space-3)}
+.details .who{font:var(--type-ui);font-size:var(--text-sm);color:var(--text-body)}
+.details .said{font:var(--type-data);font-size:var(--text-2xs);color:var(--text-faint)}
+.details .you{font:var(--type-label);letter-spacing:var(--tracking-wide);text-transform:uppercase;color:var(--amber-700);background:var(--accent-soft);border:var(--border-width) solid var(--amber-200);border-radius:var(--radius-pill);padding:1px 7px}
+.details .plain{margin:0;font:var(--type-body);font-size:var(--text-sm);color:var(--text-secondary)}
+.details .w{display:block;font:var(--type-body);font-size:var(--text-sm);color:var(--text-secondary);padding-left:var(--space-5);border-left:var(--border-width-thick) solid var(--border-etch)}
+.details .w.waiting{border-left-color:var(--amber-500)}
+.details .w.doing{border-left-color:var(--teal-500)}
+.details .what{color:var(--text-body)}
+.details .quiet{margin:var(--space-5) 0 0;font:var(--type-label);letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--text-faint)}
+.det-note{margin:0;font:var(--type-data);font-size:var(--text-xs);color:var(--text-faint)}
+
+/* Narrow rooms: the details step aside before the conversation does. */
+@media (max-width:1180px){.details{display:none}}
