@@ -584,9 +584,10 @@ func TestShellGate(t *testing.T) {
 		t.Fatalf("the People list does not put the pill on the person's name:\n%s", people)
 	}
 
-	// Somebody says your name in a room you are not standing in. The mention
-	// is written as the id the record carries — the only thing @name resolves
-	// against; a display name would tap a pigeonhole nobody watches.
+	// Somebody says your name in a room you are not standing in — and says it
+	// as a name, not as an id. The body is what a person would write and read;
+	// who it taps rides beside it, the shape the composer's picker puts on the
+	// wire. Nothing rewrites the message to make the grammar work.
 	avery, err := r.Voice(ctx, "avery", "Avery")
 	if err != nil {
 		t.Fatal(err)
@@ -595,8 +596,8 @@ func TestShellGate(t *testing.T) {
 	if _, err := ah.Materialise(ctx); err != nil {
 		t.Fatal(err)
 	}
-	const asked = "could you look at this one?"
-	mentionOp, err := ah.PostTurn(ctx, "@"+posted.Author+" "+asked)
+	const asked = "@Daan did the good coffee come in a bag or a tin?"
+	mentionOp, err := ah.PostTurnMentioning(ctx, asked, []string{posted.Author})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -604,9 +605,12 @@ func TestShellGate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tap := find(amt, "@"+posted.Author+" "+asked)
+	tap := find(amt, asked)
 	if tap == nil || len(tap.Mentions) != 1 || tap.Mentions[0] != posted.Author {
-		t.Fatalf("the record did not read the mention: %+v", tap)
+		t.Fatalf("the record did not carry the resolved mention: %+v", tap)
+	}
+	if strings.Contains(tap.Body, posted.Author) {
+		t.Fatalf("the body was rewritten into an id: %q", tap.Body)
 	}
 
 	// It reaches the person's tray over their own connection, and the spine
@@ -641,6 +645,62 @@ func TestShellGate(t *testing.T) {
 	}
 	if tally := frameWith(t, opened, `id="mentions"`); strings.Contains(tally, "tally on") {
 		t.Fatalf("the count survives opening the room it pointed at: %s", tally)
+	}
+	// And it reads as it was written: the name, verbatim, marked because it
+	// actually tapped somebody — never the id it resolved to.
+	if !strings.Contains(room, `<p class="body"><span class="mtoken">@Daan</span> did the`+
+		` good coffee come in a bag or a tin?</p>`) {
+		t.Fatalf("the message does not read as it was written:\n%s", room)
+	}
+
+	// The picker itself, from the room the person is now standing in. The
+	// server offers who is in here; typing narrows it; a fragment nobody
+	// answers to closes it.
+	suggest := r.ShellURL + "/composer/suggest?topic=" + url.QueryEscape(annexe) + "&q="
+	offered := get(t, cl, suggest+"av")
+	for _, want := range []string{`id="mention-suggest"`, `data-mention="avery"`,
+		`data-name="Avery"`, `<span class="handle">@avery</span>`} {
+		if !strings.Contains(offered, want) {
+			t.Fatalf("the picker does not offer the room (%q missing):\n%s", want, offered)
+		}
+	}
+	if closed := get(t, cl, suggest+"zzz"); strings.Contains(closed, "data-mention") {
+		t.Fatalf("the picker offers somebody nobody asked for:\n%s", closed)
+	}
+
+	// And picking one posts the shape the ceremony just measured from the
+	// other side: the body says the name, the pick says who, and the record
+	// keeps both apart.
+	const thanked = "@Avery a bag, and there is one left"
+	if got, err := r.Post(cl, annexe, url.Values{
+		"body": {thanked}, "mention": {"avery"},
+	}); err != nil || !strings.Contains(got, "Posted as") {
+		t.Fatalf("the composer did not post the picked mention: %v %s", err, got)
+	}
+	// A name typed by hand resolves too, when it can only mean one person;
+	// a name nobody in the room answers to stays exactly as typed.
+	const guessed = "@Avery and @Nobody, for the record"
+	if got, err := r.Post(cl, annexe, url.Values{"body": {guessed}}); err != nil ||
+		!strings.Contains(got, "Posted as") {
+		t.Fatalf("the composer did not post the typed mention: %v %s", err, got)
+	}
+	amt, err = topic.Open(rc, annexe).Materialise(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ what, body string }{
+		{"the picked mention", thanked}, {"the typed mention", guessed},
+	} {
+		said := find(amt, c.body)
+		if said == nil {
+			t.Fatalf("%s never reached the record: %+v", c.what, amt.Contributions)
+		}
+		if said.Body != c.body {
+			t.Fatalf("%s was rewritten: %q, want %q", c.what, said.Body, c.body)
+		}
+		if len(said.Mentions) != 1 || said.Mentions[0] != "avery" {
+			t.Fatalf("%s carries %v, want just avery", c.what, said.Mentions)
+		}
 	}
 
 	// The word the operator retired. The Go keeps it — realm.Client, the
@@ -738,6 +798,6 @@ func TestShellGate(t *testing.T) {
 	if string(magic) != "wOF2" {
 		t.Fatalf("font magic = %q", magic)
 	}
-	fmt.Printf("shell gate: ceremony, the chat shape (%s posted and answered), "+
-		"custody, offline render — all green\n", posted.Author)
+	fmt.Printf("shell gate: ceremony, the chat shape (%s posted, answered and "+
+		"tapped somebody by name), custody, offline render — all green\n", posted.Author)
 }

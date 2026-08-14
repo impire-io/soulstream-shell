@@ -118,6 +118,7 @@ func Run(ctx context.Context, opts Options) error {
 	mux.HandleFunc("POST /act/work-open", s.actWorkOpen)
 	mux.HandleFunc("POST /act/post-turn", s.actPostTurn)
 	mux.HandleFunc("GET /composer/reply", s.composerReply)
+	mux.HandleFunc("GET /composer/suggest", s.composerSuggest)
 
 	s.httpSrv = &http.Server{Addr: boundAddr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	if opts.Ready != nil {

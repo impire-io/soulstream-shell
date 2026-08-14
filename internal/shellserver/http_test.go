@@ -2,8 +2,10 @@ package shellserver
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -55,7 +57,8 @@ func TestIconsCarryTheirSize(t *testing.T) {
 // next tick.
 func TestComposerTargetsAreDistinct(t *testing.T) {
 	page := renderComposer("home/topic")
-	for _, id := range []string{`id="composer"`, `id="composer-box"`, `id="composer-note"`, `id="reply-to"`} {
+	for _, id := range []string{`id="composer"`, `id="composer-box"`, `id="composer-note"`,
+		`id="reply-to"`, `id="mention-suggest"`, `id="mention-picks"`} {
 		if strings.Count(page, id) != 1 {
 			t.Errorf("composer carries %s %d times, want 1", id, strings.Count(page, id))
 		}
@@ -611,6 +614,185 @@ func TestOverviewOpensOntoTheConversations(t *testing.T) {
 	}
 	if got := renderOverview(view{}); !strings.Contains(got, "No conversations yet") {
 		t.Errorf("the empty overview says nothing:\n%s", got)
+	}
+}
+
+// room is the people a picker would offer: the reader, one other voice,
+// and two who answer to the same name.
+func room() []participant {
+	return []participant{
+		{Persona: "u-me", Name: "Daan", Me: true},
+		{Persona: "avery", Name: "Avery Blake"},
+		{Persona: "u-19f2", Name: "Sam"},
+		{Persona: "u-77c1", Name: "Sam"},
+	}
+}
+
+// Typing @ offers the room; typing more of a name narrows to it. A person
+// is not offered themselves, and any word of a name is a way in.
+func TestThePickerOffersTheRoomAndNarrows(t *testing.T) {
+	names := func(got []participant) string {
+		var out []string
+		for _, p := range got {
+			out = append(out, p.Persona)
+		}
+		return strings.Join(out, ",")
+	}
+	for _, c := range []struct{ q, want string }{
+		{"", "avery,u-19f2,u-77c1"}, // the room, without the reader in it
+		{"av", "avery"},             // the start of a name
+		{"bl", "avery"},             // …or of any word of it
+		{"AVER", "avery"},           // case is not a way to miss somebody
+		{"u-", "u-19f2,u-77c1"},     // the handle is offered too
+		{"sam", "u-19f2,u-77c1"},    // two people answer to the same name
+		{"da", ""},                  // the reader is never offered
+		{"nobody-by-that-name", ""},
+	} {
+		if got := names(suggestions(room(), c.q)); got != c.want {
+			t.Errorf("suggestions(%q) = %q, want %q", c.q, got, c.want)
+		}
+	}
+	// The list is a glance, not a directory.
+	var crowd []participant
+	for i := range suggestLimit + 4 {
+		crowd = append(crowd, participant{Persona: fmt.Sprintf("p-%d", i), Name: "Person"})
+	}
+	if got := len(suggestions(crowd, "")); got != suggestLimit {
+		t.Errorf("the picker offers %d people at once, want %d", got, suggestLimit)
+	}
+}
+
+// The list is one patch target of its own, empty when it is closed, and it
+// never writes into anything the live stream or the composer owns.
+func TestTheSuggestionListIsItsOwnClosedTarget(t *testing.T) {
+	if got := renderSuggest(nil); got != `<div id="mention-suggest" class="suggest"></div>` {
+		t.Errorf("the closed list is not an empty target: %s", got)
+	}
+	got := renderSuggest(suggestions(room(), "av"))
+	for _, want := range []string{
+		`<div id="mention-suggest" class="suggest" role="listbox"`,
+		`class="sug on" role="option" aria-selected="true"`,
+		`data-mention="avery" data-name="Avery Blake"`,
+		`data-on:click="mentionPick(el)"`,
+		`<span class="who">Avery Blake</span><span class="handle">@avery</span>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the suggestion list is missing %q:\n%s", want, got)
+		}
+	}
+	// Every row is a button that does not submit the message being written.
+	if n := strings.Count(got, `<button type="button"`); n != strings.Count(got, "<button") {
+		t.Errorf("a suggestion row would submit the composer:\n%s", got)
+	}
+	// Exactly one row is the one Enter would take.
+	if n := strings.Count(renderSuggest(suggestions(room(), "")), `aria-selected="true"`); n != 1 {
+		t.Errorf("%d rows are marked as the obvious pick, want 1", n)
+	}
+	for _, id := range []string{`id="dash"`, `id="conversations"`, `id="details"`,
+		`id="composer-box"`, `id="mention-picks"`} {
+		if strings.Contains(got, id) {
+			t.Errorf("the suggestion list writes into %s:\n%s", id, got)
+		}
+	}
+}
+
+// Who a message is about is decided against the record, never on the
+// browser's word: a pick counts while the body still names them, a name
+// typed by hand counts when it can only mean one person, and everything
+// else is left to the library's own grammar.
+func TestWhoAMessageIsAboutIsDecidedAgainstTheRecord(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		body  string
+		picks []string
+		want  []string
+	}{
+		{"a pick, and the body still names them",
+			"@Avery Blake could you look?", []string{"avery"}, []string{"avery"}},
+		{"a pick whose name was deleted taps nobody",
+			"never mind", []string{"avery"}, nil},
+		{"a name typed by hand, unmistakable",
+			"@Avery Blake are you about?", nil, []string{"avery"}},
+		{"two people answer to it, so it stays as typed",
+			"@Sam have you seen this?", nil, nil},
+		{"…unless one of them was picked",
+			"@Sam have you seen this?", []string{"u-77c1"}, []string{"u-77c1"}},
+		{"a name nobody in the room answers to",
+			"@Nobody are you there?", nil, nil},
+		{"a pick for somebody who is not in the room",
+			"@Ghost hello", []string{"u-ghost"}, nil},
+		{"the reader may tap themselves",
+			"note to @Daan", nil, []string{"u-me"}},
+		{"a name is not read out of a longer word",
+			"@Sams are plural", []string{"u-77c1"}, nil},
+		{"nobody at all", "kettle is on", nil, nil},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			got := resolveMentions(c.body, c.picks, room())
+			if !reflect.DeepEqual(got, c.want) {
+				t.Errorf("resolveMentions(%q, %v) = %v, want %v", c.body, c.picks, got, c.want)
+			}
+		})
+	}
+}
+
+// The body reaches the page exactly as it was typed, with the names that
+// actually tapped somebody marked — and nothing else marked, however much
+// it looks like an address.
+func TestTheBodyKeepsWhatWasTypedAndMarksWhatTapped(t *testing.T) {
+	v := meView()
+	v.Names["avery"] = "Avery Blake"
+	c := &topic.Contribution{
+		OpID: "op-9", Author: "u-me", Body: "@Avery Blake and @Nobody — see <this>",
+		Mentions: []string{"avery"},
+	}
+	got := renderBody(v, c)
+	if !strings.Contains(got, `<span class="mtoken">@Avery Blake</span>`) {
+		t.Errorf("the name that tapped somebody is not marked:\n%s", got)
+	}
+	if strings.Contains(got, `mtoken">@Nobody`) {
+		t.Errorf("a name that tapped nobody is marked as if it had:\n%s", got)
+	}
+	if !strings.Contains(got, "@Nobody") {
+		t.Errorf("the unresolved name was not kept as typed:\n%s", got)
+	}
+	if strings.Contains(got, "<this>") || !strings.Contains(got, "&lt;this&gt;") {
+		t.Errorf("the body escaped its own markup:\n%s", got)
+	}
+	// The handle is marked too, when that is what was written.
+	c.Body = "@avery, then"
+	if !strings.Contains(renderBody(v, c), `<span class="mtoken">@avery</span>`) {
+		t.Errorf("the handle form is not marked:\n%s", renderBody(v, c))
+	}
+	// A message that tapped nobody is untouched text.
+	plain := &topic.Contribution{OpID: "op-8", Body: "e@mail.example and @nobody"}
+	if got := renderBody(v, plain); got != "e@mail.example and @nobody" {
+		t.Errorf("a message with no mentions was rewritten: %q", got)
+	}
+}
+
+// Typing asks the server, debounced, and only once there is an @ to answer
+// — the caret is the browser's business and the list is the server's.
+func TestTheComposerAsksTheServerForTheList(t *testing.T) {
+	box := composerBox("home/kitchen")
+	for _, want := range []string{
+		`data-on:input__debounce.150ms=`,
+		`mentionQuery(el) === null ? mentionClose() :`,
+		`@get('/composer/suggest?topic=home%2Fkitchen&amp;q=' + encodeURIComponent(mentionQuery(el)))`,
+	} {
+		if !strings.Contains(box, want) {
+			t.Errorf("the message box is missing %q:\n%s", want, box)
+		}
+	}
+	// The page-local half is served with the page, and it is the only half.
+	for _, want := range []string{"window.mentionQuery", "window.mentionPick",
+		"window.mentionClose", `case "ArrowDown"`, `case "Escape"`} {
+		if !strings.Contains(mentionScript, want) {
+			t.Errorf("the picker's page-local script is missing %q", want)
+		}
+	}
+	if strings.Contains(mentionScript, "fetch(") || strings.Contains(mentionScript, "EventSource") {
+		t.Error("the picker reaches the server on its own instead of through Datastar")
 	}
 }
 

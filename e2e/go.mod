@@ -65,3 +65,9 @@ require (
 )
 
 replace github.com/impire-io/soulstream-shell => ../
+
+// TEMPORARY until core tags v0.8.1 — the mention-supplying arms
+// (PostTurnMentioning and friends) are on main, unreleased. This is the one
+// upstream the consumer-position gate does not take at its published tag;
+// drop it and bump the require above once the tag exists.
+replace github.com/impire-io/soulstream-core => ../../soulstream-core

@@ -22,3 +22,8 @@ require (
 	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 )
+
+// TEMPORARY until core tags v0.8.1 — the mention-supplying arms
+// (PostTurnMentioning and friends) are on main, unreleased. Drop this and
+// bump the require above once the tag exists.
+replace github.com/impire-io/soulstream-core => ../soulstream-core

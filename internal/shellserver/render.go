@@ -172,8 +172,78 @@ func renderMsg(v view, c *topic.Contribution, reply bool, answers string) string
 	}
 	return fmt.Sprintf(`<div class="%s" data-op="%s"><div class="bubble">%s`+
 		`<p class="body">%s</p><div class="under">%s%s</div></div>%s</div>`,
-		cls, esc(c.OpID), byline, esc(c.Body), sigMark(c.Sig),
+		cls, esc(c.OpID), byline, renderBody(v, c), sigMark(c.Sig),
 		replyLink(v.TopicPath, c.OpID), answers)
+}
+
+// mentionTokens is what to look for in a body: for every persona the record
+// says the message tapped, the handle it may have been written as and the
+// name this reader is shown for them. Lowercased for matching, longest
+// first, so "@Avery Blake" wins where "@Avery" would also fit.
+func mentionTokens(v view, c *topic.Contribution) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, m := range c.Mentions {
+		for _, form := range []string{m, nameOf(v, m)} {
+			if form == "" {
+				continue
+			}
+			t := "@" + strings.ToLower(form)
+			if seen[t] {
+				continue
+			}
+			seen[t] = true
+			out = append(out, t)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return len(out[i]) > len(out[j]) })
+	return out
+}
+
+// renderBody is a message as it was written — escaped, never rewritten —
+// with the names that actually tapped somebody marked.
+//
+// What gets marked comes off the record's own mentions field, so the mark
+// means a slip reached that person rather than that the text looks like an
+// address. A name that resolved to nobody stays plain, which is the honest
+// thing for it to be: nothing happened when it was posted.
+func renderBody(v view, c *topic.Contribution) string {
+	tokens := mentionTokens(v, c)
+	if len(tokens) == 0 {
+		return esc(c.Body)
+	}
+	body, lower := c.Body, strings.ToLower(c.Body)
+	var b strings.Builder
+	for i := 0; i < len(body); {
+		if body[i] != '@' {
+			next := strings.IndexByte(body[i:], '@')
+			if next < 0 {
+				b.WriteString(esc(body[i:]))
+				break
+			}
+			b.WriteString(esc(body[i : i+next]))
+			i += next
+			continue
+		}
+		if n := tokenAt(lower, i, tokens); n > 0 {
+			fmt.Fprintf(&b, `<span class="mtoken">%s</span>`, esc(body[i:i+n]))
+			i += n
+			continue
+		}
+		b.WriteByte('@')
+		i++
+	}
+	return b.String()
+}
+
+// tokenAt is the length of the mention token starting at i, or 0 for none.
+func tokenAt(lower string, i int, tokens []string) int {
+	for _, t := range tokens {
+		if strings.HasPrefix(lower[i:], t) && endsToken(lower, i+len(t)) {
+			return len(t)
+		}
+	}
+	return 0
 }
 
 // renderThread is the centre column: one conversation, oldest first.

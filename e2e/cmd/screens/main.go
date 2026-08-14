@@ -175,8 +175,10 @@ func seedConversation(ctx context.Context, r *rig.Rig, cl *http.Client,
 	}
 
 	// Now that the record says who the signed-in person is, they can be
-	// named — and tapped on the shoulder. The mention is written as the id
-	// the record carries: it is the only thing @name resolves against.
+	// named — and tapped on the shoulder by that name. This is the shape the
+	// composer's picker puts on the wire: the body says what somebody would
+	// actually write, and who it taps rides beside it, so a screenshot shows
+	// a meaningful tag rather than a machine-minted id.
 	me, err := authorOf(ctx, ah, "Back in twenty.")
 	if err != nil {
 		return err
@@ -184,7 +186,8 @@ func seedConversation(ctx context.Context, r *rig.Rig, cl *http.Client,
 	if err := r.Name(ctx, me, "Daan"); err != nil {
 		return fmt.Errorf("name the signed-in person: %w", err)
 	}
-	if _, err := ah.PostTurn(ctx, "@"+me+" did the good coffee come in a bag or a tin?"); err != nil {
+	if _, err := ah.PostTurnMentioning(ctx,
+		"@Daan did the good coffee come in a bag or a tin?", []string{me}); err != nil {
 		return fmt.Errorf("avery's mention: %w", err)
 	}
 	return seedWork(ctx, oh, ah)

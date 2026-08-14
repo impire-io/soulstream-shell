@@ -66,6 +66,7 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
     .observe(el, {childList: true, subtree: true, characterData: true});
 })();
 </script>
+%s
 </body></html>`,
 		pageHead("shell — soulstream", true), qesc(topicPath),
 		s.topbar(r.Context(), sess),
@@ -73,7 +74,7 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 		// and the conversation beside it: counting it here would mean reading
 		// the board before serving a page that is about to read it anyway.
 		renderIconRail(sectionChat, topicPath, mentionTally(0)), Icon("messages-square"),
-		renderComposer(topicPath))
+		renderComposer(topicPath), mentionScript)
 }
 
 // sheetPage writes a signed-in screen whose content is one scrolling sheet
@@ -263,14 +264,37 @@ func (s *Server) actPostTurn(w http.ResponseWriter, r *http.Request) {
 		patch(w, composerNote("There is no conversation to post to."))
 		return
 	}
-	id, err := topicSay(r.Context(), sess, topicPath, body, r.PostFormValue("reply-to"))
+	// Who the message is about, decided here against the record: the picks
+	// the composer sent, kept only where the body still names them, and any
+	// name typed by hand that can only mean one person in the room. The body
+	// itself is posted exactly as written — nothing rewrites a word of it.
+	mentions := resolveMentions(body, r.PostForm["mention"],
+		s.peopleIn(r.Context(), sess, topicPath))
+	id, err := topicSay(r.Context(), sess, topicPath, body, r.PostFormValue("reply-to"), mentions)
 	if err != nil {
 		patch(w, composerNote("Not posted — "+err.Error()))
 		return
 	}
-	patch(w, composerBox(), "mode replace")
+	patch(w, composerBox(topicPath), "mode replace")
+	patch(w, composerPicks(), "mode replace")
+	patch(w, renderSuggest(nil))
 	patch(w, composerReplyTo("", ""))
 	patch(w, composerNote("Posted as "+s.meName(r.Context(), sess)+" · "+id))
+}
+
+// composerSuggest offers the people in the conversation for the @ somebody
+// is typing. It reads the record over the shell's own read lane, morphs one
+// element and keeps nothing: a half-written message never leaves the
+// browser except as the fragment this filters on.
+func (s *Server) composerSuggest(w http.ResponseWriter, r *http.Request) {
+	sess := s.currentSession(r)
+	if sess == nil {
+		http.Error(w, "sign in first", http.StatusUnauthorized)
+		return
+	}
+	topicPath := s.resolveTopic(r.Context(), r.URL.Query().Get("topic"))
+	people := s.peopleIn(r.Context(), sess, topicPath)
+	patch(w, renderSuggest(suggestions(people, r.URL.Query().Get("q"))))
 }
 
 // composerReply sets — or, with no op, clears — the message the composer

@@ -20,15 +20,21 @@ func topicOpenWork(ctx context.Context, sess *session, path, who string) (string
 //
 // The handle materialises first so the new op parents onto the state the
 // person was looking at, and so a reply's anchor is resolvable.
-func topicSay(ctx context.Context, sess *session, path, body, anchor string) (string, error) {
+//
+// mentions is who the picker resolved. The library records the union of
+// those and whatever its own grammar reads out of the body, and taps each
+// one; the body goes as written either way.
+func topicSay(ctx context.Context, sess *session, path, body, anchor string,
+	mentions []string,
+) (string, error) {
 	h := topic.Open(sess.rc, path)
 	if _, err := h.Materialise(ctx); err != nil {
 		return "", err
 	}
 	if anchor != "" {
-		return h.AddComment(ctx, body, anchor)
+		return h.AddCommentMentioning(ctx, body, anchor, mentions)
 	}
-	return h.PostTurn(ctx, body)
+	return h.PostTurnMentioning(ctx, body, mentions)
 }
 
 // contributionAuthor returns the author of one contribution in a topic,
