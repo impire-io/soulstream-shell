@@ -4,6 +4,16 @@
 // passkey enrolment with a virtual authenticator, sign-in, a cookie-jarred
 // client holding the session.
 //
+// It stands up two deployment shapes, because which modules a build runs is
+// the deployment's answer and not the shell's. Start is the bundled shape:
+// the node runs its own sign-in plane, and the people who sign in are the
+// people it administers. StartExternalIdP is the other one: that plane is
+// off, sessions ride an authorization server standing outside the product
+// entirely, and there is nobody here to administer. Everything the shell is
+// handed in either arm comes from the deployment's own declaration
+// (ceremony.State), never from a constant written here — so what the gate
+// measures is the product's wiring and not the test's opinion of it.
+//
 // The consumer-position gate and the screens helper both drive this, so
 // what a person is shown in a screenshot is what the gate measures. Like
 // the gate module that holds it, this package sits outside the impire-io
@@ -34,6 +44,7 @@ import (
 	"github.com/impire-io/soulstream-core/registry"
 	siclient "github.com/impire-io/soulstream-identity/client"
 	"github.com/impire-io/soulstream-idp/authtest"
+	foldembed "github.com/impire-io/soulstream-idp/embed"
 	shellembed "github.com/impire-io/soulstream-shell/embed"
 	"github.com/impire-io/soulstream/ceremony"
 	"github.com/impire-io/soulstream/node"
@@ -52,6 +63,14 @@ type Rig struct {
 	Token    string
 	ShellURL string
 	Issuer   string
+	// Invite is the single-use enrolment invite the deployment's sign-in
+	// surface minted for the founding person — the bundled plane's in one
+	// arm, the external authorization server's in the other.
+	Invite string
+	// AdminBase is what this deployment declared about administering its
+	// own people, read back so a test can assert against the declaration
+	// rather than against a guess at it. Empty in the external-IdP arm.
+	AdminBase string
 
 	cancel context.CancelFunc
 	conns  []*nats.Conn
@@ -70,21 +89,38 @@ func reservePort() (string, error) {
 	return port, ln.Close()
 }
 
-// Start founds a realm in dir and serves it: the node, then the shell on
-// the ops read lane the soulnode plane hands it. A failure leaves nothing
-// running.
+// Start founds a realm in dir and serves it with the deployment's own
+// sign-in plane running: the node, then the shell on the ops read lane the
+// soulnode plane hands it. A failure leaves nothing running.
 func Start(dir string) (*Rig, error) {
-	foldPort, err := reservePort()
+	return start(dir, false)
+}
+
+// StartExternalIdP founds the same realm in the other deployment shape: the
+// sign-in plane off, and sessions signing in against an authorization
+// server outside the product altogether — a fold run standalone through its
+// own public embed seam, on its own store, which this node only knows the
+// URL of.
+//
+// It is the shape a deployment takes when its people already live
+// somewhere: the node holds the record, somebody else holds the people.
+func StartExternalIdP(dir string) (*Rig, error) {
+	return start(dir, true)
+}
+
+// start stands up one arm. The only thing the two arms decide differently
+// is where the authorization server comes from; everything the shell is
+// handed is read back off the deployment's own state either way.
+func start(dir string, external bool) (*Rig, error) {
+	asPort, err := reservePort()
 	if err != nil {
-		return nil, fmt.Errorf("rig: reserve fold port: %w", err)
+		return nil, fmt.Errorf("rig: reserve sign-in port: %w", err)
 	}
 	st, err := ceremony.Generate("127.0.0.1:0", "home")
 	if err != nil {
 		return nil, fmt.Errorf("rig: ceremony: %w", err)
 	}
 	st.DoorListen = "127.0.0.1:0"
-	st.FoldListen = "127.0.0.1:" + foldPort
-	st.FoldIssuer = "http://localhost:" + foldPort
 	// The node composes a shell plane of its own on the ceremony's default
 	// port. This rig drives the shell through its public embed seam instead,
 	// so the plane it composes must not fight a shell already on this
@@ -94,24 +130,50 @@ func Start(dir string) (*Rig, error) {
 	// switches on with public-door mode (the shell plane's soulnode wiring
 	// does this by default — the finding is recorded).
 	st.DoorPublicURL = "http://127.0.0.1:8666"
-	st.DoorAuthIssuer = st.FoldIssuer
-	st.DoorAuthAudience = st.FoldAudience
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var invite string
+	if external {
+		// The authorization server this deployment does not run. It starts
+		// first: the identity plane's callout validator discovers the issuer
+		// at startup, and so does the shell.
+		st.FoldEnabled = false
+		st.DoorAuthIssuer = "http://localhost:" + asPort
+		st.DoorAuthAudience = "soulstream-external"
+		invite, err = startExternalAS(ctx, filepath.Join(dir, "external-as"),
+			st.DoorAuthIssuer, "127.0.0.1:"+asPort, st.DoorAuthAudience)
+		if err != nil {
+			cancel()
+			return nil, err
+		}
+	} else {
+		st.FoldListen = "127.0.0.1:" + asPort
+		st.FoldIssuer = "http://localhost:" + asPort
+		st.DoorAuthIssuer = st.FoldIssuer
+		st.DoorAuthAudience = st.FoldAudience
+	}
 	if err := st.Save(dir); err != nil {
+		cancel()
 		return nil, fmt.Errorf("rig: save state: %w", err)
 	}
 	n, err := node.Start(node.Config{StateDir: dir, State: st, AuditWriter: io.Discard})
 	if err != nil {
+		cancel()
 		return nil, fmt.Errorf("rig: node: %w", err)
 	}
 	token, err := node.Found(n, st, dir)
 	if err != nil {
+		cancel()
 		n.Stop()
 		return nil, fmt.Errorf("rig: found: %w", err)
 	}
+	if !external {
+		invite = n.FoldInvite()
+	}
 
+	issuer, _ := st.SessionIssuer()
 	ready := make(chan string, 1)
 	errCh := make(chan error, 1)
-	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		errCh <- shellembed.Run(ctx, shellembed.Options{
 			Listen:       "127.0.0.1:0",
@@ -121,8 +183,12 @@ func Start(dir string) (*Rig, error) {
 			SentinelPath: ceremony.SentinelPath(dir),
 			Realm:        st.Realm,
 			Account:      st.RealmPub,
-			Issuer:       st.FoldIssuer,
-			Ready:        func(addr string) { ready <- addr },
+			Issuer:       issuer,
+			// The deployment's own declaration, not the rig's: whichever arm
+			// this is, the fact reaching the shell is the one the product
+			// computes for a real soulnode.
+			AdminBase: st.AdminSurface(),
+			Ready:     func(addr string) { ready <- addr },
 		})
 	}()
 	var addr string
@@ -139,9 +205,53 @@ func Start(dir string) (*Rig, error) {
 	}
 	return &Rig{
 		Dir: dir, State: st, Node: n, Token: token,
-		ShellURL: "http://" + addr, Issuer: st.FoldIssuer, cancel: cancel,
+		ShellURL: "http://" + addr, Issuer: issuer,
+		Invite: invite, AdminBase: st.AdminSurface(), cancel: cancel,
 		signers: map[string]identity.Signer{},
 	}, nil
+}
+
+// startExternalAS runs a fold standalone, through its own public embed
+// seam, on its own embedded store — an authorization server the product
+// composes no part of and can only reach over HTTP. It returns the
+// single-use invite that enrols the founding person's passkey there.
+//
+// The seeded groups are deliberately the bundled plane's own, admin
+// included: the only difference between the two arms is the shape of the
+// deployment, never the standing of the person signing in.
+func startExternalAS(ctx context.Context, stateDir, issuer, listen, audience string) (string, error) {
+	if err := os.MkdirAll(stateDir, 0o700); err != nil {
+		return "", fmt.Errorf("rig: external AS state: %w", err)
+	}
+	ready := make(chan string, 1)
+	errCh := make(chan error, 1)
+	invites := make(chan string, 1)
+	go func() {
+		errCh <- foldembed.Run(ctx, foldembed.Options{
+			Issuer: issuer, Listen: listen, StateDir: stateDir,
+			TokenAudience: audience, EnableDCR: true,
+			SeedUsers: []foldembed.SeedUser{{
+				Username:    ceremony.FoundingPersona,
+				DisplayName: ceremony.FoundingPersona,
+				Roles:       []string{"admin", "realm"},
+			}},
+			InviteSink: func(_, token string) { invites <- token },
+			Ready:      func(addr string) { ready <- addr },
+		})
+	}()
+	select {
+	case <-ready:
+	case err := <-errCh:
+		return "", fmt.Errorf("rig: external AS: %w", err)
+	case <-time.After(20 * time.Second):
+		return "", errors.New("rig: the external authorization server did not become ready")
+	}
+	select {
+	case token := <-invites:
+		return token, nil
+	default:
+		return "", errors.New("rig: the external authorization server minted no invite")
+	}
 }
 
 // Close drains everything this rig started; the directory is the caller's.
@@ -340,11 +450,19 @@ func postJSON(cl *http.Client, u, origin string, body []byte) ([]byte, error) {
 	return out, nil
 }
 
-// Enroll performs the passkey enrolment through the fold's standalone
-// invite lane with a virtual authenticator.
+// Enroll performs the passkey enrolment through the sign-in surface's
+// standalone invite lane with a virtual authenticator, spending the invite
+// the deployment minted for the founding person.
 func (r *Rig) Enroll(auth *authtest.Authenticator, username string) error {
+	return r.EnrollWith(auth, username, r.Invite)
+}
+
+// EnrollWith spends a named invite instead — the way somebody handed one
+// uses it, and the only way to find out whether the sign-in surface really
+// issued the one a screen showed: a token it never minted is refused here.
+func (r *Rig) EnrollWith(auth *authtest.Authenticator, username, invite string) error {
 	cl := &http.Client{}
-	q := url.Values{"username": {username}, "invite": {r.Node.FoldInvite()}}
+	q := url.Values{"username": {username}, "invite": {invite}}
 	raw, err := postJSON(cl, r.Issuer+"/enroll/begin?"+q.Encode(), r.Issuer, nil)
 	if err != nil {
 		return err

@@ -23,6 +23,11 @@ type Session struct {
 	sp *Support
 	nc *nats.Conn
 	rc *realm.Client
+	// bearer is the token the issuer handed this person at sign-in — the
+	// shell's own custody, copied here so a module can act as them against
+	// a surface that speaks HTTP rather than NATS. It lives as long as the
+	// session and no longer.
+	bearer string
 
 	// stop ends the inbox follower this session runs on its own connection.
 	stop context.CancelFunc
@@ -44,6 +49,18 @@ type Session struct {
 // persona, their signature. Every act rides it — the surface's own read
 // lane never writes.
 func (sess *Session) Client() *realm.Client { return sess.rc }
+
+// Admin is this person's own reach into the deployment's people-and-sign-in
+// administration surface, carrying their bearer and no standing of the
+// surface's own. Nil when the deployment declares no such surface — the
+// same absence the module above reads to know it is not part of this
+// deployment.
+func (sess *Session) Admin() *Admin {
+	if sess.sp.cfg.AdminBase == "" {
+		return nil
+	}
+	return &Admin{base: sess.sp.cfg.AdminBase, bearer: sess.bearer, cl: sess.sp.adminCl}
+}
 
 // ScreenName is what to call this person on screen: what the issuer said
 // when it said anything, else what the realm's own persona directory

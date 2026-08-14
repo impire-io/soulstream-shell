@@ -12,6 +12,7 @@ package embed
 import (
 	"context"
 
+	"github.com/impire-io/soulstream-shell/modules/admin"
 	"github.com/impire-io/soulstream-shell/modules/conversations"
 	"github.com/impire-io/soulstream-shell/modules/overview"
 	"github.com/impire-io/soulstream-shell/shell"
@@ -37,6 +38,14 @@ type Options struct {
 	// Issuer is the OIDC authorization server (the bundled fold by
 	// default in soulnode).
 	Issuer string
+	// AdminBase is the base URL of the people-and-sign-in administration
+	// surface this deployment runs — the sign-in plane's own when the
+	// deployment runs one and signs its people in against it. A deployment
+	// whose people live on an authorization server it does not run leaves
+	// this empty, and the module that administers people is then not part
+	// of that build at all: no key on the rail, no route, 404 like any path
+	// nobody claimed. It is the one option here a deployment may omit.
+	AdminBase string
 	// Ready, when set, receives the bound listen address.
 	Ready func(addr string)
 }
@@ -79,13 +88,17 @@ func Run(ctx context.Context, o Options) error {
 		Realm:        o.Realm,
 		Account:      o.Account,
 		Issuer:       o.Issuer,
+		AdminBase:    o.AdminBase,
 	})
 	if err != nil {
 		return err
 	}
 	defer sp.Close()
 
-	// The order is the order of the rail: the house first, then the room.
-	sh.Register(overview.New(sh, sp), conversations.New(sh, sp))
+	// The order is the order of the rail: the house first, then the room,
+	// then the people who may come into it. Every one of them is registered
+	// the same way and on the same terms — which of them this deployment
+	// actually runs is each module's own answer, asked once at Run.
+	sh.Register(overview.New(sh, sp), conversations.New(sh, sp), admin.New(sh, sp))
 	return sh.Run(ctx)
 }

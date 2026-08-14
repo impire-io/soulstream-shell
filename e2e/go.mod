@@ -65,3 +65,7 @@ require (
 )
 
 replace github.com/impire-io/soulstream-shell => ../
+
+// TEMPORARY until soulstream tags the shell plane's AdminBase wiring
+// (ceremony.State.AdminSurface, node.startHelm). Remove with the pin bump.
+replace github.com/impire-io/soulstream => ../../soulstream

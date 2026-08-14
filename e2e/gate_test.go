@@ -19,6 +19,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -56,7 +57,13 @@ func startRig(t *testing.T) (*rig.Rig, string) {
 		t.Fatal(err)
 	}
 	t.Cleanup(r.Close)
+	return r, seed(t, r)
+}
 
+// seed plants those two conversations against a rig that is already up, so
+// both deployment shapes read the same record.
+func seed(t *testing.T, r *rig.Rig) string {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	owner, err := r.Owner(ctx)
@@ -78,7 +85,7 @@ func startRig(t *testing.T) (*rig.Rig, string) {
 	if _, err := h.PostTurn(ctx, seededTurn); err != nil {
 		t.Fatal(err)
 	}
-	return r, annexe.Path()
+	return annexe.Path()
 }
 
 // signIn walks the ceremony and checks the surface a person lands on is the
@@ -142,6 +149,41 @@ func get(t *testing.T, cl *http.Client, u string) string {
 	out, _ := io.ReadAll(resp.Body)
 	return string(out)
 }
+
+// post takes an act over the session and returns the patch response, the
+// way the browser's own click does.
+func post(t *testing.T, cl *http.Client, u string) string {
+	t.Helper()
+	resp, err := cl.Post(u, "text/plain", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	out, _ := io.ReadAll(resp.Body)
+	return string(out)
+}
+
+// statusOf is what a path answers, for the paths a deployment is meant not
+// to have.
+func statusOf(t *testing.T, cl *http.Client, method, u string) int {
+	t.Helper()
+	req, err := http.NewRequest(method, u, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := cl.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
+	return resp.StatusCode
+}
+
+// inviteRe pulls the shown-once invite out of the fragment that shows it.
+// The prefix is the sign-in surface's own, so a screen inventing a token
+// would not even match here.
+var inviteRe = regexp.MustCompile(`value="(sfi_[0-9a-f]+)"`)
 
 // verified materialises a topic with a keyring built from the identity
 // plane's open directory, so every op carries an earned verdict rather
@@ -773,6 +815,77 @@ func TestShellGate(t *testing.T) {
 			t.Fatalf("%s says the retired word: …%s…", page.what,
 				page.body[max(0, i-70):min(len(page.body), i+70)])
 		}
+	}
+
+	// Bar 2, the arm where the sign-in plane is present: the module that
+	// administers people is part of this build, and it acts.
+	//
+	// It is on the spine because the deployment declares a surface to
+	// administer, and for no other reason — the same registration, through
+	// the same contract, as the two modules that are always there.
+	if r.AdminBase == "" {
+		t.Fatal("the bundled deployment declared no administration surface")
+	}
+	screen := get(t, cl, r.ShellURL+"/people")
+	for _, want := range []string{`class="ir on" href="/people`, "People &amp; sign-in",
+		"Sign-in name", "Passkeys", `id="people-table"`, `id="people-result"`,
+		`<td class="mono">` + ceremony.FoundingPersona + `</td>`,
+		`<span class="pill ok"><span class="led ok"></span>yes</span>`,
+		// The groups the sign-in surface holds for this person, which are
+		// the groups their own token carried here — the standing that got
+		// this list read at all.
+		`<span class="pill">admin</span>`,
+		`@post('/act/invite?who=` + ceremony.FoundingPersona,
+		`@post('/act/disable?who=` + ceremony.FoundingPersona,
+	} {
+		if !strings.Contains(screen, want) {
+			t.Fatalf("the people screen is missing %q: %s", want, screen)
+		}
+	}
+
+	// The act, round-tripped: the shell asks the sign-in surface as the
+	// signed-in person, and what comes back is an invite that surface will
+	// honour. A token this screen invented would be refused at enrolment.
+	minted := post(t, cl, r.ShellURL+"/act/invite?who="+ceremony.FoundingPersona)
+	shown := frameWith(t, minted, `id="people-result"`)
+	m := inviteRe.FindStringSubmatch(shown)
+	if m == nil {
+		t.Fatalf("no invite on the screen that asked for one:\n%s", shown)
+	}
+	if !strings.Contains(shown, "Shown once") {
+		t.Fatalf("the screen does not say the invite is shown once:\n%s", shown)
+	}
+	second, err := authtest.New("localhost", r.Issuer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.EnrollWith(second, ceremony.FoundingPersona, m[1]); err != nil {
+		t.Fatalf("the sign-in surface refused the invite its own screen showed: %v", err)
+	}
+	// And it was single-use, which is the surface's own semantic rather
+	// than anything this module gets to decide.
+	third, err := authtest.New("localhost", r.Issuer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.EnrollWith(third, ceremony.FoundingPersona, m[1]); err == nil {
+		t.Fatal("the invite was spent twice")
+	}
+
+	// The other act: taking a sign-in away, and the screen re-reads the
+	// surface rather than believing the click. The list that comes back is
+	// the sign-in surface's own answer to a fresh question.
+	off := post(t, cl, r.ShellURL+"/act/disable?who="+ceremony.FoundingPersona)
+	if note := frameWith(t, off, `id="people-result"`); !strings.Contains(note,
+		ceremony.FoundingPersona+" can no longer sign in") {
+		t.Fatalf("the screen does not say what it did:\n%s", note)
+	}
+	table := frameWith(t, off, `id="people-table"`)
+	if !strings.Contains(table, `<span class="pill warn">no</span>`) {
+		t.Fatalf("the re-read list still says they can sign in:\n%s", table)
+	}
+	if strings.Contains(table, "/act/disable?who=") {
+		t.Fatalf("the screen offers to take away a sign-in that is already gone:\n%s", table)
 	}
 
 	// Sign out closes the session.

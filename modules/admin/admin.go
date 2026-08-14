@@ -1,0 +1,170 @@
+// Package admin is the shell module for the people who can sign in: who
+// they are, how somebody gets their first passkey, and taking a sign-in
+// away.
+//
+// It is the module that is not always there, and that is the point of it.
+// Whether a deployment runs this surface is neither the module's opinion
+// nor the shell's: a deployment that signs its people in against an
+// authorization server it does not run has nobody to administer from here,
+// and says so by declaring no administration surface. Active reads exactly
+// that declaration — no probe, no reachability guess, and not one line of
+// configuration invented for the shell's sake. Absent, the module puts
+// nothing on the rail and mounts nothing, so every path below answers like
+// any other path nobody claimed.
+//
+// Authority is delegated, never borrowed: every call rides the signed-in
+// person's own bearer through the Soulstream support layer, and what comes
+// back when they lack the standing is the sign-in surface's own refusal,
+// put on the screen in the words it used.
+package admin
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+
+	"github.com/impire-io/soulstream-shell/shell"
+	"github.com/impire-io/soulstream-shell/soulstream"
+)
+
+// esc and qesc are the frame's own escaping, named short because most of
+// this module is markup.
+var (
+	esc  = shell.Esc
+	qesc = shell.QueryEsc
+)
+
+// This module's key on the spine.
+const sectionPeople = "people"
+
+// Module is the people-and-sign-in surface.
+type Module struct {
+	sh *shell.Shell
+	sp *soulstream.Support
+}
+
+// New builds the module over a shell and the Soulstream support layer.
+func New(sh *shell.Shell, sp *soulstream.Support) *Module {
+	return &Module{sh: sh, sp: sp}
+}
+
+// Identity names the module. On screen it is called by what it does, not
+// by what it is built on: a person managing their colleagues' sign-ins
+// should never have to know which component answers.
+func (m *Module) Identity() shell.Identity {
+	return shell.Identity{Slug: "admin", Name: "People & sign-in"}
+}
+
+// Active is the whole of how this module learns which deployment it is in:
+// one fact the deployment already declares about itself.
+func (m *Module) Active(context.Context) bool { return m.sp.AdminSurface() != "" }
+
+// Nav is this module's one key on the spine. It carries the open
+// conversation the way every other entry does, so coming back from here
+// lands where the person left.
+func (m *Module) Nav(r *http.Request) []shell.NavEntry {
+	return []shell.NavEntry{{
+		Section: sectionPeople, Icon: "users", Label: "People & sign-in",
+		Href: "/people" + topicQuery(r.URL.Query().Get("topic")),
+	}}
+}
+
+// Mount claims the screen and the two acts offered from it.
+func (m *Module) Mount(rt shell.Router) {
+	rt.HandleFunc("GET /people", m.people)
+	rt.HandleFunc("POST /act/invite", m.actInvite)
+	rt.HandleFunc("POST /act/disable", m.actDisable)
+}
+
+// topicQuery carries the open conversation across screens.
+func topicQuery(topicPath string) string {
+	if topicPath == "" {
+		return ""
+	}
+	return "?topic=" + qesc(topicPath)
+}
+
+// reach is this request's own way into the surface: the signed-in person's,
+// or nothing. A request carrying no session belongs at the front door. A
+// session with no reach cannot arrive here at all — an inactive module
+// mounts no routes — so it is reported as the contradiction it would be
+// rather than passed on as an empty screen.
+func (m *Module) reach(r *http.Request) (*soulstream.Admin, error) {
+	sess := m.sp.Session(r)
+	if sess == nil {
+		return nil, errNoSession
+	}
+	a := sess.Admin()
+	if a == nil {
+		return nil, errors.New("this deployment administers its sign-ins elsewhere")
+	}
+	return a, nil
+}
+
+// errNoSession is the one refusal that is not the surface's: nobody is
+// signed in, so there is nobody to act as.
+var errNoSession = errors.New("no session — sign in first")
+
+// people is the screen: everyone who can sign in, and the two acts a
+// person with the standing may take on them.
+func (m *Module) people(w http.ResponseWriter, r *http.Request) {
+	a, err := m.reach(r)
+	if err != nil {
+		http.Redirect(w, r, m.sh.Home(), http.StatusFound)
+		return
+	}
+	list, err := a.People(r.Context())
+	m.sh.Render(w, r, shell.Page{
+		Title: "people and sign-in", Section: sectionPeople, Live: true,
+		Body: m.sh.Sheet(renderPeople(list, err)),
+	})
+}
+
+// actInvite mints a single-use enrolment invite for somebody who already
+// exists. The token comes back once and is kept nowhere, so the screen
+// shows it whole and says out loud that this is the only time.
+func (m *Module) actInvite(w http.ResponseWriter, r *http.Request) {
+	a, err := m.reach(r)
+	if err != nil {
+		shell.Patch(w, resultNote(err.Error()))
+		return
+	}
+	who := r.URL.Query().Get("who")
+	inv, err := a.MintInvite(r.Context(), who)
+	if err != nil {
+		shell.Patch(w, resultNote(refusalWords("Creating an invite for "+who, err)))
+		return
+	}
+	shell.Patch(w, renderInvite(who, inv))
+}
+
+// actDisable takes somebody's sign-in away, then re-reads the list so the
+// screen shows what is now true rather than what the person clicked.
+func (m *Module) actDisable(w http.ResponseWriter, r *http.Request) {
+	a, err := m.reach(r)
+	if err != nil {
+		shell.Patch(w, resultNote(err.Error()))
+		return
+	}
+	who := r.URL.Query().Get("who")
+	if err := a.Disable(r.Context(), who); err != nil {
+		shell.Patch(w, resultNote(refusalWords("Disabling "+who, err)))
+		return
+	}
+	shell.Patch(w, resultNote(fmt.Sprintf("%s can no longer sign in.", who)))
+	list, err := a.People(r.Context())
+	shell.Patch(w, renderTable(list, err))
+}
+
+// refusalWords says what happened in the surface's own words. A refusal a
+// person is meant to read as "not yours to do" is named as that; anything
+// else is reported as the fault it is, never dressed up.
+func refusalWords(what string, err error) string {
+	var ref *soulstream.Refusal
+	if errors.As(err, &ref) && ref.Denied() {
+		return what + " needs an account that administers sign-ins — yours does not. " +
+			"The sign-in surface said: " + ref.Msg
+	}
+	return what + " failed: " + err.Error()
+}

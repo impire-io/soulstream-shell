@@ -53,6 +53,12 @@ type Config struct {
 	// Issuer is the sign-in surface, read for the house readout only — the
 	// shell does the signing in.
 	Issuer string
+	// AdminBase is the base URL of the people-and-sign-in administration
+	// surface this deployment runs, and the one optional field here: a
+	// deployment whose people are administered somewhere it does not run
+	// declares none, and every module that needs one is then not part of
+	// that deployment.
+	AdminBase string
 }
 
 // Support is the layer itself: one read lane for the surface, and a session
@@ -64,6 +70,10 @@ type Support struct {
 	nc  *nats.Conn
 	rc  *realm.Client
 	dir *siclient.Client
+	// adminCl is the lane to the administration surface: shared for its
+	// connection pool, never for its authority — the bearer rides per call,
+	// from the session that owns it.
+	adminCl *http.Client
 
 	mu        sync.Mutex
 	keyCache  map[string]string // persona -> public key (directory reads)
@@ -83,7 +93,8 @@ func Open(ctx context.Context, sh *shell.Shell, cfg Config) (*Support, error) {
 		return nil, errors.New("soulstream: every Config field is required")
 	}
 	sp := &Support{cfg: cfg, sh: sh,
-		keyCache: map[string]string{}, cardCache: map[string]Card{}}
+		keyCache: map[string]string{}, cardCache: map[string]Card{},
+		adminCl: &http.Client{Timeout: 10 * time.Second}}
 
 	var err error
 	sp.nc, err = nats.Connect(cfg.NATSURL, nats.UserCredentials(cfg.CredsPath),
@@ -115,6 +126,14 @@ func (sp *Support) Close() {
 // writes.
 func (sp *Support) Reader() *realm.Client { return sp.rc }
 
+// AdminSurface is where this deployment administers the people who can sign
+// in, "" when it administers them nowhere this surface reaches. It is a
+// declared deployment fact and nothing else: a module asks it to learn
+// whether it is part of this deployment at all, and asking is the whole of
+// what that costs — no probe, no round-trip, no configuration of the
+// shell's own.
+func (sp *Support) AdminSurface() string { return sp.cfg.AdminBase }
+
 // Session is the Soulstream side of the session this request carries, nil
 // when it carries none.
 func (sp *Support) Session(r *http.Request) *Session {
@@ -140,6 +159,7 @@ func (sp *Support) SignedIn(ctx context.Context, sh *shell.Session) (any, error)
 	// issuer that says nothing leaves the id standing in, and ScreenName
 	// keeps asking the persona directory until somebody publishes one.
 	sess := &Session{Persona: sh.Subject, sp: sp, nc: nc, name: sh.Subject,
+		bearer: sh.Bearer,
 		unread: map[string]map[string]bool{}, seen: map[string]bool{}}
 	if sh.Name != "" {
 		sess.name, sess.named = sh.Name, true

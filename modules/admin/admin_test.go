@@ -1,0 +1,132 @@
+package admin
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/impire-io/soulstream-shell/soulstream"
+)
+
+// routes records what a module claims, without serving any of it.
+type routes struct{ patterns []string }
+
+func (rt *routes) Handle(pattern string, _ http.Handler) {
+	rt.patterns = append(rt.patterns, pattern)
+}
+
+func (rt *routes) HandleFunc(pattern string, _ func(http.ResponseWriter, *http.Request)) {
+	rt.patterns = append(rt.patterns, pattern)
+}
+
+// people is a list as the sign-in surface hands one over: somebody who can
+// sign in and has a passkey, and somebody who cannot.
+func people() []soulstream.Person {
+	return []soulstream.Person{
+		{ID: "u-1", Username: "owner", DisplayName: "Daan", Status: "active",
+			Groups: []string{"admin", "keeper"}, Credentials: 1},
+		{ID: "u-2", Username: "avery", Status: "disabled", Credentials: 0},
+	}
+}
+
+// The module claims its screen and the two acts offered from it — and
+// nothing another surface could be serving.
+func TestTheModuleClaimsItsOwnRoutes(t *testing.T) {
+	m := New(nil, nil)
+	if got := m.Identity(); got.Slug != "admin" || got.Name != "People & sign-in" {
+		t.Errorf("the module names itself %+v", got)
+	}
+	var rt routes
+	m.Mount(&rt)
+	want := []string{"GET /people", "POST /act/invite", "POST /act/disable"}
+	if !reflect.DeepEqual(rt.patterns, want) {
+		t.Errorf("the module mounts %v, want %v", rt.patterns, want)
+	}
+}
+
+// Its one key on the spine carries the open conversation, so the way back
+// from here lands where the person left.
+func TestTheKeyOnTheSpineCarriesTheOpenConversation(t *testing.T) {
+	m := New(nil, nil)
+	r := httptest.NewRequest(http.MethodGet, "/people?topic=home/kitchen", nil)
+	nav := m.Nav(r)
+	if len(nav) != 1 {
+		t.Fatalf("the module contributes %d entries, want 1", len(nav))
+	}
+	if nav[0].Icon != "users" || nav[0].Label != "People & sign-in" {
+		t.Errorf("the entry reads %+v", nav[0])
+	}
+	if !strings.HasSuffix(nav[0].Href, "?topic=home%2Fkitchen") {
+		t.Errorf("the entry drops the open conversation: %q", nav[0].Href)
+	}
+	bare := m.Nav(httptest.NewRequest(http.MethodGet, "/people", nil))
+	if bare[0].Href != "/people" {
+		t.Errorf("with no conversation open the entry reads %q", bare[0].Href)
+	}
+}
+
+// The screen says what a person needs in plain words, and offers each act
+// only where it means something: nothing to take away from somebody who
+// already cannot sign in.
+func TestTheScreenOffersActsOnlyWhereTheyMeanSomething(t *testing.T) {
+	body := renderPeople(people(), nil)
+	for _, want := range []string{
+		"People &amp; sign-in", "Sign-in name", "Passkeys",
+		"Daan", "avery", `class="pill ok"`, `class="pill warn"`,
+		`@post('/act/invite?who=owner')`, `@post('/act/disable?who=owner')`,
+		`id="people-table"`, `id="people-result"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the screen is missing %q", want)
+		}
+	}
+	if strings.Contains(body, "who=avery") {
+		t.Error("the screen offers to take a sign-in away from somebody who has none")
+	}
+	// The plain-language rule: the screen names no component and no byname.
+	for _, banned := range []string{"realm", "fold", "idp", "soulstream-idp", "OIDC"} {
+		if strings.Contains(strings.ToLower(body), strings.ToLower(banned)) {
+			t.Errorf("the screen says %q at a person", banned)
+		}
+	}
+}
+
+// The one answer carrying a secret says out loud that it is the only time
+// it will ever be shown.
+func TestTheInviteIsShownOnceAndSaysSo(t *testing.T) {
+	got := renderInvite("avery", soulstream.Invite{
+		Token: "sfi_deadbeef", URL: "http://as/enroll?invite=sfi_deadbeef",
+	})
+	for _, want := range []string{"sfi_deadbeef", "Shown once", "avery",
+		`id="people-result"`, "Enrolment link"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the invite answer is missing %q:\n%s", want, got)
+		}
+	}
+}
+
+// A person without the standing is told so, in the surface's own words —
+// never shown a fault, and never left guessing.
+func TestAStandingRefusalReadsAsOne(t *testing.T) {
+	denied := &soulstream.Refusal{Status: http.StatusForbidden,
+		Msg: "adminapi: the token carries no admin role"}
+	words := refusalWords("Creating an invite for avery", denied)
+	if !strings.Contains(words, "administers sign-ins") ||
+		!strings.Contains(words, "no admin role") {
+		t.Errorf("a standing refusal reads as %q", words)
+	}
+	broken := &soulstream.Refusal{Status: http.StatusInternalServerError,
+		Msg: "store: unreachable"}
+	if w := refusalWords("Reading the list of people", broken); strings.Contains(w, "yours does not") {
+		t.Errorf("a fault reads as a standing refusal: %q", w)
+	}
+}
+
+// An empty list is a sentence, not an empty table.
+func TestAnEmptyListSaysSo(t *testing.T) {
+	if got := renderTable(nil, nil); !strings.Contains(got, "Nobody can sign in here yet") {
+		t.Errorf("an empty list renders as %q", got)
+	}
+}
