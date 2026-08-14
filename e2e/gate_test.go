@@ -29,6 +29,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 
+	"github.com/impire-io/soulstream-core/identity"
 	"github.com/impire-io/soulstream-core/realm"
 	"github.com/impire-io/soulstream-core/topic"
 	siclient "github.com/impire-io/soulstream-identity/client"
@@ -37,6 +38,10 @@ import (
 	"github.com/impire-io/soulstream/ceremony"
 	"github.com/impire-io/soulstream/node"
 )
+
+// seededTurn is the message the rig plants as the founding owner, so the
+// gate has something to observe — and something to answer.
+const seededTurn = "the gate is watching"
 
 func reservePort(t *testing.T) string {
 	t.Helper()
@@ -116,7 +121,7 @@ func startRig(t *testing.T) *rig {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.PostTurn(ctx, "the gate is watching"); err != nil {
+	if _, err := h.PostTurn(ctx, seededTurn); err != nil {
 		t.Fatal(err)
 	}
 
@@ -257,6 +262,12 @@ func signIn(t *testing.T, r *rig, auth *authtest.Authenticator) *http.Client {
 	if !strings.Contains(string(body), "Sign out") {
 		t.Fatalf("helm page shows no session: %s", body)
 	}
+	// The signed-in page offers participation, not only observation.
+	for _, want := range []string{`id="composer"`, `id="composer-box"`, "Add to the conversation"} {
+		if !strings.Contains(string(body), want) {
+			t.Fatalf("signed-in page has no composer (%q missing): %s", want, body)
+		}
+	}
 	return cl
 }
 
@@ -282,6 +293,80 @@ func readSSE(t *testing.T, cl *http.Client, u string, d time.Duration) string {
 		}
 	}
 	return b.String()
+}
+
+// verified materialises a topic with a keyring built from the identity
+// plane's open directory, so every op carries an earned verdict rather
+// than the unknown-key default.
+func verified(ctx context.Context, t *testing.T, rc *realm.Client, nc *nats.Conn,
+	account, path string,
+) *topic.MaterializedTopic {
+	t.Helper()
+	h := topic.Open(rc, path)
+	mt, err := h.Materialise(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := siclient.New(nc, account, ceremony.FoundingPersona)
+	kr := &identity.Keyring{Keys: map[string][]string{}}
+	for _, c := range mt.Contributions {
+		if _, ok := kr.Keys[c.Author]; ok {
+			continue
+		}
+		k, err := dir.PersonaPublicKey(c.Author)
+		if err != nil {
+			t.Fatalf("no published key for %s: %v", c.Author, err)
+		}
+		kr.Keys[c.Author] = []string{k}
+	}
+	h.UseKeyring(kr)
+	if mt, err = h.Materialise(ctx); err != nil {
+		t.Fatal(err)
+	}
+	return mt
+}
+
+// find returns the contribution with the given body.
+func find(mt *topic.MaterializedTopic, body string) *topic.Contribution {
+	for i := range mt.Contributions {
+		if mt.Contributions[i].Body == body {
+			return &mt.Contributions[i]
+		}
+	}
+	return nil
+}
+
+// patchFrame returns the lines of the first complete
+// datastar-patch-elements event in an SSE response.
+func patchFrame(t *testing.T, sse string) []string {
+	t.Helper()
+	var frame []string
+	open := false
+	for _, line := range strings.Split(sse, "\n") {
+		switch {
+		case line == "event: datastar-patch-elements":
+			open, frame = true, []string{line}
+		case open && line == "":
+			return frame
+		case open:
+			frame = append(frame, line)
+		}
+	}
+	t.Fatalf("no complete patch frame in:\n%s", sse)
+	return nil
+}
+
+// elementsIn joins a frame's element lines the way the browser joins
+// them. Everything else on the frame the browser drops — which is the
+// point: a fragment written with raw newlines arrives truncated.
+func elementsIn(frame []string) string {
+	var lines []string
+	for _, l := range frame {
+		if v, ok := strings.CutPrefix(l, "data: elements "); ok {
+			lines = append(lines, v)
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // scanFor walks the state dir (skipping the realm's own churn) looking
@@ -390,6 +475,98 @@ func TestHelmGate(t *testing.T) {
 		t.Fatalf("work item author = %q — not the fold principal", author)
 	}
 
+	// The composer: the signed-in person writes into the conversation.
+	// The rig posts what the browser's form posts — the same encoding
+	// Datastar's form mode puts on the wire.
+	post := func(form url.Values) string {
+		t.Helper()
+		resp, err := cl.PostForm(r.helmURL+"/act/post-turn", form)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		return string(out)
+	}
+	const said = "posted from the composer"
+	if got := post(url.Values{"body": {said}}); !strings.Contains(got, "Posted as") {
+		t.Fatalf("the composer did not post: %s", got)
+	}
+
+	// The message is on the record: the session's own principal wrote it,
+	// signed with that principal's own key.
+	path := entries[len(entries)-1].Path
+	mt = verified(ctx, t, rc, rnc, r.st.RealmPub, path)
+	posted := find(mt, said)
+	if posted == nil {
+		t.Fatalf("the message never reached the record: %+v", mt.Contributions)
+	}
+	if posted.Author == "" || posted.Author == ceremony.FoundingPersona {
+		t.Fatalf("message author = %q — not the signed-in principal", posted.Author)
+	}
+	if posted.Author != author {
+		t.Fatalf("message author = %q, work author = %q — one session, one principal",
+			posted.Author, author)
+	}
+	if posted.Type != topic.TypeTurnPost {
+		t.Fatalf("message type = %q, want %q", posted.Type, topic.TypeTurnPost)
+	}
+	if posted.Sig != topic.SigVerified {
+		t.Fatalf("message signature = %q, want %q", posted.Sig, topic.SigVerified)
+	}
+
+	// Answering: the composer takes its anchor from the record, and the
+	// answer lands as a reply on the message it names.
+	seeded := find(mt, seededTurn)
+	if seeded == nil {
+		t.Fatalf("the seeded message is gone: %+v", mt.Contributions)
+	}
+	anchorResp, err := cl.Get(r.helmURL + "/composer/reply?op=" + url.QueryEscape(seeded.OpID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	anchor, _ := io.ReadAll(anchorResp.Body)
+	anchorResp.Body.Close()
+	if !strings.Contains(string(anchor), `name="reply-to" value="`+seeded.OpID+`"`) {
+		t.Fatalf("the composer did not take the anchor: %s", anchor)
+	}
+	const answered = "answered from the composer"
+	if got := post(url.Values{"body": {answered}, "reply-to": {seeded.OpID}}); !strings.Contains(got, "Posted as") {
+		t.Fatalf("the composer did not answer: %s", got)
+	}
+	mt = verified(ctx, t, rc, rnc, r.st.RealmPub, path)
+	reply := find(mt, answered)
+	if reply == nil {
+		t.Fatalf("the answer never reached the record: %+v", mt.Contributions)
+	}
+	if reply.Anchor != seeded.OpID || reply.Dangling {
+		t.Fatalf("answer anchor = %q (dangling=%v), want %q",
+			reply.Anchor, reply.Dangling, seeded.OpID)
+	}
+	if reply.Author != posted.Author || reply.Sig != topic.SigVerified {
+		t.Fatalf("answer by %q signature %q — want %q / %q",
+			reply.Author, reply.Sig, posted.Author, topic.SigVerified)
+	}
+
+	// And both arrive in the view the ordinary way: the live stream's
+	// next morph carries them, no reload asked of anyone.
+	stream := readSSE(t, cl, r.helmURL+"/live", 3*time.Second)
+	frame := patchFrame(t, stream)
+	for _, l := range frame[1:] {
+		if !strings.HasPrefix(l, "data: ") {
+			t.Fatalf("the browser drops this line of the patch frame: %q", l)
+		}
+	}
+	seen := elementsIn(frame)
+	if !strings.HasPrefix(seen, `<div id="dash">`) || !strings.HasSuffix(seen, "</div>") {
+		t.Fatalf("the view the browser receives is not a whole fragment:\n%s", seen)
+	}
+	for _, want := range []string{said, "↳ " + answered, "reply"} {
+		if !strings.Contains(seen, want) {
+			t.Fatalf("view missing %q after posting:\n%s", want, seen)
+		}
+	}
+
 	// Sign out closes the session.
 	if _, err := cl.Post(r.helmURL+"/logout", "", nil); err != nil {
 		t.Fatal(err)
@@ -453,5 +630,6 @@ func TestHelmGate(t *testing.T) {
 	if string(magic) != "wOF2" {
 		t.Fatalf("font magic = %q", magic)
 	}
-	fmt.Println("helm gate: ceremony, custody, offline render — all green")
+	fmt.Printf("helm gate: ceremony, the composer (%s posted and answered), "+
+		"custody, offline render — all green\n", posted.Author)
 }

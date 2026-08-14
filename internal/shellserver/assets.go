@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"io/fs"
 	"regexp"
+	"strings"
 )
 
 //go:embed assets
@@ -21,7 +22,7 @@ func Assets() fs.FS {
 
 var (
 	iconLicense = regexp.MustCompile(`(?s)<!--.*?-->\s*`)
-	iconSize    = regexp.MustCompile(`\s+(width|height)="24"`)
+	iconBreaks  = regexp.MustCompile(`\s+`)
 	icons       = map[string]template.HTML{}
 )
 
@@ -32,8 +33,12 @@ func init() {
 		if err != nil {
 			continue
 		}
+		// The vendored width and height stay on: an SVG carrying only a
+		// viewBox grows to the width of whatever holds it, and .btn svg is
+		// the only rule in the token source that would stop it.
 		svg := iconLicense.ReplaceAllString(string(raw), "")
-		svg = iconSize.ReplaceAllString(svg, "")
+		// One line each: icons ride SSE frames a second at a time.
+		svg = strings.TrimSpace(iconBreaks.ReplaceAllString(svg, " "))
 		name := e.Name()[:len(e.Name())-len(".svg")]
 		icons[name] = template.HTML(svg) // #nosec G203 -- vendored static SVGs, embedded at build
 	}

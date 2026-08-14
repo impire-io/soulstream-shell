@@ -111,6 +111,8 @@ func Run(ctx context.Context, opts Options) error {
 	mux.HandleFunc("GET /callback", s.callback)
 	mux.HandleFunc("POST /logout", s.logout)
 	mux.HandleFunc("POST /act/work-open", s.actWorkOpen)
+	mux.HandleFunc("POST /act/post-turn", s.actPostTurn)
+	mux.HandleFunc("GET /composer/reply", s.composerReply)
 
 	s.httpSrv = &http.Server{Addr: boundAddr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	if opts.Ready != nil {
@@ -306,8 +308,13 @@ func (s *Server) renderDash(v view) string {
 		fmt.Fprintf(&b, `<div class="section"><div class="eyebrow">%s<span class="strip shell">latest activity · %s</span></div><div class="screen">`,
 			Icon("database"), esc(v.TopicPath))
 		for _, c := range v.Topic.Contributions {
-			fmt.Fprintf(&b, `<p><span class="dim">%s</span> %s · %s %s</p>`,
-				c.Timestamp.Format("15:04:05"), esc(trunc(c.Body, 80)), esc(c.Author), sigMark(c.Sig))
+			lead := ""
+			if c.Anchor != "" {
+				lead = "↳ "
+			}
+			fmt.Fprintf(&b, `<p><span class="dim">%s</span> %s%s · %s %s %s</p>`,
+				c.Timestamp.Format("15:04:05"), lead, esc(trunc(c.Body, 80)),
+				esc(c.Author), sigMark(c.Sig), replyLink(v.TopicPath, c.OpID))
 		}
 		for _, w := range v.Topic.WorkItems {
 			fmt.Fprintf(&b, `<p><span class="dim">%s</span> work %q · %s · %s</p>`,
