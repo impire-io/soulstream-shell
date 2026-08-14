@@ -50,8 +50,8 @@ github.com/impire-io/soulstream v0.8.0 h1:sX66ioO0T3rsGS/QFmM866dRGKH4tQS705TTGz
 github.com/impire-io/soulstream v0.8.0/go.mod h1:BRrh5TwTiz+x5H3cyCGlU7MJYHlrLqWZQ/O/blE8mnU=
 github.com/impire-io/soulstream-archivist v0.3.0 h1:JF5rY3Aknr6z0yVhbHi+Dh0TK+0SjcLFCmrYdBsmAgI=
 github.com/impire-io/soulstream-archivist v0.3.0/go.mod h1:2zX7OJLDtW0uUDG0OV+cvBokOJKGbQsTQD1H2/RFzSU=
-github.com/impire-io/soulstream-core v0.8.0 h1:hn9E7zEy2qY3eDx9BPHeUXJCpVrtrK4mAbeB2g4D7ss=
-github.com/impire-io/soulstream-core v0.8.0/go.mod h1:IFrTcdTqVmTSeBMOxlnqxiSQ6t4RG6aZ905WXwk+Msg=
+github.com/impire-io/soulstream-core v0.8.1 h1:y6O3IvxTZ6IvSigf+IxAOZdPpq8NmG8j7sjtJNTr8x0=
+github.com/impire-io/soulstream-core v0.8.1/go.mod h1:IFrTcdTqVmTSeBMOxlnqxiSQ6t4RG6aZ905WXwk+Msg=
 github.com/impire-io/soulstream-identity v0.2.0 h1:k28fVZQcIGtgEofcLls6ZHx92T812BcQ9sk4FPx1Bfs=
 github.com/impire-io/soulstream-identity v0.2.0/go.mod h1:ap57XR/bDU22PrJ7DITCBIXoxnyX6YBwNcB0YsXDglA=
 github.com/impire-io/soulstream-idp v0.4.0 h1:+ChgC5hurzj/wG3HUUle+hJKMUmYcpw3m0QxE1fdbSQ=

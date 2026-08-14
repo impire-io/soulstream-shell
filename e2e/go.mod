@@ -4,7 +4,7 @@ go 1.26.2
 
 require (
 	github.com/impire-io/soulstream v0.8.0
-	github.com/impire-io/soulstream-core v0.8.0
+	github.com/impire-io/soulstream-core v0.8.1
 	github.com/impire-io/soulstream-identity v0.2.0
 	github.com/impire-io/soulstream-idp v0.4.0
 	github.com/impire-io/soulstream-shell v0.2.0
@@ -65,9 +65,3 @@ require (
 )
 
 replace github.com/impire-io/soulstream-shell => ../
-
-// TEMPORARY until core tags v0.8.1 — the mention-supplying arms
-// (PostTurnMentioning and friends) are on main, unreleased. This is the one
-// upstream the consumer-position gate does not take at its published tag;
-// drop it and bump the require above once the tag exists.
-replace github.com/impire-io/soulstream-core => ../../soulstream-core

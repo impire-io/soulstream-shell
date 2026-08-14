@@ -4,7 +4,7 @@ go 1.26.2
 
 require (
 	github.com/coreos/go-oidc/v3 v3.20.0
-	github.com/impire-io/soulstream-core v0.8.0
+	github.com/impire-io/soulstream-core v0.8.1
 	github.com/impire-io/soulstream-identity v0.2.0
 	github.com/nats-io/nats.go v1.52.0
 	golang.org/x/oauth2 v0.36.0
@@ -22,8 +22,3 @@ require (
 	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 )
-
-// TEMPORARY until core tags v0.8.1 — the mention-supplying arms
-// (PostTurnMentioning and friends) are on main, unreleased. Drop this and
-// bump the require above once the tag exists.
-replace github.com/impire-io/soulstream-core => ../soulstream-core
