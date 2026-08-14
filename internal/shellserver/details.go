@@ -158,8 +158,13 @@ func renderDetails(v view) string {
 		if p.Me {
 			youMark = `<span class="you">you</span>`
 		}
-		fmt.Fprintf(&people, `<li><span class="who">%s</span>%s<span class="said">%s</span></li>`,
-			esc(p.Name), youMark, esc(saidWords(p)))
+		// The name is what a person reads; the id behind it is the tooltip,
+		// written the way it would be typed. It is the only place the surface
+		// says how to tap somebody on the shoulder, because @-mentions only
+		// resolve against the id the record carries — never a display name.
+		fmt.Fprintf(&people, `<li><span class="who" title="@%s">%s</span>%s`+
+			`<span class="said">%s</span></li>`,
+			esc(p.Persona), esc(p.Name), youMark, esc(saidWords(p)))
 	}
 	people.WriteString(`</ul>`)
 	b.WriteString(detSection("users", "People", people.String()))

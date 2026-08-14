@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -26,10 +27,52 @@ import (
 // touches disk.
 type session struct {
 	Persona string // the admitted persona-shaped id
-	Display string // human-facing name (id until O3 resolves richer)
 	Signed  bool
 	nc      *nats.Conn
 	rc      *realm.Client
+
+	// stop ends the mention follower this session runs on its own
+	// connection.
+	stop context.CancelFunc
+
+	mu sync.Mutex
+	// name is what to call this person on screen, and named says whether it
+	// is theirs or the id standing in until somebody publishes one.
+	name  string
+	named bool
+	// unread is this person's own tray: the conversations holding a message
+	// with their name in it, and which messages those are. seen is every
+	// slip already tallied, so a replayed inbox never resurrects a message
+	// already read. Both are memory only — the record keeps the inbox; the
+	// shell keeps only what this session has looked at.
+	unread map[string]map[string]bool
+	seen   map[string]bool
+}
+
+// screenName is the name already settled for this person, and whether it is
+// settled: the fold's when the fold said one, or the directory's once it
+// answered.
+func (sess *session) screenName() (string, bool) {
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+	return sess.name, sess.named
+}
+
+// nameIs settles what this person is called and returns it.
+func (sess *session) nameIs(name string) string {
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+	sess.name, sess.named = name, true
+	return name
+}
+
+// close drains one session: the mention follower first, so its consumer is
+// gone before the connection under it is.
+func (sess *session) close() {
+	if sess.stop != nil {
+		sess.stop()
+	}
+	sess.nc.Close()
 }
 
 type oidcRP struct {
@@ -115,7 +158,7 @@ func (s *Server) closeAllSessions() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for id, sess := range s.sessions {
-		sess.nc.Close()
+		sess.close()
 		delete(s.sessions, id)
 	}
 }
@@ -167,12 +210,6 @@ func (s *Server) callback(w http.ResponseWriter, r *http.Request) {
 	if persona == "" {
 		persona = idt.Subject
 	}
-	// The name to put on screen: what the fold knows, else what the realm's
-	// own persona directory publishes, else the id the record carries.
-	display := claims.Name
-	if display == "" {
-		display = s.displayName(r.Context(), persona)
-	}
 
 	nc2, err := nats.Connect(s.opts.NATSURL,
 		nats.UserCredentials(s.opts.SentinelPath), nats.Token(tok.AccessToken))
@@ -180,7 +217,14 @@ func (s *Server) callback(w http.ResponseWriter, r *http.Request) {
 		fail("admission (oidc lane)", err)
 		return
 	}
-	sess := &session{Persona: persona, Display: display, nc: nc2}
+	// The name to put on screen starts as whatever the fold said. A fold
+	// that says nothing leaves the id standing in, and meName keeps asking
+	// the persona directory until somebody publishes one.
+	sess := &session{Persona: persona, nc: nc2, name: persona,
+		unread: map[string]map[string]bool{}, seen: map[string]bool{}}
+	if claims.Name != "" {
+		sess.name, sess.named = claims.Name, true
+	}
 	cfg := realm.Config{Realm: s.opts.Realm, Persona: persona}
 	if signer, serr := siclient.New(nc2, s.opts.Account, persona).PersonaSigner(persona); serr == nil {
 		cfg.Signer = signer
@@ -189,10 +233,15 @@ func (s *Server) callback(w http.ResponseWriter, r *http.Request) {
 	rc2, err := realm.NewClient(r.Context(), nc2, cfg)
 	if err != nil {
 		nc2.Close()
-		fail("realm client", err)
+		fail("soulstream client", err)
 		return
 	}
 	sess.rc = rc2
+	// This person's own inbox, followed over this person's own connection,
+	// for as long as they are signed in.
+	fctx, stop := context.WithCancel(context.Background())
+	sess.stop = stop
+	go s.followMentions(fctx, sess)
 	sid := randTok()
 	s.mu.Lock()
 	s.sessions[sid] = sess
@@ -206,7 +255,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie("helm_session"); err == nil {
 		s.mu.Lock()
 		if sess := s.sessions[c.Value]; sess != nil {
-			sess.nc.Close()
+			sess.close()
 		}
 		delete(s.sessions, c.Value)
 		s.mu.Unlock()

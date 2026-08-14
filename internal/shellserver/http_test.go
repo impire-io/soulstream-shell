@@ -1,6 +1,9 @@
 package shellserver
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -300,7 +303,7 @@ func TestUnknownVoicesKeepTheirRecordedName(t *testing.T) {
 // The spine holds the few places a person can go, and Home is one of them
 // from every screen. The section they are on is marked, and only that one.
 func TestTheSpineReachesHomeFromAnywhere(t *testing.T) {
-	rail := renderIconRail(sectionChat, "home/kitchen")
+	rail := renderIconRail(sectionChat, "home/kitchen", mentionTally(0))
 	for _, want := range []string{
 		`href="/home?topic=home%2Fkitchen"`, `<span class="lbl">Home</span>`,
 		`href="/?topic=home%2Fkitchen"`, `<span class="lbl">Conversations</span>`,
@@ -317,7 +320,8 @@ func TestTheSpineReachesHomeFromAnywhere(t *testing.T) {
 	if !strings.Contains(rail, `class="ir on" href="/?topic=home%2Fkitchen"`) {
 		t.Errorf("the conversation screen is not the marked one:\n%s", rail)
 	}
-	if !strings.Contains(renderIconRail(sectionHome, ""), `class="ir on" href="/home"`) {
+	if !strings.Contains(renderIconRail(sectionHome, "", mentionTally(0)),
+		`class="ir on" href="/home"`) {
 		t.Error("the overview does not mark itself")
 	}
 	// Expanding is page-local: a signal and a class, no round-trip.
@@ -328,6 +332,173 @@ func TestTheSpineReachesHomeFromAnywhere(t *testing.T) {
 	if strings.Contains(rail, `id="dash"`) || strings.Contains(rail, `id="conversations"`) ||
 		strings.Contains(rail, `id="details"`) {
 		t.Errorf("the spine writes into a target the live stream owns:\n%s", rail)
+	}
+}
+
+// The one thing on the spine the live stream does keep current is the
+// mentions tally — and it does so through a target of its own, so the spine
+// around it (and the labels a person pulled out) survives every tick.
+func TestTheSpineCarriesTheMentionsTally(t *testing.T) {
+	quiet := renderIconRail(sectionChat, "", mentionTally(0))
+	if n := strings.Count(quiet, `id="mentions"`); n != 1 {
+		t.Fatalf("the spine carries the tally %d times, want 1:\n%s", n, quiet)
+	}
+	if strings.Contains(quiet, `class="tally on"`) {
+		t.Errorf("nothing is waiting and the spine still counts:\n%s", quiet)
+	}
+	loud := renderIconRail(sectionChat, "", mentionTally(3))
+	if !strings.Contains(loud, `<span id="mentions" class="tally on" title="3 messages mention you">3</span>`) {
+		t.Errorf("the spine does not carry the count:\n%s", loud)
+	}
+	// It belongs to Conversations, not to Home or the status screen.
+	if strings.Index(loud, `id="mentions"`) < strings.Index(loud, `>Conversations<`) {
+		t.Errorf("the tally hangs off the wrong entry:\n%s", loud)
+	}
+	if !strings.Contains(mentionTally(1), "1 message mentions you") {
+		t.Errorf("one waiting message reads as many: %s", mentionTally(1))
+	}
+}
+
+// mentioned is the conversation with the reader's name in someone's message.
+func mentioned() *topic.MaterializedTopic {
+	mt := convo()
+	mt.Contributions[0].Mentions = []string{"u-me"}
+	return mt
+}
+
+// A message that says your name is marked where it was said — and the mark
+// comes off the record itself, so it holds whether or not the slip in your
+// inbox ever arrived.
+func TestAMessageThatSaysYourNameIsMarked(t *testing.T) {
+	v := meView()
+	v.Topic = mentioned()
+	got := renderThread(v)
+	if !strings.Contains(got, `<div class="msg mentions" data-op="op-1">`) {
+		t.Errorf("the message that mentions the reader is not marked:\n%s", got)
+	}
+	if n := strings.Count(got, "mentions"); n != 1 {
+		t.Errorf("%d messages are marked, want 1:\n%s", n, got)
+	}
+	// Somebody else's name is not the reader's.
+	other := meView()
+	other.Topic = mentioned()
+	other.Me = "avery"
+	if strings.Contains(renderThread(other), `class="msg mentions`) {
+		t.Error("a mention of someone else is marked as the reader's")
+	}
+	// Signed out, nobody's name is in anything.
+	anon := meView()
+	anon.Topic, anon.Me = mentioned(), ""
+	if strings.Contains(renderThread(anon), "mentions") {
+		t.Error("a view with no session claims a mention as somebody's")
+	}
+}
+
+// A conversation holding messages with your name in it is marked in the
+// list, with its own share of the count.
+func TestTheRailMarksConversationsThatWantYou(t *testing.T) {
+	v := meView()
+	v.Unread = map[string]int{"home/attic": 2}
+	rail := renderRail(v)
+	if !strings.Contains(rail, `<a class="conv unread" href="/?topic=home%2Fattic">`) {
+		t.Errorf("the conversation holding the mentions is not marked:\n%s", rail)
+	}
+	if !strings.Contains(rail, `<span class="tally on" title="2 messages mention you">2</span>`) {
+		t.Errorf("the rail does not say how many are waiting:\n%s", rail)
+	}
+	if strings.Contains(rail, `class="conv on unread"`) {
+		t.Errorf("the open conversation is marked unread:\n%s", rail)
+	}
+	// The overview lists the same conversations and says the same thing.
+	over := renderOverview(v)
+	if !strings.Contains(over, `class="tally on" title="2 messages mention you"`) {
+		t.Errorf("the overview does not mark the conversation:\n%s", over)
+	}
+	// Nothing waiting, nothing marked.
+	if strings.Contains(renderRail(meView()), "tally") {
+		t.Error("an empty tray still marks the rail")
+	}
+}
+
+// The tray is the session's own: slips fill it, opening a conversation
+// empties that conversation's share, and an inbox replayed after a
+// reconnect never resurrects a message already read.
+func TestTheTrayFillsAndEmptiesOnReading(t *testing.T) {
+	sess := &session{unread: map[string]map[string]bool{}, seen: map[string]bool{}}
+	board := []topic.BoardEntry{{Path: "home/attic"}, {Path: "home/kitchen"}}
+	sess.tap("home/attic", "op-1")
+	sess.tap("home/attic", "op-1") // the same slip twice is one message
+	sess.tap("home/attic", "op-2")
+	sess.tap("home/kitchen", "op-3")
+	if got := sess.standing(board); got["home/attic"] != 2 || got["home/kitchen"] != 1 {
+		t.Fatalf("the tray holds %v, want 2 in the attic and 1 in the kitchen", got)
+	}
+	if n := unreadTotal(sess.standing(board)); n != 3 {
+		t.Errorf("the whole tray counts %d, want 3", n)
+	}
+	sess.read("home/attic")
+	if got := sess.standing(board); got["home/attic"] != 0 || got["home/kitchen"] != 1 {
+		t.Fatalf("reading the attic left %v", got)
+	}
+	sess.tap("home/attic", "op-1") // the inbox replays
+	if got := sess.standing(board); got["home/attic"] != 0 {
+		t.Errorf("a replayed inbox resurrected a message already read: %v", got)
+	}
+	// A slip pointing somewhere the board does not reach is not a mark: it
+	// would open onto nothing, and nothing would ever clear it.
+	sess.tap("home/cellar", "op-9")
+	if got := sess.standing(board); len(got) != 1 {
+		t.Errorf("a slip for a conversation off the board became a mark: %v", got)
+	}
+}
+
+// The word the operator retired. The Go keeps it — realm.Client, the realm
+// package, the flag a deployment sets — but nothing a person reads says it.
+func TestNothingServedSaysTheRetiredWord(t *testing.T) {
+	v := meView()
+	v.Topic, v.Unread = working(), map[string]int{"home/attic": 1}
+	s := &Server{opts: Options{Realm: "home"}}
+	sess := &session{Persona: "u-me", name: "Daan", named: true}
+	rec := httptest.NewRecorder()
+	s.page(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	for what, served := range map[string]string{
+		"the rail":            renderRail(v),
+		"the conversation":    renderThread(v),
+		"the details":         renderDetails(v),
+		"the overview":        renderOverview(v),
+		"the status readouts": renderPlanes(v),
+		"the spine":           renderIconRail(sectionChat, "home/kitchen", mentionTally(1)),
+		"the composer":        renderComposer("home/kitchen"),
+		"the top bar":         s.topbar(context.Background(), sess),
+		"the sign-in card":    rec.Body.String(),
+	} {
+		if strings.Contains(strings.ToLower(served), "realm") {
+			t.Errorf("%s says the retired word:\n%s", what, served)
+		}
+	}
+}
+
+// The signed-in person reads their own name, everywhere they appear. The id
+// behind it stays reachable — as a tooltip, never as the thing on screen.
+func TestTheSignedInPersonIsNamedNotNumbered(t *testing.T) {
+	s := &Server{opts: Options{Realm: "home"}}
+	sess := &session{Persona: "u-f468aecb", name: "Daan", named: true}
+	bar := s.topbar(context.Background(), sess)
+	if !strings.Contains(bar, `<span class="who" title="u-f468aecb">Daan</span>`) {
+		t.Errorf("the top bar does not say the person's name:\n%s", bar)
+	}
+
+	v := meView()
+	v.Names["u-me"] = "Daan"
+	det := renderDetails(v)
+	if !strings.Contains(det, `<span class="who" title="@u-me">Daan</span><span class="you">you</span>`) {
+		t.Errorf("the People list does not put the pill on the name:\n%s", det)
+	}
+	// Everyone else keeps the handle behind their name too — it is the only
+	// place the surface says what to type to tap somebody.
+	if !strings.Contains(det, `<span class="who" title="@avery">Avery</span>`) {
+		t.Errorf("the other person carries no handle:\n%s", det)
 	}
 }
 

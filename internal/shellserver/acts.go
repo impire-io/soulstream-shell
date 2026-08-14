@@ -9,9 +9,9 @@ import (
 // topicOpenWork posts work.open through the session's realm client —
 // the session's connection, the session's persona, the session's
 // signature. The shell's own lane never writes.
-func topicOpenWork(ctx context.Context, sess *session, path string) (string, error) {
+func topicOpenWork(ctx context.Context, sess *session, path, who string) (string, error) {
 	return topic.Open(sess.rc, path).
-		OpenWork(ctx, "opened by "+sess.Display, "opened from the shell")
+		OpenWork(ctx, "opened by "+who, "opened from the shell")
 }
 
 // topicSay adds a message to a conversation through the session's own

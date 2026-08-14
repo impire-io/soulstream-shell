@@ -29,9 +29,9 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 <span class="led"></span><span class="tbar-wordmark" style="font-family:var(--font-core);font-weight:var(--weight-bold);font-size:22px;letter-spacing:-.035em;font-variation-settings:'wdth' 88">soulstream</span>
 <span class="strip">shell</span></div>
 <div class="card raised"><h1>Sign in</h1>
-<p class="lede">The cockpit shows your realm — sign in with your passkey.</p>
+<p class="lede">The cockpit shows your soulstream — sign in with your passkey.</p>
 <p style="margin-top:var(--space-6)"><a class="btn" style="border-bottom:none" href="/login">%sSign in with the fold</a></p>
-</div><p class="foot">soulstream · shell · realm %s</p></main></body></html>`,
+</div><p class="foot">soulstream · shell · %s</p></main></body></html>`,
 			pageHead("shell — soulstream", false), Icon("power"), esc(s.opts.Realm))
 		return
 	}
@@ -67,16 +67,22 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 })();
 </script>
 </body></html>`,
-		pageHead("shell — soulstream", true), qesc(topicPath), s.topbar(sess.Display),
-		renderIconRail(sectionChat, topicPath), Icon("messages-square"),
+		pageHead("shell — soulstream", true), qesc(topicPath),
+		s.topbar(r.Context(), sess),
+		// The tally starts empty and the live stream fills it, like the rail
+		// and the conversation beside it: counting it here would mean reading
+		// the board before serving a page that is about to read it anyway.
+		renderIconRail(sectionChat, topicPath, mentionTally(0)), Icon("messages-square"),
 		renderComposer(topicPath))
 }
 
 // sheetPage writes a signed-in screen whose content is one scrolling sheet
 // beside the spine — the shape every screen that is not the conversation
-// takes, so the way back to the others never moves.
-func (s *Server) sheetPage(w http.ResponseWriter, sess *session,
-	section, topicPath, title, body string,
+// takes, so the way back to the others never moves. These screens do not
+// stream, so the spine's tally is counted here from what the view already
+// read.
+func (s *Server) sheetPage(w http.ResponseWriter, r *http.Request, sess *session,
+	section string, v view, title, body string,
 ) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, `%s
@@ -85,10 +91,10 @@ func (s *Server) sheetPage(w http.ResponseWriter, sess *session,
 <div class="frame">
 %s
 <main class="sheet"><div class="sheet-in">%s
-<p class="foot">soulstream · shell · your data lives in the realm, not here</p>
+<p class="foot">soulstream · shell · your data lives in your soulstream, not here</p>
 </div></main>
-</div></body></html>`, pageHead(title, true), s.topbar(sess.Display),
-		renderIconRail(section, topicPath), body)
+</div></body></html>`, pageHead(title, true), s.topbar(r.Context(), sess),
+		renderIconRail(section, v.TopicPath, mentionTally(unreadTotal(v.Unread))), body)
 }
 
 // home is the overview: the house at a glance and the way into every
@@ -101,15 +107,18 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 	}
 	v := s.observe(r.Context(), r.URL.Query().Get("topic"), sess)
 	s.health(r.Context(), &v)
-	s.sheetPage(w, sess, sectionHome, v.TopicPath, "home — soulstream", renderOverview(v))
+	s.sheetPage(w, r, sess, sectionHome, v, "home — soulstream", renderOverview(v))
 }
 
-// topbar is the ink housing every signed-in screen hangs from.
-func (s *Server) topbar(who string) string {
+// topbar is the ink housing every signed-in screen hangs from. It says the
+// person's own name; the id behind it is the tooltip, for the once a year
+// somebody needs it.
+func (s *Server) topbar(ctx context.Context, sess *session) string {
 	return fmt.Sprintf(`<header class="tbar slim"><span class="wordmark">soulstream</span>`+
-		`<span class="strip">shell</span><span class="strip shell">realm · %s</span>`+
-		`<span class="spacer"></span><span class="who">%s</span><span class="led"></span></header>`,
-		esc(s.opts.Realm), esc(who))
+		`<span class="strip">shell</span><span class="strip shell">%s</span>`+
+		`<span class="spacer"></span><span class="who" title="%s">%s</span>`+
+		`<span class="led"></span></header>`,
+		esc(s.opts.Realm), esc(sess.Persona), esc(s.meName(ctx, sess)))
 }
 
 // status is the house readouts — storage, sign-in, work — off the
@@ -129,14 +138,15 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 <p style="margin-top:var(--space-8)">
 <button class="btn ghost" data-on:click="@post('/act/work-open?topic=%s')">Open work item</button></p>
 <div id="result">—</div>`, renderPlanes(v), qesc(v.TopicPath))
-	s.sheetPage(w, sess, sectionStatus, v.TopicPath, "system status — soulstream", body)
+	s.sheetPage(w, r, sess, sectionStatus, v, "system status — soulstream", body)
 }
 
 // live is the Datastar SSE channel: the observed state re-rendered and
-// morphed into the stream's own three targets — the rail of conversations,
-// the conversation itself, and the details beside it. Session-gated like
-// every realm-bearing surface, and the session is also what tells the
-// render whose messages are theirs.
+// morphed into the stream's own four targets — the rail of conversations,
+// the conversation itself, the details beside it, and the mentions tally on
+// the spine. Session-gated like every surface that carries the record, and
+// the session is also what tells the render whose messages are theirs and
+// which of them said their name.
 func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 	sess := s.currentSession(r)
 	if sess == nil {
@@ -153,9 +163,15 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 	topicPath := r.URL.Query().Get("topic")
 	for {
 		v := s.observe(r.Context(), topicPath, sess)
+		// Looking at a conversation is reading what is in it: its marks go
+		// before the tick that would have shown them, so the count never
+		// stands over the very messages in front of the person.
+		sess.read(v.TopicPath)
+		v.Unread = sess.standing(v.Board)
 		writeElements(w, renderRail(v))
 		writeElements(w, renderThread(v))
 		writeElements(w, renderDetails(v))
+		writeElements(w, mentionTally(unreadTotal(v.Unread)))
 		fl.Flush()
 		select {
 		case <-r.Context().Done():
@@ -211,14 +227,15 @@ func (s *Server) actWorkOpen(w http.ResponseWriter, r *http.Request) {
 		patch(w, `<div id="result">no topic to open work on</div>`)
 		return
 	}
-	id, err := topicOpenWork(r.Context(), sess, topicPath)
+	who := s.meName(r.Context(), sess)
+	id, err := topicOpenWork(r.Context(), sess, topicPath, who)
 	if err != nil {
 		patch(w, fmt.Sprintf(`<div id="result">work.open as %s refused: %s</div>`,
-			esc(sess.Display), esc(err.Error())))
+			esc(who), esc(err.Error())))
 		return
 	}
 	patch(w, fmt.Sprintf(`<div id="result">work.open ok · %s · by %s (signed=%v)</div>`,
-		esc(id), esc(sess.Display), sess.Signed))
+		esc(id), esc(who), sess.Signed))
 }
 
 // actPostTurn is the composer's act: a message on the record through the
@@ -253,7 +270,7 @@ func (s *Server) actPostTurn(w http.ResponseWriter, r *http.Request) {
 	}
 	patch(w, composerBox(), "mode replace")
 	patch(w, composerReplyTo("", ""))
-	patch(w, composerNote("Posted as "+sess.Display+" · "+id))
+	patch(w, composerNote("Posted as "+s.meName(r.Context(), sess)+" · "+id))
 }
 
 // composerReply sets — or, with no op, clears — the message the composer

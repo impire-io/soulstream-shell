@@ -39,9 +39,16 @@ import (
 // gate has something to observe — and something to answer.
 const seededTurn = "the gate is watching"
 
-// startRig boots the deployment and seeds the conversation the ceremony
-// reads: one topic, one message from the founding owner.
-func startRig(t *testing.T) *rig.Rig {
+// startRig boots the deployment and seeds the two conversations the ceremony
+// reads: the gate's own, and an annexe for being tapped on the shoulder from
+// somewhere the person is not already looking. It returns the rig and the
+// annexe's path.
+//
+// The board comes back sorted by path, and the shell opens the last of them,
+// so "annexe" sorting ahead of "helm-gate" is what keeps the gate's own
+// conversation the one in the middle. The seeded message is the check: it is
+// in the gate's own room, and the ceremony reads it from the default.
+func startRig(t *testing.T) (*rig.Rig, string) {
 	t.Helper()
 	r, err := rig.Start(t.TempDir())
 	if err != nil {
@@ -55,6 +62,12 @@ func startRig(t *testing.T) *rig.Rig {
 	if err != nil {
 		t.Fatal(err)
 	}
+	annexe, err := topic.StartTopic(ctx, owner, topic.StartTopicInput{
+		Name: "annexe", SubjectMatter: "the room nobody is looking at",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	h, err := topic.StartTopic(ctx, owner, topic.StartTopicInput{
 		Name: "helm-gate", SubjectMatter: "the standing consumer-position gate",
 	})
@@ -64,7 +77,7 @@ func startRig(t *testing.T) *rig.Rig {
 	if _, err := h.PostTurn(ctx, seededTurn); err != nil {
 		t.Fatal(err)
 	}
-	return r
+	return r, annexe.Path()
 }
 
 // signIn walks the ceremony and checks the surface a person lands on is the
@@ -82,7 +95,7 @@ func signIn(t *testing.T, r *rig.Rig, auth *authtest.Authenticator) *http.Client
 	// The shape, in plain words.
 	for _, want := range []string{
 		`class="iconrail"`, `href="/home`, "Home", "Conversations",
-		`id="conversations"`, `id="dash"`, `class="thread-body"`,
+		`id="conversations"`, `id="dash"`, `class="thread-body"`, `id="mentions"`,
 		`id="details"`, `id="composer"`, `class="dock centred"`, `id="composer-box"`,
 		"Write a message…", `href="/status`, "System status",
 	} {
@@ -206,6 +219,72 @@ func frameFor(t *testing.T, frames [][]string, id string) []string {
 	return nil
 }
 
+// frameWith returns the content of the LAST patch frame carrying the target
+// in one read of the stream, so a read spanning several ticks is judged at
+// the state it ended in rather than the one it started in.
+func frameWith(t *testing.T, sse, id string) string {
+	t.Helper()
+	var last string
+	for _, f := range patchFrames(t, sse) {
+		if el := elementsIn(f); strings.Contains(el, id) {
+			last = el
+		}
+	}
+	if last == "" {
+		t.Fatalf("no patch frame carries %s in:\n%s", id, sse)
+	}
+	return last
+}
+
+// waitFor reads the live stream until some patch frame carrying target also
+// carries want, and returns everything read up to the end of that tick — so
+// the caller can pull the tick's other targets out of the same read. Slips
+// reach a person's tray from their own inbox on their own connection, so the
+// gate waits for that rather than betting on which tick it lands in.
+//
+// A tick is the four frames the stream writes before it flushes, and the
+// mentions tally is the last of them: that is how this knows the tick is
+// whole.
+func waitFor(t *testing.T, cl *http.Client, u, target, want string, d time.Duration) string {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), d)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	resp, err := cl.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	var read strings.Builder
+	var frame []string
+	open, found := false, false
+	sc := bufio.NewScanner(resp.Body)
+	sc.Buffer(make([]byte, 1<<20), 1<<20)
+	for sc.Scan() {
+		line := sc.Text()
+		read.WriteString(line)
+		read.WriteString("\n")
+		switch {
+		case line == "event: datastar-patch-elements":
+			open, frame = true, []string{line}
+		case open && line == "":
+			open = false
+			el := elementsIn(frame)
+			if strings.Contains(el, target) && strings.Contains(el, want) {
+				found = true
+			}
+			if found && strings.Contains(el, `id="mentions"`) {
+				return read.String()
+			}
+		case open:
+			frame = append(frame, line)
+		}
+	}
+	t.Fatalf("%s never carried %q; the stream said:\n%s", target, want, read.String())
+	return ""
+}
+
 // elementsIn joins a frame's element lines the way the browser joins
 // them. Everything else on the frame the browser drops — which is the
 // point: a fragment written with raw newlines arrives truncated.
@@ -251,7 +330,7 @@ func scanFor(t *testing.T, root, needle string) []string {
 }
 
 func TestShellGate(t *testing.T) {
-	r := startRig(t)
+	r, annexe := startRig(t)
 	auth, err := authtest.New("localhost", r.Issuer)
 	if err != nil {
 		t.Fatal(err)
@@ -318,7 +397,7 @@ func TestShellGate(t *testing.T) {
 	// Home is reachable from anywhere and renders inside the same frame: the
 	// house at a glance, and a way into every conversation.
 	overview := get(t, cl, r.ShellURL+"/home")
-	for _, want := range []string{"Your realm at a glance", "Storage", "Conversations",
+	for _, want := range []string{"Your soulstream at a glance", "Storage", "Conversations",
 		"helm-gate", `class="row" href="/?topic=`, `class="ir on" href="/home`} {
 		if !strings.Contains(overview, want) {
 			t.Fatalf("the overview is missing %q: %s", want, overview)
@@ -481,6 +560,110 @@ func TestShellGate(t *testing.T) {
 	}
 	if strings.Contains(side, "<a ") {
 		t.Fatalf("the details panel offers a link that goes nowhere:\n%s", side)
+	}
+
+	// A person reads their own name on their own screen. The fold mints an
+	// id and keeps whatever it knows about the human to itself, so the name
+	// lives in the realm's own directory — and the shell asks it again on
+	// every render until it answers, so a name published now reaches a
+	// session that signed in before it existed.
+	if err := r.Name(ctx, posted.Author, "Daan"); err != nil {
+		t.Fatal(err)
+	}
+	named := get(t, cl, r.ShellURL+"/")
+	if !strings.Contains(named, `<span class="who" title="`+posted.Author+`">Daan</span>`) {
+		t.Fatalf("the top bar numbers the person instead of naming them: %s", named)
+	}
+	if strings.Contains(named, ">"+posted.Author+"<") {
+		t.Fatalf("the raw id is on screen rather than behind the name: %s", named)
+	}
+	people := frameWith(t, readSSE(t, cl, r.ShellURL+"/live", 1500*time.Millisecond),
+		`id="details"`)
+	if !strings.Contains(people,
+		`<span class="who" title="@`+posted.Author+`">Daan</span><span class="you">you</span>`) {
+		t.Fatalf("the People list does not put the pill on the person's name:\n%s", people)
+	}
+
+	// Somebody says your name in a room you are not standing in. The mention
+	// is written as the id the record carries — the only thing @name resolves
+	// against; a display name would tap a pigeonhole nobody watches.
+	avery, err := r.Voice(ctx, "avery", "Avery")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ah := topic.Open(avery, annexe)
+	if _, err := ah.Materialise(ctx); err != nil {
+		t.Fatal(err)
+	}
+	const asked = "could you look at this one?"
+	mentionOp, err := ah.PostTurn(ctx, "@"+posted.Author+" "+asked)
+	if err != nil {
+		t.Fatal(err)
+	}
+	amt, err := topic.Open(rc, annexe).Materialise(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tap := find(amt, "@"+posted.Author+" "+asked)
+	if tap == nil || len(tap.Mentions) != 1 || tap.Mentions[0] != posted.Author {
+		t.Fatalf("the record did not read the mention: %+v", tap)
+	}
+
+	// It reaches the person's tray over their own connection, and the spine
+	// counts it — from a conversation they are not looking at.
+	chat := r.ShellURL + "/live?topic=" + url.QueryEscape(path)
+	tapped := waitFor(t, cl, chat, `id="mentions"`, `class="tally on"`, 20*time.Second)
+	if tally := frameWith(t, tapped, `id="mentions"`); !strings.Contains(tally, ">1</span>") {
+		t.Fatalf("the spine counts the wrong number of waiting messages: %s", tally)
+	}
+	if list := frameWith(t, tapped, `id="conversations"`); !strings.Contains(list, `class="conv unread"`) {
+		t.Fatalf("the conversation holding the mention is not marked in the rail:\n%s", list)
+	}
+
+	// The control: a message in the same room with nobody's name in it. The
+	// mark has to be the mention and not the room.
+	quiet, err := ah.PostTurn(ctx, "and one for nobody in particular")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Opening the room is reading it: the message that said the person's
+	// name stands out where it was said, the one that did not is a message
+	// like any other, and the count comes off the spine.
+	opened := waitFor(t, cl, r.ShellURL+"/live?topic="+url.QueryEscape(annexe),
+		`id="dash"`, `class="msg mentions"`, 20*time.Second)
+	room := frameWith(t, opened, `id="dash"`)
+	if !strings.Contains(room, fmt.Sprintf(`<div class="msg mentions" data-op=%q>`, mentionOp)) {
+		t.Fatalf("the message that says the person's name is not marked:\n%s", room)
+	}
+	if !strings.Contains(room, fmt.Sprintf(`<div class="msg" data-op=%q>`, quiet)) {
+		t.Fatalf("a message with nobody's name in it is marked too:\n%s", room)
+	}
+	if tally := frameWith(t, opened, `id="mentions"`); strings.Contains(tally, "tally on") {
+		t.Fatalf("the count survives opening the room it pointed at: %s", tally)
+	}
+
+	// The word the operator retired. The Go keeps it — realm.Client, the
+	// realm package, the flag a deployment sets — but nothing a person is
+	// served says it.
+	tokens, err := http.Get(r.ShellURL + "/assets/tokens.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tokenSrc, _ := io.ReadAll(tokens.Body)
+	tokens.Body.Close()
+	for _, page := range []struct{ what, body string }{
+		{"the sign-in card", string(anon)},
+		{"the conversation", named},
+		{"the overview", get(t, cl, r.ShellURL+"/home")},
+		{"the system-status screen", get(t, cl, r.ShellURL+"/status")},
+		{"the live stream", readSSE(t, cl, r.ShellURL+"/live", 1200*time.Millisecond)},
+		{"the token source", string(tokenSrc)},
+	} {
+		if i := strings.Index(strings.ToLower(page.body), "realm"); i >= 0 {
+			t.Fatalf("%s says the retired word: …%s…", page.what,
+				page.body[max(0, i-70):min(len(page.body), i+70)])
+		}
 	}
 
 	// Sign out closes the session.

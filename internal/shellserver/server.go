@@ -210,6 +210,31 @@ func (s *Server) displayName(ctx context.Context, persona string) string {
 	return e.name
 }
 
+// meName is the on-screen name for the signed-in person: what the fold said
+// when it said anything, else what the realm's own persona directory
+// publishes, else the id the record carries. A person should read their own
+// name on their own screen, not the id a machine minted for them.
+//
+// It resolves on the session rather than through the shared name cache, and
+// keeps asking until the directory answers: a profile published after
+// somebody signed in reaches their screen without asking them to sign in
+// again, and one person's unnamed session never leaves a miss in the cache
+// every other reader then inherits for a minute.
+func (s *Server) meName(ctx context.Context, sess *session) string {
+	if sess == nil {
+		return ""
+	}
+	name, settled := sess.screenName()
+	if settled {
+		return name
+	}
+	if p, found, err := registry.Lookup(ctx, s.rc, sess.Persona); err == nil && found &&
+		p.DisplayName != "" {
+		return sess.nameIs(p.DisplayName)
+	}
+	return name
+}
+
 // namesFor resolves every voice in a topic once per render.
 func (s *Server) namesFor(ctx context.Context, mt *topic.MaterializedTopic) map[string]string {
 	names := map[string]string{}
@@ -238,7 +263,11 @@ type view struct {
 	// theirs. "" when signed out.
 	Me string
 	// Names maps a persona to the name shown for it on screen.
-	Names     map[string]string
+	Names map[string]string
+	// Unread is how many messages in each conversation have this person's
+	// name in them and have not been looked at yet — this session's own
+	// tray, kept in memory and never on the record.
+	Unread    map[string]int
 	Board     []topic.BoardEntry
 	Topic     *topic.MaterializedTopic
 	TopicPath string
@@ -249,10 +278,11 @@ type view struct {
 }
 
 func (s *Server) observe(ctx context.Context, topicPath string, sess *session) view {
-	v := view{Realm: s.opts.Realm, TopicPath: topicPath, Names: map[string]string{}}
+	v := view{Realm: s.opts.Realm, TopicPath: topicPath, Names: map[string]string{},
+		Unread: map[string]int{}}
 	if sess != nil {
 		v.Me = sess.Persona
-		v.Names[sess.Persona] = sess.Display
+		v.Names[sess.Persona] = s.meName(ctx, sess)
 	}
 	entries, err := topic.Board(ctx, s.rc)
 	if err != nil {
@@ -260,6 +290,7 @@ func (s *Server) observe(ctx context.Context, topicPath string, sess *session) v
 		return v
 	}
 	v.Board = entries
+	v.Unread = sess.standing(entries)
 	if v.TopicPath == "" && len(entries) > 0 {
 		v.TopicPath = entries[len(entries)-1].Path
 	}

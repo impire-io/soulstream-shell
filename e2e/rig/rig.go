@@ -224,6 +224,20 @@ func (r *Rig) Voice(ctx context.Context, persona, display string) (*realm.Client
 	return rc, nil
 }
 
+// Name gives a persona a name on screen: its entry in the realm's own
+// persona directory, published as that persona over a lane the operator
+// mints for them.
+//
+// It is how a fold-issued person comes to be called something. The fold
+// mints the id and keeps the name to itself — nothing in the token it hands
+// the shell carries one — so the directory is the only place a human name
+// can live, and the directory takes an entry from nobody but the persona it
+// belongs to.
+func (r *Rig) Name(ctx context.Context, persona, display string) error {
+	_, err := r.Voice(ctx, persona, display)
+	return err
+}
+
 var csrfRe = regexp.MustCompile(`id="csrf" value="([^"]*)"`)
 
 type beginResp struct {

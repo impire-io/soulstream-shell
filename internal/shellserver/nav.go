@@ -31,6 +31,10 @@ type navEntry struct {
 	Icon    string
 	Label   string
 	Href    string
+	// Mark is what the entry carries after its label — the mentions tally
+	// on Conversations, nothing on the rest. It is its own patch target, so
+	// the live stream keeps it current without morphing the spine around it.
+	Mark string
 }
 
 // topicQuery carries the open conversation across screens, so coming back
@@ -44,14 +48,15 @@ func topicQuery(topicPath string) string {
 
 // navEntries is the rail's content: what sits at the top, what sits at the
 // foot. Sign out is not here — it is a form, not a link (see renderIconRail).
-func navEntries(topicPath string) (top, foot []navEntry) {
+func navEntries(topicPath, tally string) (top, foot []navEntry) {
 	q := topicQuery(topicPath)
 	top = []navEntry{
-		{sectionHome, "home", "Home", "/home" + q},
-		{sectionChat, "messages-square", "Conversations", "/" + q},
+		{Section: sectionHome, Icon: "home", Label: "Home", Href: "/home" + q},
+		{Section: sectionChat, Icon: "messages-square", Label: "Conversations",
+			Href: "/" + q, Mark: tally},
 	}
 	foot = []navEntry{
-		{sectionStatus, "gauge", "System status", "/status" + q},
+		{Section: sectionStatus, Icon: "gauge", Label: "System status", Href: "/status" + q},
 	}
 	return top, foot
 }
@@ -63,13 +68,16 @@ func navLink(e navEntry, active string) string {
 	if e.Section == active {
 		cls, current = "ir on", ` aria-current="page"`
 	}
-	return fmt.Sprintf(`<a class="%s" href="%s" title="%s"%s>%s<span class="lbl">%s</span></a>`,
-		cls, e.Href, esc(e.Label), current, Icon(e.Icon), esc(e.Label))
+	return fmt.Sprintf(`<a class="%s" href="%s" title="%s"%s>%s<span class="lbl">%s</span>%s</a>`,
+		cls, e.Href, esc(e.Label), current, Icon(e.Icon), esc(e.Label), e.Mark)
 }
 
-// renderIconRail is the spine itself, marked for the screen it is on.
-func renderIconRail(active, topicPath string) string {
-	top, foot := navEntries(topicPath)
+// renderIconRail is the spine itself, marked for the screen it is on. The
+// tally is passed in already rendered: the conversation page serves an empty
+// one and lets the live stream fill it a moment later, the way it fills
+// every other target on that page.
+func renderIconRail(active, topicPath, tally string) string {
+	top, foot := navEntries(topicPath, tally)
 	var b strings.Builder
 	b.WriteString(`<nav class="iconrail" aria-label="Sections" data-class:open="$rail">`)
 	fmt.Fprintf(&b, `<button type="button" class="ir toggle" title="Show the labels"`+

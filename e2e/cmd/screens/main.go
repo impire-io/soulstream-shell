@@ -133,7 +133,8 @@ func seedQuiet(ctx context.Context, owner *realm.Client) error {
 // seedConversation writes the transcript the screenshot is of: two other
 // voices on the record, the signed-in person's own messages through the
 // composer they would actually use, answers hanging off messages on both
-// sides, and work in every state the details panel can show.
+// sides, a message with the signed-in person's name in it, and work in every
+// state the details panel can show.
 func seedConversation(ctx context.Context, r *rig.Rig, cl *http.Client,
 	owner, avery *realm.Client, path string,
 ) error {
@@ -171,6 +172,20 @@ func seedConversation(ctx context.Context, r *rig.Rig, cl *http.Client,
 	}
 	if _, err := ah.AddComment(ctx, "You are a hero.", mine); err != nil {
 		return fmt.Errorf("avery's answer: %w", err)
+	}
+
+	// Now that the record says who the signed-in person is, they can be
+	// named — and tapped on the shoulder. The mention is written as the id
+	// the record carries: it is the only thing @name resolves against.
+	me, err := authorOf(ctx, ah, "Back in twenty.")
+	if err != nil {
+		return err
+	}
+	if err := r.Name(ctx, me, "Daan"); err != nil {
+		return fmt.Errorf("name the signed-in person: %w", err)
+	}
+	if _, err := ah.PostTurn(ctx, "@"+me+" did the good coffee come in a bag or a tin?"); err != nil {
+		return fmt.Errorf("avery's mention: %w", err)
 	}
 	return seedWork(ctx, oh, ah)
 }
@@ -224,14 +239,33 @@ func post(r *rig.Rig, cl *http.Client, path string, form url.Values) error {
 // latestBy finds the op id of a message by its body — the anchor an answer
 // needs, resolved against the record like every other anchor.
 func latestBy(ctx context.Context, h *topic.Handle, body string) (string, error) {
-	mt, err := h.Materialise(ctx)
+	c, err := latest(ctx, h, body)
 	if err != nil {
 		return "", err
 	}
+	return c.OpID, nil
+}
+
+// authorOf is how anything outside the shell learns the persona behind a
+// session: the fold's subject reaches the realm only as the author of what
+// that session writes, so the record is the one public witness of it.
+func authorOf(ctx context.Context, h *topic.Handle, body string) (string, error) {
+	c, err := latest(ctx, h, body)
+	if err != nil {
+		return "", err
+	}
+	return c.Author, nil
+}
+
+func latest(ctx context.Context, h *topic.Handle, body string) (*topic.Contribution, error) {
+	mt, err := h.Materialise(ctx)
+	if err != nil {
+		return nil, err
+	}
 	for i := len(mt.Contributions) - 1; i >= 0; i-- {
 		if mt.Contributions[i].Body == body {
-			return mt.Contributions[i].OpID, nil
+			return &mt.Contributions[i], nil
 		}
 	}
-	return "", fmt.Errorf("no message %q on the record", body)
+	return nil, fmt.Errorf("no message %q on the record", body)
 }

@@ -64,13 +64,16 @@ func renderRail(v view) string {
 		if e.Path == v.TopicPath {
 			cls = "conv on"
 		}
+		if v.Unread[e.Path] > 0 {
+			cls += " unread"
+		}
 		name := e.Announcement.Name
 		if name == "" {
 			name = e.Path
 		}
 		fmt.Fprintf(&b, `<a class="%s" href="/?topic=%s"><span class="name">%s</span>`+
-			`<span class="state">%s</span></a>`,
-			cls, qesc(e.Path), esc(name), esc(string(e.Lifecycle)))
+			`<span class="state">%s</span>%s</a>`,
+			cls, qesc(e.Path), esc(name), esc(string(e.Lifecycle)), unreadMark(v.Unread[e.Path]))
 	}
 	b.WriteString(`</nav>`)
 	return b.String()
@@ -146,6 +149,9 @@ func timeline(mt *topic.MaterializedTopic) []threadItem {
 // renderMsg is one bubble, with the answers to it (already rendered)
 // hanging underneath. Side is attribution: the signed-in person's own
 // messages sit right and carry no name — everyone else's sit left, named.
+// A message with the reader's name in it is marked, quietly and for good:
+// scrolling back, the ones that were about them are still the ones that
+// were about them.
 func renderMsg(v view, c *topic.Contribution, reply bool, answers string) string {
 	cls := "msg"
 	if mine(v, c.Author) {
@@ -153,6 +159,9 @@ func renderMsg(v view, c *topic.Contribution, reply bool, answers string) string
 	}
 	if reply {
 		cls += " reply"
+	}
+	if mentionsMe(v, c) {
+		cls += " mentions"
 	}
 	byline := fmt.Sprintf(`<div class="byline"><span class="name">%s</span>`+
 		`<span class="at">%s</span></div>`,
@@ -264,8 +273,8 @@ func renderPlanes(v view) string {
 // the way into every conversation from anywhere.
 func renderOverview(v view) string {
 	var b strings.Builder
-	b.WriteString(`<h1>Your realm at a glance</h1>`)
-	b.WriteString(`<p class="lede">Everything here is read live from your realm — ` +
+	b.WriteString(`<h1>Your soulstream at a glance</h1>`)
+	b.WriteString(`<p class="lede">Everything here is read live from your soulstream — ` +
 		`the shell keeps none of it.</p>`)
 	b.WriteString(`<div class="planes">`)
 	b.WriteString(planeCard("cassette-tape", "Storage", storageRow(v)))
@@ -295,9 +304,9 @@ func renderOverview(v view) string {
 			name = e.Path
 		}
 		fmt.Fprintf(&b, `<a class="row" href="/?topic=%s"><span class="name">%s</span>`+
-			`<span class="what">%s</span><span class="state">%s</span></a>`,
+			`<span class="what">%s</span>%s<span class="state">%s</span></a>`,
 			qesc(e.Path), esc(name), esc(e.Announcement.SubjectMatter),
-			esc(string(e.Lifecycle)))
+			unreadMark(v.Unread[e.Path]), esc(string(e.Lifecycle)))
 	}
 	b.WriteString(`</div>`)
 	return b.String()
