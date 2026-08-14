@@ -45,8 +45,7 @@ func composerPicks() string { return `<span id="mention-picks"></span>` }
 // composerNote is the composer's own result line — what happened to the
 // last message, in plain words.
 func composerNote(msg string) string {
-	return `<span id="composer-note" class="mono" style="font-size:var(--text-2xs);` +
-		`color:var(--text-muted)">` + esc(msg) + `</span>`
+	return `<span id="composer-note" class="note">` + esc(msg) + `</span>`
 }
 
 // composerReplyTo is the reply state, shown above the input: empty for a

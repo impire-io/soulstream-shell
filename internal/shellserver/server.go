@@ -65,8 +65,8 @@ type Server struct {
 
 	mu        sync.Mutex
 	sessions  map[string]*session
-	keyCache  map[string]string    // persona -> public key (directory reads)
-	nameCache map[string]nameEntry // persona -> on-screen name (registry reads)
+	keyCache  map[string]string // persona -> public key (directory reads)
+	cardCache map[string]card   // persona -> directory card (registry reads)
 
 	httpSrv *http.Server
 }
@@ -80,7 +80,7 @@ func Run(ctx context.Context, opts Options) error {
 		return errors.New("shell: every Options field except Ready is required")
 	}
 	s := &Server{opts: opts, sessions: map[string]*session{},
-		keyCache: map[string]string{}, nameCache: map[string]nameEntry{}}
+		keyCache: map[string]string{}, cardCache: map[string]card{}}
 
 	var err error
 	s.nc, err = nats.Connect(opts.NATSURL, nats.UserCredentials(opts.CredsPath),
@@ -180,35 +180,47 @@ func (s *Server) keyringFor(mt *topic.MaterializedTopic) *identity.Keyring {
 	return kr
 }
 
-// nameEntry is one cached on-screen name. A persona the directory does not
-// name yet is remembered too, briefly, so a missing profile costs one read a
-// minute rather than one a second — and still appears when it is published.
-type nameEntry struct {
+// card is one cached directory entry, holding both things this surface reads
+// off a persona: what to call them on screen, and who answers for them. A
+// persona the directory does not name yet is remembered too, briefly, so a
+// missing profile costs one read a minute rather than one a second — and
+// still appears when it is published.
+type card struct {
 	name  string
+	voice voice
 	found bool
 	at    time.Time
 }
 
-// displayName resolves a persona's on-screen name from the realm's own
+// lookupCard resolves a persona's directory entry from the house's own
 // persona directory (design 0001 §6 — the shell owns the id→name mapping on
 // screen). A persona with no published profile keeps the id the record
-// carries; a directory that does not answer is not an error here.
-func (s *Server) displayName(ctx context.Context, persona string) string {
+// carries and answers for itself; a directory that does not answer is not an
+// error here. The name and the operator claim come off one read, so carrying
+// the channel costs the surface nothing.
+func (s *Server) lookupCard(ctx context.Context, persona string) card {
 	s.mu.Lock()
-	e, ok := s.nameCache[persona]
+	e, ok := s.cardCache[persona]
 	s.mu.Unlock()
 	if ok && (e.found || time.Since(e.at) < time.Minute) {
-		return e.name
+		return e
 	}
-	e = nameEntry{name: persona, at: time.Now()}
-	if p, found, err := registry.Lookup(ctx, s.rc, persona); err == nil && found &&
-		p.DisplayName != "" {
-		e.name, e.found = p.DisplayName, true
+	e = card{name: persona, at: time.Now()}
+	if p, found, err := registry.Lookup(ctx, s.rc, persona); err == nil && found {
+		e.voice = voice{OperatedBy: p.OperatedBy}
+		if p.DisplayName != "" {
+			e.name, e.found = p.DisplayName, true
+		}
 	}
 	s.mu.Lock()
-	s.nameCache[persona] = e
+	s.cardCache[persona] = e
 	s.mu.Unlock()
-	return e.name
+	return e
+}
+
+// displayName is the on-screen name for a persona.
+func (s *Server) displayName(ctx context.Context, persona string) string {
+	return s.lookupCard(ctx, persona).name
 }
 
 // meName is the on-screen name for the signed-in person: what the fold said
@@ -236,14 +248,19 @@ func (s *Server) meName(ctx context.Context, sess *session) string {
 	return name
 }
 
-// namesFor resolves every voice in a topic once per render.
-func (s *Server) namesFor(ctx context.Context, mt *topic.MaterializedTopic) map[string]string {
-	names := map[string]string{}
+// directory resolves everyone a topic mentions by name once per render: what
+// each persona is called on screen, and the operator claim their channel is
+// read from. Everyone the panel beside the conversation can name is here —
+// whoever spoke, whoever opened or took on work, whoever attached something.
+func (s *Server) directory(ctx context.Context, mt *topic.MaterializedTopic,
+) (map[string]string, map[string]voice) {
+	names, voices := map[string]string{}, map[string]voice{}
 	add := func(p string) {
 		if p == "" || names[p] != "" {
 			return
 		}
-		names[p] = s.displayName(ctx, p)
+		c := s.lookupCard(ctx, p)
+		names[p], voices[p] = c.name, c.voice
 	}
 	if mt != nil {
 		for _, c := range mt.Contributions {
@@ -251,9 +268,13 @@ func (s *Server) namesFor(ctx context.Context, mt *topic.MaterializedTopic) map[
 		}
 		for _, w := range mt.WorkItems {
 			add(w.Author)
+			add(w.Owner)
+		}
+		for _, a := range mt.Attachments {
+			add(a.Author)
 		}
 	}
-	return names
+	return names, voices
 }
 
 // view is one render of the whole observed state.
@@ -265,6 +286,10 @@ type view struct {
 	Me string
 	// Names maps a persona to the name shown for it on screen.
 	Names map[string]string
+	// Voices maps a persona to what the directory says about it beyond its
+	// name — the operator claim the channel colours are read from. A persona
+	// missing here answers for itself (see channel.go).
+	Voices map[string]voice
 	// Unread is how many messages in each conversation have this person's
 	// name in them and have not been looked at yet — this session's own
 	// tray, kept in memory and never on the record.
@@ -273,14 +298,19 @@ type view struct {
 	Topic     *topic.MaterializedTopic
 	TopicPath string
 	StreamMsg uint64
-	StreamMB  float64
-	FoldOK    bool
-	Err       string
+	// StreamBytes is what the store holds; StreamRoof is the byte roof it
+	// declares for itself, 0 when it declares none. The house readout needs
+	// both: a level means nothing without the scale it is read against, and a
+	// store provisioned with no roof has no scale to invent one from.
+	StreamBytes uint64
+	StreamRoof  int64
+	FoldOK      bool
+	Err         string
 }
 
 func (s *Server) observe(ctx context.Context, topicPath string, sess *session) view {
 	v := view{Realm: s.opts.Realm, TopicPath: topicPath, Names: map[string]string{},
-		Unread: map[string]int{}}
+		Voices: map[string]voice{}, Unread: map[string]int{}}
 	if sess != nil {
 		v.Me = sess.Persona
 		v.Names[sess.Persona] = s.meName(ctx, sess)
@@ -307,11 +337,13 @@ func (s *Server) observe(ctx context.Context, topicPath string, sess *session) v
 			v.Err = fmt.Sprintf("topic %s: %v", v.TopicPath, err)
 		}
 	}
-	for p, n := range s.namesFor(ctx, v.Topic) {
+	names, voices := s.directory(ctx, v.Topic)
+	for p, n := range names {
 		if v.Names[p] == "" {
 			v.Names[p] = n
 		}
 	}
+	v.Voices = voices
 	return v
 }
 
@@ -322,7 +354,12 @@ func (s *Server) health(ctx context.Context, v *view) {
 	if info, err := s.rc.JetStream().Stream(ctx, "SOULSTREAM"); err == nil {
 		if si, err := info.Info(ctx); err == nil {
 			v.StreamMsg = si.State.Msgs
-			v.StreamMB = float64(si.State.Bytes) / (1 << 20)
+			v.StreamBytes = si.State.Bytes
+			// The server stores an unlimited roof as -1; the readout wants one
+			// word for "no scale", so both spellings become zero here.
+			if si.Config.MaxBytes > 0 {
+				v.StreamRoof = si.Config.MaxBytes
+			}
 		}
 	}
 	v.FoldOK = probe(s.opts.Issuer + "/.well-known/openid-configuration")

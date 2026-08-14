@@ -27,6 +27,7 @@ import (
 
 	"github.com/impire-io/soulstream-core/identity"
 	"github.com/impire-io/soulstream-core/realm"
+	"github.com/impire-io/soulstream-core/registry"
 	"github.com/impire-io/soulstream-core/topic"
 	siclient "github.com/impire-io/soulstream-identity/client"
 	"github.com/impire-io/soulstream-idp/authtest"
@@ -367,7 +368,7 @@ func TestShellGate(t *testing.T) {
 		}
 	}
 	thread := elementsIn(frameFor(t, patchFrames(t, live), `id="dash"`))
-	for _, want := range []string{seededTurn, "verified", `class="msg"`} {
+	for _, want := range []string{seededTurn, "verified", `class="msg human"`} {
 		if !strings.Contains(thread, want) {
 			t.Fatalf("the conversation is missing %q:\n%s", want, thread)
 		}
@@ -528,18 +529,18 @@ func TestShellGate(t *testing.T) {
 	// is legible in the HTML the browser is handed: the signed-in person's
 	// own message is theirs, the owner's is not, and the answer hangs off
 	// the message it answers.
-	ownTag := fmt.Sprintf(`<div class="msg mine" data-op=%q>`, posted.OpID)
+	ownTag := fmt.Sprintf(`<div class="msg human mine" data-op=%q>`, posted.OpID)
 	if !strings.Contains(seen, ownTag) {
 		t.Fatalf("the person's own message is not rendered as theirs (%s):\n%s", ownTag, seen)
 	}
-	otherTag := fmt.Sprintf(`<div class="msg" data-op=%q>`, seeded.OpID)
+	otherTag := fmt.Sprintf(`<div class="msg human" data-op=%q>`, seeded.OpID)
 	if !strings.Contains(seen, otherTag) {
 		t.Fatalf("the owner's message is rendered as somebody else's (%s):\n%s", otherTag, seen)
 	}
 	if !strings.Contains(seen, ceremony.FoundingPersona) {
 		t.Fatalf("the other person's message carries no name:\n%s", seen)
 	}
-	answerTag := fmt.Sprintf(`<div class="msg mine reply" data-op=%q>`, reply.OpID)
+	answerTag := fmt.Sprintf(`<div class="msg human mine reply" data-op=%q>`, reply.OpID)
 	i, j := strings.Index(seen, otherTag), strings.Index(seen, answerTag)
 	nested := strings.Index(seen, `<div class="replies">`)
 	if j < 0 || nested < i || j < nested {
@@ -635,12 +636,12 @@ func TestShellGate(t *testing.T) {
 	// name stands out where it was said, the one that did not is a message
 	// like any other, and the count comes off the spine.
 	opened := waitFor(t, cl, r.ShellURL+"/live?topic="+url.QueryEscape(annexe),
-		`id="dash"`, `class="msg mentions"`, 20*time.Second)
+		`id="dash"`, `class="msg human mentions"`, 20*time.Second)
 	room := frameWith(t, opened, `id="dash"`)
-	if !strings.Contains(room, fmt.Sprintf(`<div class="msg mentions" data-op=%q>`, mentionOp)) {
+	if !strings.Contains(room, fmt.Sprintf(`<div class="msg human mentions" data-op=%q>`, mentionOp)) {
 		t.Fatalf("the message that says the person's name is not marked:\n%s", room)
 	}
-	if !strings.Contains(room, fmt.Sprintf(`<div class="msg" data-op=%q>`, quiet)) {
+	if !strings.Contains(room, fmt.Sprintf(`<div class="msg human" data-op=%q>`, quiet)) {
 		t.Fatalf("a message with nobody's name in it is marked too:\n%s", room)
 	}
 	if tally := frameWith(t, opened, `id="mentions"`); strings.Contains(tally, "tally on") {
@@ -648,7 +649,7 @@ func TestShellGate(t *testing.T) {
 	}
 	// And it reads as it was written: the name, verbatim, marked because it
 	// actually tapped somebody — never the id it resolved to.
-	if !strings.Contains(room, `<p class="body"><span class="mtoken">@Daan</span> did the`+
+	if !strings.Contains(room, `<p class="body"><span class="mtoken human">@Daan</span> did the`+
 		` good coffee come in a bag or a tin?</p>`) {
 		t.Fatalf("the message does not read as it was written:\n%s", room)
 	}
@@ -701,6 +702,54 @@ func TestShellGate(t *testing.T) {
 		if len(said.Mentions) != 1 || said.Mentions[0] != "avery" {
 			t.Fatalf("%s carries %v, want just avery", c.what, said.Mentions)
 		}
+	}
+
+	// The second channel, and the only honest way onto it. Soulstream has no
+	// human/agent field to set — the persona taxonomy was removed outright,
+	// because the protocol cannot verify what controls a key — so a voice
+	// says it is not a person answering for themselves by naming an operator
+	// and having that operator countersign the claim. The shell reads that
+	// claim and nothing else, and both accents end up in one room at equal
+	// weight.
+	scribe, err := r.Operated(ctx, "scribe", "Scribe", posted.Author)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sh := topic.Open(scribe, annexe)
+	if _, err := sh.Materialise(ctx); err != nil {
+		t.Fatal(err)
+	}
+	machineOp, err := sh.PostTurn(ctx, "noted, and on the list")
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, found, err := registry.Lookup(ctx, rc, "scribe")
+	if err != nil || !found {
+		t.Fatalf("the operated voice has no directory card: found=%v %v", found, err)
+	}
+	if profile.OperatedBy != posted.Author || profile.OperatorAttestation == nil {
+		t.Fatalf("the card carries no countersigned operator claim: %+v", profile)
+	}
+
+	// And the screen reads it off the record: the card and the lamp both go
+	// teal, the claim is in words beside the name in the People panel, and
+	// everybody who answers for themselves stays amber in the same room.
+	channels := waitFor(t, cl, r.ShellURL+"/live?topic="+url.QueryEscape(annexe),
+		`id="dash"`, `class="msg machine"`, 20*time.Second)
+	both := frameWith(t, channels, `id="dash"`)
+	if !strings.Contains(both, fmt.Sprintf(`<div class="msg machine" data-op=%q>`, machineOp)) {
+		t.Fatalf("the operated voice is not on the machine channel:\n%s", both)
+	}
+	if !strings.Contains(both, `<span class="led machine" title="operated by Daan"></span>`) {
+		t.Fatalf("the machine channel carries no lamp of its own:\n%s", both)
+	}
+	if !strings.Contains(both, `<div class="msg human" data-op=`) {
+		t.Fatalf("the human channel left the room when the machine one arrived:\n%s", both)
+	}
+	panel := frameWith(t, channels, `id="details"`)
+	if !strings.Contains(panel, `<span class="who" title="@scribe">Scribe</span>`) ||
+		!strings.Contains(panel, "operated by Daan") {
+		t.Fatalf("the People panel does not say who answers for the voice:\n%s", panel)
 	}
 
 	// The word the operator retired. The Go keeps it — realm.Client, the

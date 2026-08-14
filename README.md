@@ -28,6 +28,34 @@ Founding articles, held by the standing e2e gate:
   bearer through the OIDC callout lane) and their own persona
   signature. The shell signs as no one.
 
+## Design
+
+The canon is vendored at [`docs/design-canon.md`](docs/design-canon.md)
+and implemented by `internal/shellserver/assets/tokens.css`: the token
+blocks and the shared component layer are verbatim from the design
+system, and everything under `THE SHELL'S OWN COMPONENT LAYER` is this
+repo's. Cassette futurism in a light key — molded panels, milled
+lettering on coloured keys, printed scales, no gradients, no opacity as
+a state, pills only for tags and badges.
+
+**The two channels.** Amber is the human channel and teal the machine
+channel, at deliberately equal weight. Every message carries the one it
+belongs to, on the card's outer edge and in the lamp in its byline;
+whose a message is is carried by which side it sits on and by nothing
+else, so no colour anywhere says both.
+
+Which channel a voice speaks on is read from the record, and the record
+refuses the obvious question on purpose: soulstream removed the persona
+`kind` field (human / agent / service) outright, because the protocol
+cannot verify what controls a key. What it keeps instead is the
+operator claim — `operated_by` plus the operator's countersignature —
+so the shell reads accountability rather than species: a voice that
+answers for itself is on the human channel, a voice somebody else
+answers for is on the machine one. The seam and its limits are written
+out in [`internal/shellserver/channel.go`](internal/shellserver/channel.go);
+the People panel always names the operator beside the voice, so the
+claim is on the screen rather than implied by a shade of teal.
+
 ## Run
 
 As a soulnode plane (the default distribution): `planes.shell` — see
@@ -48,11 +76,13 @@ e2e, which boots a real soulnode realm at its published tag), lint.
 All green before every commit; none skipped.
 
 `make screens` stands the same rig up and leaves it running, with a
-seeded conversation — two other voices, answers on both sides, and work
-waiting, in hand and finished, so the details panel has something real
-to say — and a signed-in session, so the surface can be looked at
-rather than read about. It prints the address and the session cookie
-and blocks until `^C`; nothing outlives the temp dir it founds.
+seeded conversation — three other voices, one of them a persona the
+signed-in person operates and countersigns for, so both channels are on
+the screen; answers on both sides; and work waiting, in hand and
+finished, so the details panel has something real to say — and a
+signed-in session, so the surface can be looked at rather than read
+about. It prints the address and the session cookie and blocks until
+`^C`; nothing outlives the temp dir it founds.
 
 ## License
 

@@ -2,6 +2,7 @@ package shellserver
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -147,13 +148,21 @@ func timeline(mt *topic.MaterializedTopic) []threadItem {
 }
 
 // renderMsg is one bubble, with the answers to it (already rendered)
-// hanging underneath. Side is attribution: the signed-in person's own
-// messages sit right and carry no name — everyone else's sit left, named.
+// hanging underneath.
+//
+// Two things are said about every message and they are kept apart. WHOSE it
+// is is said by which side it sits on and by nothing else: the signed-in
+// person's own sit right and carry no name, everyone else's sit left, named.
+// WHICH CHANNEL it is in is said by the card's own edge and by the pip in
+// its byline — amber for a voice that answers for itself, teal for one
+// somebody else answers for (channel.go). Neither says the other's thing.
+//
 // A message with the reader's name in it is marked, quietly and for good:
-// scrolling back, the ones that were about them are still the ones that
-// were about them.
+// scrolling back, the ones that were about them are still the ones that were
+// about them. The mark hardens the card's outline rather than borrowing a
+// channel colour, so it can never be mistaken for who spoke.
 func renderMsg(v view, c *topic.Contribution, reply bool, answers string) string {
-	cls := "msg"
+	cls := "msg " + channelOf(v, c.Author)
 	if mine(v, c.Author) {
 		cls += " mine"
 	}
@@ -163,12 +172,12 @@ func renderMsg(v view, c *topic.Contribution, reply bool, answers string) string
 	if mentionsMe(v, c) {
 		cls += " mentions"
 	}
-	byline := fmt.Sprintf(`<div class="byline"><span class="name">%s</span>`+
+	byline := fmt.Sprintf(`<div class="byline">%s<span class="name">%s</span>`+
 		`<span class="at">%s</span></div>`,
-		esc(nameOf(v, c.Author)), c.Timestamp.Format("15:04"))
+		channelPip(v, c.Author), esc(nameOf(v, c.Author)), c.Timestamp.Format("15:04"))
 	if mine(v, c.Author) {
-		byline = fmt.Sprintf(`<div class="byline"><span class="at">%s</span></div>`,
-			c.Timestamp.Format("15:04"))
+		byline = fmt.Sprintf(`<div class="byline">%s<span class="at">%s</span></div>`,
+			channelPip(v, c.Author), c.Timestamp.Format("15:04"))
 	}
 	return fmt.Sprintf(`<div class="%s" data-op="%s"><div class="bubble">%s`+
 		`<p class="body">%s</p><div class="under">%s%s</div></div>%s</div>`,
@@ -176,12 +185,20 @@ func renderMsg(v view, c *topic.Contribution, reply bool, answers string) string
 		replyLink(v.TopicPath, c.OpID), answers)
 }
 
+// mentionToken is one way a tapped persona may have been written, and the
+// channel that persona speaks on — so a name in a sentence carries the same
+// accent as the messages the person it names writes.
+type mentionToken struct {
+	Text    string // lowercased "@…", for matching
+	Channel string
+}
+
 // mentionTokens is what to look for in a body: for every persona the record
 // says the message tapped, the handle it may have been written as and the
 // name this reader is shown for them. Lowercased for matching, longest
 // first, so "@Avery Blake" wins where "@Avery" would also fit.
-func mentionTokens(v view, c *topic.Contribution) []string {
-	var out []string
+func mentionTokens(v view, c *topic.Contribution) []mentionToken {
+	var out []mentionToken
 	seen := map[string]bool{}
 	for _, m := range c.Mentions {
 		for _, form := range []string{m, nameOf(v, m)} {
@@ -193,10 +210,10 @@ func mentionTokens(v view, c *topic.Contribution) []string {
 				continue
 			}
 			seen[t] = true
-			out = append(out, t)
+			out = append(out, mentionToken{Text: t, Channel: channelOf(v, m)})
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return len(out[i]) > len(out[j]) })
+	sort.SliceStable(out, func(i, j int) bool { return len(out[i].Text) > len(out[j].Text) })
 	return out
 }
 
@@ -225,8 +242,8 @@ func renderBody(v view, c *topic.Contribution) string {
 			i += next
 			continue
 		}
-		if n := tokenAt(lower, i, tokens); n > 0 {
-			fmt.Fprintf(&b, `<span class="mtoken">%s</span>`, esc(body[i:i+n]))
+		if n, ch := tokenAt(lower, i, tokens); n > 0 {
+			fmt.Fprintf(&b, `<span class="mtoken %s">%s</span>`, ch, esc(body[i:i+n]))
 			i += n
 			continue
 		}
@@ -236,14 +253,15 @@ func renderBody(v view, c *topic.Contribution) string {
 	return b.String()
 }
 
-// tokenAt is the length of the mention token starting at i, or 0 for none.
-func tokenAt(lower string, i int, tokens []string) int {
+// tokenAt is the length of the mention token starting at i and the channel
+// of the voice it names, or 0 for none.
+func tokenAt(lower string, i int, tokens []mentionToken) (int, string) {
 	for _, t := range tokens {
-		if strings.HasPrefix(lower[i:], t) && endsToken(lower, i+len(t)) {
-			return len(t)
+		if strings.HasPrefix(lower[i:], t.Text) && endsToken(lower, i+len(t.Text)) {
+			return len(t.Text), t.Channel
 		}
 	}
-	return 0
+	return 0, ""
 }
 
 // renderThread is the centre column: one conversation, oldest first.
@@ -272,8 +290,12 @@ func renderThread(v view) string {
 	}
 	for _, it := range items {
 		if it.Work != nil {
-			fmt.Fprintf(&b, `<div class="sysline">%s opened work “%s” · %s</div>`,
-				esc(nameOf(v, it.Work.Author)), esc(it.Work.Title), esc(string(it.Work.Status)))
+			// A stamped strip for the state, plain words for the event: the
+			// strip is the thing that shouts, and a work title in capitals is a
+			// title nobody wrote.
+			fmt.Fprintf(&b, `<div class="sysline"><span class="strip shell">%s</span>`+
+				`<span class="what">%s opened work “%s”</span></div>`,
+				esc(string(it.Work.Status)), esc(nameOf(v, it.Work.Author)), esc(it.Work.Title))
 			continue
 		}
 		answers := ""
@@ -293,24 +315,90 @@ func renderThread(v view) string {
 }
 
 // planeCard is one house readout — the same molded panel on the overview
-// and on the system-status screen.
-func planeCard(icon, heading, row string) string {
-	return fmt.Sprintf(`<div class="card plane"><div class="head">%s<h2>%s</h2></div>`+
-		`<div class="row">%s</div></div>`, Icon(icon), heading, row)
+// and on the system-status screen. Everything after the heading is a block
+// of the card's body, in the order it is given.
+func planeCard(icon, heading string, body ...string) string {
+	return fmt.Sprintf(`<div class="card plane"><div class="head">%s<h2>%s</h2></div>%s</div>`,
+		Icon(icon), heading, strings.Join(body, ""))
 }
 
-// storageRow and signInRow are the two readouts both screens carry.
-func storageRow(v view) string {
-	return fmt.Sprintf(`<span class="pill ok"><span class="led machine"></span>keeping</span>`+
-		`<span class="mono">%d ops · %.1f MB</span>`, v.StreamMsg, v.StreamMB)
+// vuSegments is how many lamps the house readout has. Enough that a single
+// segment is a fine enough step to watch, few enough that the ladder still
+// reads as a ladder rather than as a bar.
+const vuSegments = 24
+
+// vuMeter is the segmented ladder the canon puts in place of every progress
+// bar. level is a fraction of full scale; a level below zero means the
+// instrument has no scale to read against and every lamp stays dark, which
+// is the honest thing for an instrument with nothing to measure to do.
+//
+// The far end of the ladder is the amber and then the red zone. The zone is
+// carried on the segment either way and coloured only where the lamps reach
+// it, so a ladder at rest is uniformly dark rather than looking lit at the
+// top.
+func vuMeter(level float64, label string) string {
+	lit := 0
+	if level > 0 {
+		lit = int(math.Round(level * vuSegments))
+		if lit < 1 {
+			lit = 1 // anything at all in the store lights the first lamp
+		}
+		if lit > vuSegments {
+			lit = vuSegments
+		}
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, `<div class="vu" role="img" aria-label="%s">`, esc(label))
+	for i := range vuSegments {
+		cls := "seg"
+		switch {
+		case i >= vuSegments-2:
+			cls += " red"
+		case i >= vuSegments-6:
+			cls += " amber"
+		}
+		if i < lit {
+			cls += " lit"
+		}
+		fmt.Fprintf(&b, `<span class="%s"></span>`, cls)
+	}
+	b.WriteString(`</div>`)
+	return b.String()
 }
 
+// storageCard is the house's own readout: what the store holds, and how far
+// up its own scale that reaches.
+//
+// The scale is the byte roof the store declares for itself. A store
+// provisioned without one has no scale, and the meter says so rather than
+// inventing a ceiling to look full against — an unroofed store is not 0%
+// full, it is unmeasured.
+func storageCard(v view) string {
+	row := fmt.Sprintf(`<div class="row"><span class="pill ok"><span class="led ok"></span>`+
+		`keeping</span><span class="mono">%d ops · %s</span></div>`,
+		v.StreamMsg, esc(sizeWords(v.StreamBytes)))
+	level, scale, pct := -1.0, "no budget set", ""
+	if v.StreamRoof > 0 {
+		level = float64(v.StreamBytes) / float64(v.StreamRoof)
+		scale = "of " + sizeWords(uint64(v.StreamRoof))
+		pct = fmt.Sprintf("%.0f%%", level*100)
+	}
+	label := "the store declares no budget to measure against"
+	if pct != "" {
+		label = pct + " of the store's budget used"
+	}
+	readout := fmt.Sprintf(`<p class="readout"><span class="cap">%s</span>`+
+		`<span class="mono">%s</span></p>`, esc(scale), esc(pct))
+	return row + vuMeter(level, label) + readout
+}
+
+// signInRow is the other readout both screens carry.
 func signInRow(v view) string {
 	fold := `<span class="pill warn">unreachable</span>`
 	if v.FoldOK {
-		fold = `<span class="pill ok"><span class="led"></span>serving</span>`
+		fold = `<span class="pill ok"><span class="led ok"></span>serving</span>`
 	}
-	return fold + `<span class="mono">passkeys</span>`
+	return `<div class="row">` + fold + `<span class="mono">passkeys</span></div>`
 }
 
 // renderPlanes is the system-status screen's body — the house readouts
@@ -320,7 +408,7 @@ func signInRow(v view) string {
 func renderPlanes(v view) string {
 	var b strings.Builder
 	b.WriteString(`<div class="planes">`)
-	b.WriteString(planeCard("cassette-tape", "Storage", storageRow(v)))
+	b.WriteString(planeCard("cassette-tape", "Storage", storageCard(v)))
 	b.WriteString(planeCard("key", "People &amp; sign-in", signInRow(v)))
 	open, claimed := 0, 0
 	if v.Topic != nil {
@@ -334,7 +422,8 @@ func renderPlanes(v view) string {
 		}
 	}
 	b.WriteString(planeCard("activity", "Work",
-		fmt.Sprintf(`<span class="mono">open %d · claimed %d</span>`, open, claimed)))
+		fmt.Sprintf(`<div class="row"><span class="mono">open %d · claimed %d</span></div>`,
+			open, claimed)))
 	b.WriteString(`</div>`)
 	return b.String()
 }
@@ -347,17 +436,18 @@ func renderOverview(v view) string {
 	b.WriteString(`<p class="lede">Everything here is read live from your soulstream — ` +
 		`the shell keeps none of it.</p>`)
 	b.WriteString(`<div class="planes">`)
-	b.WriteString(planeCard("cassette-tape", "Storage", storageRow(v)))
+	b.WriteString(planeCard("cassette-tape", "Storage", storageCard(v)))
 	b.WriteString(planeCard("key", "People &amp; sign-in", signInRow(v)))
 	rooms := "conversation"
 	if len(v.Board) != 1 {
 		rooms = "conversations"
 	}
 	b.WriteString(planeCard("messages-square", "Talking",
-		fmt.Sprintf(`<span class="mono">%d %s</span>`, len(v.Board), rooms)))
+		fmt.Sprintf(`<div class="row"><span class="mono">%d %s</span></div>`,
+			len(v.Board), rooms)))
 	b.WriteString(`</div>`)
 
-	b.WriteString(`<h2 class="section">Conversations</h2>`)
+	b.WriteString(`<h2 class="section label">Conversations</h2>`)
 	if v.Err != "" {
 		fmt.Fprintf(&b, `<p class="blank">%s</p>`, esc(v.Err))
 		return b.String()

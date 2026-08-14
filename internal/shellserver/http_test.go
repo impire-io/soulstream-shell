@@ -139,9 +139,9 @@ func meView() view {
 func TestOwnMessagesAreDecidedByTheSessionPrincipal(t *testing.T) {
 	got := renderThread(meView())
 	for _, want := range []string{
-		`<div class="msg" data-op="op-1">`,
-		`<div class="msg mine reply" data-op="op-2">`,
-		`<div class="msg mine" data-op="op-3">`,
+		`<div class="msg human" data-op="op-1">`,
+		`<div class="msg human mine reply" data-op="op-2">`,
+		`<div class="msg human mine" data-op="op-3">`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("thread missing %s:\n%s", want, got)
@@ -158,7 +158,7 @@ func TestOwnMessagesAreDecidedByTheSessionPrincipal(t *testing.T) {
 	// Signed out, nothing is anyone's own.
 	anon := meView()
 	anon.Me = ""
-	if strings.Contains(renderThread(anon), `class="msg mine`) {
+	if strings.Contains(renderThread(anon), `class="msg human mine`) {
 		t.Error("a view with no session claims messages as someone's own")
 	}
 }
@@ -166,10 +166,10 @@ func TestOwnMessagesAreDecidedByTheSessionPrincipal(t *testing.T) {
 // An answer renders under the message it answers, inside it.
 func TestAnswersHangOffTheMessageTheyAnswer(t *testing.T) {
 	got := renderThread(meView())
-	open := strings.Index(got, `<div class="msg" data-op="op-1">`)
+	open := strings.Index(got, `<div class="msg human" data-op="op-1">`)
 	nested := strings.Index(got, `<div class="replies">`)
 	answer := strings.Index(got, `data-op="op-2"`)
-	sibling := strings.Index(got, `<div class="msg mine" data-op="op-3">`)
+	sibling := strings.Index(got, `<div class="msg human mine" data-op="op-3">`)
 	if open < 0 || nested < open || answer < nested || sibling < answer {
 		t.Fatalf("the answer does not hang off op-1 (%d/%d/%d/%d):\n%s",
 			open, nested, answer, sibling, got)
@@ -211,7 +211,8 @@ func TestWorkMarksSitInTheConversation(t *testing.T) {
 		Status: topic.WorkStatus("open"), Timestamp: mt.Contributions[0].Timestamp,
 	}}
 	got := renderThread(view{Me: "u-me", Names: map[string]string{"avery": "Avery"}, Topic: mt})
-	if !strings.Contains(got, `<div class="sysline">Avery opened work “put the kettle on” · open</div>`) {
+	if !strings.Contains(got, `<div class="sysline"><span class="strip shell">open</span>`+
+		`<span class="what">Avery opened work “put the kettle on”</span></div>`) {
 		t.Errorf("no work mark in the conversation:\n%s", got)
 	}
 }
@@ -237,6 +238,190 @@ func TestRailSaysWhenThereIsNothing(t *testing.T) {
 	}
 	if got := renderThread(view{}); !strings.Contains(got, "Pick a conversation") {
 		t.Errorf("empty thread says nothing:\n%s", got)
+	}
+}
+
+// operated is the view with a voice somebody else answers for in it: the
+// record's own way of saying a message was not written by a person answering
+// for themselves.
+func operated() view {
+	v := meView()
+	mt := v.Topic
+	mt.Contributions = append(mt.Contributions, topic.Contribution{
+		OpID: "op-4", Author: "scribe", Type: topic.TypeTurnPost,
+		Timestamp: mt.Contributions[0].Timestamp.Add(3 * time.Minute),
+		Body:      "kettle logged", Sig: topic.SigVerified,
+	})
+	v.Names["scribe"] = "Scribe"
+	v.Voices = map[string]voice{"scribe": {OperatedBy: "u-me"}}
+	return v
+}
+
+// Every message says which of the two channels it is in, and it says it with
+// the card's own edge and the lamp in its byline — never by tinting the
+// message. The channel comes off the record's operator claim: a voice that
+// answers for itself is on the human channel, a voice somebody else answers
+// for is on the machine one.
+func TestEveryMessageCarriesItsChannel(t *testing.T) {
+	got := renderThread(operated())
+	for _, want := range []string{
+		`<div class="msg human" data-op="op-1">`,
+		`<div class="msg machine" data-op="op-4">`,
+		`<span class="led human" title="answers for itself"></span>`,
+		`<span class="led machine" title="operated by me"></span>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the conversation is missing %q:\n%s", want, got)
+		}
+	}
+	// Every message carries one, including the reader's own — which has no
+	// name on it, so the lamp is the only thing that could say.
+	if n := strings.Count(got, `class="led `); n != 4 {
+		t.Errorf("%d of 4 messages carry a channel lamp:\n%s", n, got)
+	}
+}
+
+// Whose a message is is carried by which side it sits on and by nothing
+// else. No colour anywhere may say it, or the two channels stop being the
+// only thing colour means on this surface.
+func TestOwnMessagesAreNotColoured(t *testing.T) {
+	v := operated()
+	if got := renderThread(v); !strings.Contains(got, `<div class="msg human mine" data-op="op-3">`) {
+		t.Fatalf("no message is rendered as the reader's own:\n%s", got)
+	}
+	// A machine-channel message the reader wrote is teal and right: the two
+	// say different things and neither implies the other.
+	v.Voices["u-me"] = voice{OperatedBy: "avery"}
+	both := renderThread(v)
+	if !strings.Contains(both, `<div class="msg machine mine" data-op="op-3">`) {
+		t.Errorf("channel and side do not compose:\n%s", both)
+	}
+	if !strings.Contains(both, `<div class="msg human" data-op="op-1">`) {
+		t.Errorf("somebody else's channel moved with the reader's:\n%s", both)
+	}
+	css, err := assetsFS.ReadFile("assets/tokens.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(css), ".msg.mine>.bubble{background") {
+		t.Error("the reader's own messages are tinted — side is the whole attribution")
+	}
+}
+
+// A message with the reader's name in it is marked without borrowing a
+// channel colour: the mark hardens the card's outline, which is the canon's
+// other kind of edge, and the channel edge stays exactly where it was.
+func TestTheMentionMarkTakesNoChannelColour(t *testing.T) {
+	v := operated()
+	v.Topic.Contributions[3].Mentions = []string{"u-me"}
+	got := renderThread(v)
+	if !strings.Contains(got, `<div class="msg machine mentions" data-op="op-4">`) {
+		t.Errorf("a machine-channel message that says your name lost its channel:\n%s", got)
+	}
+	css, err := assetsFS.ReadFile("assets/tokens.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The channel moves the card's edge; the mark moves the card's outline.
+	// Two custom properties, on purpose, so neither can be read as the other.
+	for _, want := range []string{
+		"--chan:var(--channel-human)", ".msg.machine{--chan:var(--channel-machine)}",
+		".msg.mentions{--edge:var(--border-strong)}",
+	} {
+		if !strings.Contains(string(css), want) {
+			t.Errorf("the token source does not hold the channel edge (%q)", want)
+		}
+	}
+}
+
+// A name that tapped somebody carries that person's channel, so a word in a
+// sentence reads the way the messages that person writes do.
+func TestMentionTokensCarryTheChannelOfWhoTheyTapped(t *testing.T) {
+	c := &topic.Contribution{OpID: "op-9", Author: "u-me",
+		Body: "@Scribe and @Avery, both of you", Mentions: []string{"scribe", "avery"}}
+	got := renderBody(operated(), c)
+	for _, want := range []string{
+		`<span class="mtoken machine">@Scribe</span>`,
+		`<span class="mtoken human">@Avery</span>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the body is missing %q:\n%s", want, got)
+		}
+	}
+}
+
+// The People panel says what the colour was read from, so the claim is on
+// the screen rather than implied by a shade of teal.
+func TestThePeoplePanelNamesWhoAnswersForAVoice(t *testing.T) {
+	got := renderDetails(operated())
+	for _, want := range []string{
+		`<span class="led machine" title="operated by me"></span>` +
+			`<span class="who" title="@scribe">Scribe</span>`,
+		"operated by me · 1 message",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the People list is missing %q:\n%s", want, got)
+		}
+	}
+	// A voice that answers for itself says nothing extra — most of them do,
+	// and a line saying so on every one would be noise.
+	if strings.Contains(got, "operated by me · 3 messages") {
+		t.Errorf("a voice that answers for itself is described as operated:\n%s", got)
+	}
+}
+
+// The picker says which channel a name belongs to before it is written into
+// the message: picking a voice somebody else answers for is a different act
+// from picking the person themselves.
+func TestThePickerSaysWhichChannelANameIs(t *testing.T) {
+	got := renderSuggest([]participant{
+		{Persona: "avery", Name: "Avery Blake"},
+		{Persona: "scribe", Name: "Scribe", OperatedBy: "u-me"},
+	})
+	for _, want := range []string{
+		`<span class="led human" title="answers for itself"></span>` +
+			`<span class="who">Avery Blake</span>`,
+		`<span class="led machine" title="operated by @u-me"></span>` +
+			`<span class="who">Scribe</span>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the picker is missing %q:\n%s", want, got)
+		}
+	}
+}
+
+// The house readout is the segmented ladder, and it reads against the scale
+// the store declares for itself. A store with no declared roof has no scale,
+// and the instrument says so rather than inventing a ceiling to look empty
+// against: an unroofed store is not 0% full, it is unmeasured.
+func TestTheStorageReadoutIsAMeterAgainstADeclaredScale(t *testing.T) {
+	roofed := renderOverview(view{StreamMsg: 400, StreamBytes: 512 << 20, StreamRoof: 1 << 30})
+	if n := strings.Count(roofed, `<span class="seg`); n != vuSegments {
+		t.Errorf("the ladder has %d segments, want %d", n, vuSegments)
+	}
+	if lit := strings.Count(roofed, " lit"); lit != vuSegments/2 {
+		t.Errorf("half a budget lights %d of %d lamps", lit, vuSegments)
+	}
+	for _, want := range []string{`<span class="cap">of 1.0 GB</span>`,
+		`<span class="mono">50%</span>`, `aria-label="50% of the store&#39;s budget used"`,
+		"400 ops · 512 MB"} {
+		if !strings.Contains(roofed, want) {
+			t.Errorf("the storage readout is missing %q:\n%s", want, roofed)
+		}
+	}
+	bare := renderOverview(view{StreamMsg: 400, StreamBytes: 512 << 20})
+	if strings.Contains(bare, " lit") {
+		t.Errorf("a store with no declared budget still reads a level:\n%s", bare)
+	}
+	for _, want := range []string{`<span class="cap">no budget set</span>`,
+		`aria-label="the store declares no budget to measure against"`} {
+		if !strings.Contains(bare, want) {
+			t.Errorf("the unmeasured store does not say so (%q):\n%s", want, bare)
+		}
+	}
+	// And nothing anywhere is a progress bar.
+	if strings.Contains(bare, "<progress") || strings.Contains(roofed, "<progress") {
+		t.Error("the house readout is a progress bar")
 	}
 }
 
@@ -376,7 +561,7 @@ func TestAMessageThatSaysYourNameIsMarked(t *testing.T) {
 	v := meView()
 	v.Topic = mentioned()
 	got := renderThread(v)
-	if !strings.Contains(got, `<div class="msg mentions" data-op="op-1">`) {
+	if !strings.Contains(got, `<div class="msg human mentions" data-op="op-1">`) {
 		t.Errorf("the message that mentions the reader is not marked:\n%s", got)
 	}
 	if n := strings.Count(got, "mentions"); n != 1 {
@@ -386,7 +571,7 @@ func TestAMessageThatSaysYourNameIsMarked(t *testing.T) {
 	other := meView()
 	other.Topic = mentioned()
 	other.Me = "avery"
-	if strings.Contains(renderThread(other), `class="msg mentions`) {
+	if strings.Contains(renderThread(other), `class="msg human mentions`) {
 		t.Error("a mention of someone else is marked as the reader's")
 	}
 	// Signed out, nobody's name is in anything.
@@ -600,7 +785,7 @@ func TestDetailsPanelIsOneWholeTarget(t *testing.T) {
 func TestOverviewOpensOntoTheConversations(t *testing.T) {
 	got := renderOverview(view{
 		Board:     meView().Board,
-		StreamMsg: 12, StreamMB: 1.5, FoldOK: true,
+		StreamMsg: 12, StreamBytes: 1 << 20, FoldOK: true,
 	})
 	for _, want := range []string{
 		"Storage", "People &amp; sign-in", "12 ops",
@@ -747,10 +932,10 @@ func TestTheBodyKeepsWhatWasTypedAndMarksWhatTapped(t *testing.T) {
 		Mentions: []string{"avery"},
 	}
 	got := renderBody(v, c)
-	if !strings.Contains(got, `<span class="mtoken">@Avery Blake</span>`) {
+	if !strings.Contains(got, `<span class="mtoken human">@Avery Blake</span>`) {
 		t.Errorf("the name that tapped somebody is not marked:\n%s", got)
 	}
-	if strings.Contains(got, `mtoken">@Nobody`) {
+	if strings.Contains(got, `mtoken human">@Nobody`) {
 		t.Errorf("a name that tapped nobody is marked as if it had:\n%s", got)
 	}
 	if !strings.Contains(got, "@Nobody") {
@@ -761,7 +946,7 @@ func TestTheBodyKeepsWhatWasTypedAndMarksWhatTapped(t *testing.T) {
 	}
 	// The handle is marked too, when that is what was written.
 	c.Body = "@avery, then"
-	if !strings.Contains(renderBody(v, c), `<span class="mtoken">@avery</span>`) {
+	if !strings.Contains(renderBody(v, c), `<span class="mtoken human">@avery</span>`) {
 		t.Errorf("the handle form is not marked:\n%s", renderBody(v, c))
 	}
 	// A message that tapped nobody is untouched text.
@@ -798,7 +983,7 @@ func TestTheComposerAsksTheServerForTheList(t *testing.T) {
 
 // The system-status screen still carries the house readouts in plain words.
 func TestStatusScreenKeepsThePlaneReadouts(t *testing.T) {
-	got := renderPlanes(view{StreamMsg: 12, StreamMB: 3.25, FoldOK: true, Topic: convo()})
+	got := renderPlanes(view{StreamMsg: 12, StreamBytes: 3 << 20, FoldOK: true, Topic: convo()})
 	for _, want := range []string{"Storage", "People &amp; sign-in", "Work", "12 ops"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("status screen missing %q:\n%s", want, got)

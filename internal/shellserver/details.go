@@ -24,6 +24,10 @@ type participant struct {
 	Name    string
 	Me      bool
 	Said    int
+	// OperatedBy is the persona the directory says answers for this one, ""
+	// when it answers for itself — the claim the channel colours are read
+	// from, and the one this panel says out loud (see channel.go).
+	OperatedBy string
 }
 
 // participants is who is in this conversation, in the order they first
@@ -45,6 +49,7 @@ func participants(v view) []participant {
 		at[persona] = len(people)
 		people = append(people, participant{
 			Persona: persona, Name: nameOf(v, persona), Me: mine(v, persona),
+			OperatedBy: v.Voices[persona].OperatedBy,
 		})
 		return at[persona]
 	}
@@ -58,6 +63,16 @@ func participants(v view) []participant {
 		add(w.Owner)
 	}
 	return people
+}
+
+// answersFor is who answers for a voice, said in front of what that voice
+// has done here — or nothing at all for a voice that answers for itself,
+// which is most of them and needs no line of its own.
+func answersFor(v view, p participant) string {
+	if p.OperatedBy == "" {
+		return ""
+	}
+	return esc("operated by "+nameOf(v, p.OperatedBy)) + " · "
 }
 
 // saidWords is a participant's part in the conversation so far, counted
@@ -120,22 +135,29 @@ func workWords(v view, w topic.WorkItem) string {
 	}
 }
 
-// sizeWords is a byte count as a person reads it.
+// sizeWords is a byte count as a person reads it: never more digits than the
+// number has any use for, and a scale that reaches as far as a store's own
+// budget does.
 func sizeWords(n uint64) string {
 	switch {
 	case n < 1024:
 		return fmt.Sprintf("%d B", n)
 	case n < 1<<20:
 		return fmt.Sprintf("%.0f KB", float64(n)/1024)
-	default:
+	case n < 100<<20:
 		return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
+	case n < 1<<30:
+		return fmt.Sprintf("%.0f MB", float64(n)/(1<<20))
+	default:
+		return fmt.Sprintf("%.1f GB", float64(n)/(1<<30))
 	}
 }
 
-// detSection is one titled block of the panel.
+// detSection is one titled block of the panel. The title is a mono label
+// strip, the way the canon names the sections of an instrument.
 func detSection(icon, heading, body string) string {
-	return fmt.Sprintf(`<section class="det"><div class="det-head">%s<h2>%s</h2></div>%s</section>`,
-		Icon(icon), esc(heading), body)
+	return fmt.Sprintf(`<section class="det"><div class="det-head">%s`+
+		`<h2 class="label">%s</h2></div>%s</section>`, Icon(icon), esc(heading), body)
 }
 
 // renderDetails is the whole panel — the live stream's third target.
@@ -162,9 +184,15 @@ func renderDetails(v view) string {
 		// written the way it would be typed. It is the only place the surface
 		// says how to tap somebody on the shoulder, because @-mentions only
 		// resolve against the id the record carries — never a display name.
-		fmt.Fprintf(&people, `<li><span class="who" title="@%s">%s</span>%s`+
-			`<span class="said">%s</span></li>`,
-			esc(p.Persona), esc(p.Name), youMark, esc(saidWords(p)))
+		//
+		// The pip in front of the name is the channel, and the line under it
+		// says what that channel was read from: a voice somebody else answers
+		// for names them here, so the colour is never the only place the claim
+		// appears.
+		fmt.Fprintf(&people, `<li>%s<span class="who" title="@%s">%s</span>%s`+
+			`<span class="said">%s%s</span></li>`,
+			channelPip(v, p.Persona), esc(p.Persona), esc(p.Name), youMark,
+			answersFor(v, p), esc(saidWords(p)))
 	}
 	people.WriteString(`</ul>`)
 	b.WriteString(detSection("users", "People", people.String()))

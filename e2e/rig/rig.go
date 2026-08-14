@@ -29,6 +29,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 
+	"github.com/impire-io/soulstream-core/identity"
 	"github.com/impire-io/soulstream-core/realm"
 	"github.com/impire-io/soulstream-core/registry"
 	siclient "github.com/impire-io/soulstream-identity/client"
@@ -54,6 +55,10 @@ type Rig struct {
 
 	cancel context.CancelFunc
 	conns  []*nats.Conn
+	// signers is the signing capability this rig holds for each persona it
+	// has admitted — what an operator needs to countersign a claim that they
+	// answer for somebody (see Operated).
+	signers map[string]identity.Signer
 }
 
 func reservePort() (string, error) {
@@ -135,6 +140,7 @@ func Start(dir string) (*Rig, error) {
 	return &Rig{
 		Dir: dir, State: st, Node: n, Token: token,
 		ShellURL: "http://" + addr, Issuer: st.FoldIssuer, cancel: cancel,
+		signers: map[string]identity.Signer{},
 	}, nil
 }
 
@@ -167,6 +173,7 @@ func (r *Rig) Owner(ctx context.Context) (*realm.Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("rig: owner client: %w", err)
 	}
+	r.signers[ceremony.FoundingPersona] = signer
 	return rc, nil
 }
 
@@ -186,42 +193,110 @@ func (r *Rig) Reader(ctx context.Context) (*realm.Client, *nats.Conn, error) {
 	return rc, nc, nil
 }
 
-// Voice mints a second admitted principal through the identity plane's
-// operator lane and returns a realm client that writes as that persona,
-// signed with that persona's own key. With a display name it publishes the
-// persona's directory profile too, so readers have a name to show.
-func (r *Rig) Voice(ctx context.Context, persona, display string) (*realm.Client, error) {
+// admit mints an admitted principal through the identity plane's operator
+// lane and returns a realm client that writes as that persona, signed with
+// that persona's own key. The signing capability is remembered, so a persona
+// this rig admitted can later countersign for somebody it operates.
+func (r *Rig) admit(ctx context.Context, persona string) (*realm.Client, identity.Signer, error) {
 	minted, err := r.Node.Ops().MintCreds(r.State.RealmPub, persona)
 	if err != nil {
-		return nil, fmt.Errorf("rig: mint %q: %w", persona, err)
+		return nil, nil, fmt.Errorf("rig: mint %q: %w", persona, err)
 	}
 	path := filepath.Join(r.Dir, persona+".creds")
 	if err := os.WriteFile(path, []byte(minted.Creds), 0o600); err != nil {
-		return nil, fmt.Errorf("rig: write %q creds: %w", persona, err)
+		return nil, nil, fmt.Errorf("rig: write %q creds: %w", persona, err)
 	}
 	nc, err := nats.Connect(r.Node.URL(), nats.UserCredentials(path))
 	if err != nil {
-		return nil, fmt.Errorf("rig: %q admission: %w", persona, err)
+		return nil, nil, fmt.Errorf("rig: %q admission: %w", persona, err)
 	}
 	r.conns = append(r.conns, nc)
 	signer, err := siclient.New(nc, r.State.RealmPub, persona).PersonaSigner(persona)
 	if err != nil {
-		return nil, fmt.Errorf("rig: %q signer: %w", persona, err)
+		return nil, nil, fmt.Errorf("rig: %q signer: %w", persona, err)
 	}
 	rc, err := realm.NewClient(ctx, nc, realm.Config{
 		Realm: r.State.Realm, Persona: persona, Signer: signer,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("rig: %q client: %w", persona, err)
+		return nil, nil, fmt.Errorf("rig: %q client: %w", persona, err)
 	}
-	if display != "" {
-		p := registry.Profile{Name: persona, DisplayName: display, CreatedAt: time.Now()}
-		p.SigningKey = &registry.SigningKeyInfo{Ed25519: signer.PublicKey(), Since: p.CreatedAt}
-		if err := registry.Publish(ctx, rc, p); err != nil {
-			return nil, fmt.Errorf("rig: publish %q profile: %w", persona, err)
-		}
+	r.signers[persona] = signer
+	return rc, signer, nil
+}
+
+// Voice mints a second admitted principal and returns a realm client that
+// writes as that persona. With a display name it publishes the persona's
+// directory card too, so readers have a name to show. The card names no
+// operator, which is the directory's way of saying this voice answers for
+// itself.
+func (r *Rig) Voice(ctx context.Context, persona, display string) (*realm.Client, error) {
+	rc, signer, err := r.admit(ctx, persona)
+	if err != nil {
+		return nil, err
 	}
-	return rc, nil
+	if display == "" {
+		return rc, nil
+	}
+	return rc, r.publish(ctx, rc, card(persona, display, signer), persona)
+}
+
+// Operated mints a persona the record says somebody else answers for: its
+// directory card names an operator and carries that operator's
+// countersignature over the claim.
+//
+// It is the honest way to put a machine voice on the record. Soulstream has
+// no human/agent field to set — the persona `kind` taxonomy was removed
+// outright, because the protocol cannot verify what controls a key — and the
+// operator claim is what replaced it: an audit fact about who answers for a
+// voice, verifiable because the operator signs it.
+//
+// The hand-off is the real one, not a shortcut. The operator presses the
+// stamp on its own side and only the token travels; the operated persona
+// publishes its own card with the token in it. Nobody ever writes on
+// somebody else's card. The operator must therefore be a persona this rig
+// already holds the signing capability for — the owner, or a Voice it
+// minted.
+func (r *Rig) Operated(ctx context.Context, persona, display, operator string) (*realm.Client, error) {
+	op, ok := r.signers[operator]
+	if !ok {
+		return nil, fmt.Errorf("rig: %q cannot attest for %q — this rig holds no signer for it",
+			operator, persona)
+	}
+	rc, signer, err := r.admit(ctx, persona)
+	if err != nil {
+		return nil, err
+	}
+	token, err := registry.NewAttestationToken(op, operator, persona, signer.PublicKey())
+	if err != nil {
+		return nil, fmt.Errorf("rig: %q attests for %q: %w", operator, persona, err)
+	}
+	stamp, err := registry.ParseAttestationToken(token)
+	if err != nil {
+		return nil, fmt.Errorf("rig: %q reads the attestation token: %w", persona, err)
+	}
+	p := card(persona, display, signer)
+	p.OperatedBy = operator
+	p.OperatorAttestation = &registry.OperatorAttestation{
+		OperatedKey: stamp.OperatedKey, Sig: stamp.Sig,
+	}
+	return rc, r.publish(ctx, rc, p, persona)
+}
+
+// card is a persona's own directory entry, keyed to its own signing key.
+func card(persona, display string, signer identity.Signer) registry.Profile {
+	p := registry.Profile{Name: persona, DisplayName: display, CreatedAt: time.Now()}
+	p.SigningKey = &registry.SigningKeyInfo{Ed25519: signer.PublicKey(), Since: p.CreatedAt}
+	return p
+}
+
+func (r *Rig) publish(ctx context.Context, rc *realm.Client, p registry.Profile,
+	persona string,
+) error {
+	if err := registry.Publish(ctx, rc, p); err != nil {
+		return fmt.Errorf("rig: publish %q profile: %w", persona, err)
+	}
+	return nil
 }
 
 // Name gives a persona a name on screen: its entry in the realm's own

@@ -49,7 +49,8 @@ func (s *Server) peopleIn(ctx context.Context, sess *session, path string) []par
 	if err != nil {
 		return nil
 	}
-	v := view{Names: s.namesFor(ctx, mt), Topic: mt}
+	names, voices := s.directory(ctx, mt)
+	v := view{Names: names, Voices: voices, Topic: mt}
 	if sess != nil {
 		v.Me = sess.Persona
 	}
@@ -109,10 +110,14 @@ func renderSuggest(people []participant) string {
 		if i == 0 {
 			cls, selected = "sug on", "true"
 		}
+		// The lamp says which channel the name about to be written belongs to:
+		// tapping a voice somebody else answers for is a different act from
+		// tapping the person who answers for themselves, and the list is where
+		// a person finds that out — before the name is in the message.
 		fmt.Fprintf(&b, `<button type="button" class="%s" role="option" aria-selected="%s"`+
 			` data-mention="%s" data-name="%s" data-on:click="mentionPick(el)">`+
-			`<span class="who">%s</span><span class="handle">@%s</span></button>`,
-			cls, selected, esc(p.Persona), esc(p.Name), esc(p.Name), esc(p.Persona))
+			`%s<span class="who">%s</span><span class="handle">@%s</span></button>`,
+			cls, selected, esc(p.Persona), esc(p.Name), p.pip(), esc(p.Name), esc(p.Persona))
 	}
 	b.WriteString(`</div>`)
 	return b.String()

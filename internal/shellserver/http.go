@@ -24,13 +24,12 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if sess == nil {
 		fmt.Fprintf(w, `%s
-<body><main style="max-width:420px;margin:10vh auto 0;padding:0 var(--space-6)">
-<div style="display:flex;align-items:center;gap:var(--space-4);margin-bottom:var(--space-6)">
-<span class="led"></span><span class="tbar-wordmark" style="font-family:var(--font-core);font-weight:var(--weight-bold);font-size:22px;letter-spacing:-.035em;font-variation-settings:'wdth' 88">soulstream</span>
-<span class="strip">shell</span></div>
+<body><main class="gate">
+<div class="gate-head"><span class="led human"></span>
+<span class="wordmark">soulstream</span><span class="strip">shell</span></div>
 <div class="card raised"><h1>Sign in</h1>
-<p class="lede">The cockpit shows your soulstream — sign in with your passkey.</p>
-<p style="margin-top:var(--space-6)"><a class="btn" style="border-bottom:none" href="/login">%sSign in with the fold</a></p>
+<p class="lede">This screen shows your soulstream — sign in with your passkey.</p>
+<p class="act"><a class="btn" href="/login">%sSign in with your passkey</a></p>
 </div><p class="foot">soulstream · shell · %s</p></main></body></html>`,
 			pageHead("shell — soulstream", false), Icon("power"), esc(s.opts.Realm))
 		return
@@ -42,7 +41,7 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 <div class="frame">
 %s
 <aside class="rail">
-<div class="rail-head">%s<h2>Conversations</h2></div>
+<div class="rail-head">%s<h2 class="label">Conversations</h2></div>
 <nav id="conversations" class="rail-list"><p class="rail-note">loading…</p></nav>
 </aside>
 <section class="thread">
@@ -136,9 +135,9 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	body := fmt.Sprintf(`<h1>System status</h1>
 <p class="lede">What the house itself is doing — read live, kept nowhere.</p>
 %s
-<p style="margin-top:var(--space-8)">
+<p class="act">
 <button class="btn ghost" data-on:click="@post('/act/work-open?topic=%s')">Open work item</button></p>
-<div id="result">—</div>`, renderPlanes(v), qesc(v.TopicPath))
+<div id="result" class="note">—</div>`, renderPlanes(v), qesc(v.TopicPath))
 	s.sheetPage(w, r, sess, sectionStatus, v, "system status — soulstream", body)
 }
 
@@ -220,22 +219,22 @@ func (s *Server) resolveTopic(ctx context.Context, want string) string {
 func (s *Server) actWorkOpen(w http.ResponseWriter, r *http.Request) {
 	sess := s.currentSession(r)
 	if sess == nil {
-		patch(w, `<div id="result">no session — sign in first</div>`)
+		patch(w, `<div id="result" class="note">no session — sign in first</div>`)
 		return
 	}
 	topicPath := s.resolveTopic(r.Context(), r.URL.Query().Get("topic"))
 	if topicPath == "" {
-		patch(w, `<div id="result">no topic to open work on</div>`)
+		patch(w, `<div id="result" class="note">no topic to open work on</div>`)
 		return
 	}
 	who := s.meName(r.Context(), sess)
 	id, err := topicOpenWork(r.Context(), sess, topicPath, who)
 	if err != nil {
-		patch(w, fmt.Sprintf(`<div id="result">work.open as %s refused: %s</div>`,
+		patch(w, fmt.Sprintf(`<div id="result" class="note">work.open as %s refused: %s</div>`,
 			esc(who), esc(err.Error())))
 		return
 	}
-	patch(w, fmt.Sprintf(`<div id="result">work.open ok · %s · by %s (signed=%v)</div>`,
+	patch(w, fmt.Sprintf(`<div id="result" class="note">work.open ok · %s · by %s (signed=%v)</div>`,
 		esc(id), esc(who), sess.Signed))
 }
 

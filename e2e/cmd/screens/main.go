@@ -190,7 +190,37 @@ func seedConversation(ctx context.Context, r *rig.Rig, cl *http.Client,
 		"@Daan did the good coffee come in a bag or a tin?", []string{me}); err != nil {
 		return fmt.Errorf("avery's mention: %w", err)
 	}
+	if err := seedMachineVoice(ctx, r, path, me); err != nil {
+		return err
+	}
 	return seedWork(ctx, oh, ah)
+}
+
+// seedMachineVoice puts the second channel in the room. The screenshot has to
+// show both accents at equal weight, and that only means anything if the
+// record actually says one of these voices is not a person answering for
+// themselves.
+//
+// It says it the only way it can. There is no human/agent field to set — the
+// persona taxonomy was removed from the protocol on the grounds that it
+// cannot be verified — so the honest claim is the operator one: this voice
+// names the signed-in person as its operator, and the signed-in person
+// countersigns. A reader sees a teal card and, beside the name in the People
+// panel, the sentence it was read from.
+func seedMachineVoice(ctx context.Context, r *rig.Rig, path, operator string) error {
+	scribe, err := r.Operated(ctx, "scribe", "Scribe", operator)
+	if err != nil {
+		return fmt.Errorf("admit the operated voice: %w", err)
+	}
+	sh := topic.Open(scribe, path)
+	if _, err := sh.Materialise(ctx); err != nil {
+		return fmt.Errorf("read the conversation as scribe: %w", err)
+	}
+	if _, err := sh.PostTurn(ctx,
+		"Milk and the good coffee are on the list. Nothing else outstanding."); err != nil {
+		return fmt.Errorf("scribe's message: %w", err)
+	}
+	return nil
 }
 
 // seedWork puts all three states of the work vocabulary on the record, so

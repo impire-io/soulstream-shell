@@ -204,10 +204,17 @@ td.mono,.mono{font:var(--type-data)}
 .plane .head svg{width:18px;height:18px;color:var(--text-muted)}
 
 /* ============================================================
-   The chat surface — a spine of sections, a rail of
-   conversations, one thread with the details beside it, a
-   docked composer. Layout only: every colour, face and step
-   below is a token from the layers above.
+   THE SHELL'S OWN COMPONENT LAYER — everything below this line
+   belongs to this repo and is written against the canon in
+   docs/design-canon.md. Nothing above it is edited: the token
+   blocks and the shared component layer stay verbatim, so
+   re-vendoring the design system is a paste rather than a merge.
+   Where a rule here overrides something above, it says why.
+
+   The surface it dresses: a spine of sections, a rail of
+   conversations, one conversation held to a reading measure with
+   the details beside it, a docked composer. Hardware, not
+   software — molded panels, milled lettering, printed scales.
    ============================================================ */
 
 :root{
@@ -215,26 +222,71 @@ td.mono,.mono{font:var(--type-data)}
 --spine-open:196px;   /* … and with its labels shown */
 --details-width:288px;
 --chat-max:860px;     /* the conversation never grows wider than this */
+--channel-edge:3px;   /* how wide a card's channel edge is drawn */
 }
+
+/* --- The frame ----------------------------------------------------- */
 
 html{height:100%}
 body.chat{height:100%;display:flex;flex-direction:column;overflow:hidden}
 .tbar.slim{padding:var(--space-4) var(--space-7)}
+/* The transport bar is structural, so it closes on ink rather than on the
+   etch line the shared layer draws (canon: hairline for quiet separation,
+   ink for interactive or structural). It never scrolls — the frame under it
+   does, which is what "fixed" means in a surface this shape. */
+body.chat>.tbar{flex:none;border-bottom:var(--border-width-thick) solid var(--border-strong)}
 .frame{flex:1;display:flex;min-height:0}
 
-/* The spine — the few places a person can go, as icons at the far left.
-   It widens to icons-and-labels on a page-local signal. */
-.iconrail{width:var(--spine-width);flex:none;display:flex;flex-direction:column;gap:var(--space-2);padding:var(--space-4) var(--space-3) var(--space-5);background:var(--ink-900);background-image:var(--texture-rib);border-right:var(--border-width) solid var(--border-strong);overflow:hidden;transition:width var(--dur-base) var(--ease-mech)}
+/* Label strips on real headings — the label-maker register. Every section of
+   the instrument is named this way: mono, 11px, uppercase, tracked wide.
+   Headings and buttons stay sentence case; only strips, badges and the
+   spine's tab labels are shouted. */
+.label{display:inline-block;margin:0;padding:3px var(--space-4);font:var(--type-label);
+letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--text-secondary);
+background:var(--surface-inset);border:var(--border-width) solid var(--border-etch);
+border-radius:var(--radius-xs);text-shadow:var(--engrave-light)}
+
+/* Press physics: the key travels into its housing and the raised bevel swaps
+   for the inset one. --press-shift above travels 1px; the canon says 2, and
+   the canon is the contract. Nothing scales, ever. */
+.btn:active{transform:translateY(2px);box-shadow:var(--bevel-inset)}
+/* A key is not a link, whatever element it is made of. */
+a.btn{border-bottom:none}
+
+/* Both channels get a pip named for themselves. The shared layer's .led is
+   already amber, but leaving the human channel as the unnamed default would
+   make it the senior of the two — and the canon says they are peers. */
+.led.human{background:var(--channel-human)}
+.led.ok{background:var(--success);box-shadow:0 0 0 2px rgba(62,122,58,.18),0 0 8px rgba(62,122,58,.5)}
+
+/* --- The spine ------------------------------------------------------
+   The few places a person can go, as icons at the far left of every
+   signed-in screen. It widens to icons-and-labels on a page-local signal.
+   On ink there is no shade darker to step to, so hover steps up the ink
+   ramp instead — the same one-step move the canon asks for on the light
+   key, read in the direction this surface has room for. */
+
+.iconrail{width:var(--spine-width);flex:none;display:flex;flex-direction:column;gap:var(--space-2);
+padding:var(--space-4) var(--space-3) var(--space-5);background:var(--ink-900);
+background-image:var(--texture-rib);border-right:var(--border-width) solid var(--border-strong);
+overflow:hidden;transition:width var(--dur-base) var(--ease-mech)}
 .iconrail.open{width:var(--spine-open)}
 .iconrail .ir-group{display:flex;flex-direction:column;gap:var(--space-2)}
 .iconrail .ir-foot{margin-top:auto}
 .iconrail form{display:contents}
-.ir{display:flex;align-items:center;gap:var(--space-5);width:100%;padding:var(--space-4);border:var(--border-width) solid transparent;border-radius:var(--radius-md);background:none;color:var(--shell-400);font:var(--type-ui);text-align:left;white-space:nowrap;cursor:pointer;transition:var(--transition-control)}
+.ir{position:relative;display:flex;align-items:center;gap:var(--space-5);width:100%;
+padding:var(--space-4);border:var(--border-width) solid transparent;border-radius:var(--radius-sm);
+background:none;color:var(--shell-400);text-align:left;white-space:nowrap;cursor:pointer;
+transition:var(--transition-control)}
 a.ir{border-bottom:none}
 .ir:hover{background:var(--ink-700);color:var(--shell-050)}
-.ir.on{background:var(--ink-800);color:var(--amber-400);border-color:var(--ink-700);box-shadow:var(--bevel-raised)}
+.ir:active{transform:translateY(2px)}
+.ir.on{background:var(--ink-800);color:var(--amber-400);border-color:var(--ink-700);
+box-shadow:var(--bevel-raised)}
 .ir svg{width:20px;height:20px;flex:none}
-.ir .lbl{display:none}
+/* Tab labels, which the canon lets shout: mono, uppercase, tracked. */
+.ir .lbl{display:none;font:var(--type-label);letter-spacing:var(--tracking-label);
+text-transform:uppercase}
 .iconrail.open .lbl{display:inline}
 .ir.toggle{color:var(--ink-300);margin-bottom:var(--space-4)}
 .ir.toggle svg{transition:transform var(--dur-base) var(--ease-mech)}
@@ -243,138 +295,266 @@ a.ir{border-bottom:none}
 /* How many messages are waiting with your name in them. Nothing waiting,
    nothing shown. On the collapsed spine it sits over the icon, where a
    notification dot belongs; with the labels out it moves to the end of the
-   row it belongs to. */
+   row it belongs to. A count is a badge, which is one of the two things the
+   canon still lets be pill-shaped — and it is milled like every other
+   coloured key: amber-600 under light lettering, never ink on orange. */
 .tally{display:none}
-.tally.on{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;border-radius:var(--radius-pill);background:var(--accent);color:var(--ink-900);font:var(--type-label);font-size:10px;letter-spacing:0;box-shadow:var(--glow-led)}
-.ir{position:relative}
+.tally.on{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;
+padding:0 5px;border-radius:var(--radius-pill);background:var(--amber-600);color:var(--text-inverse);
+font:var(--type-label);font-size:10px;letter-spacing:0;text-shadow:var(--engrave-dark);
+border:var(--border-width) solid var(--amber-700)}
 .ir .tally.on{position:absolute;top:1px;left:24px}
 .iconrail.open .tally.on{position:static;margin-left:auto}
 
-/* A screen that is not the conversation: one sheet beside the spine */
+/* --- The rail of conversations --------------------------------------
+   Sticky beside the spine, its own scroll, an etch edge against the
+   conversation. */
+
+.rail{width:var(--rail-width);flex:none;display:flex;flex-direction:column;min-height:0;
+background:var(--surface-inset);border-right:var(--border-width) solid var(--border-etch)}
+.rail-head{display:flex;align-items:center;gap:var(--space-4);flex:none;
+padding:var(--space-5) var(--space-6);background:var(--surface-inset);
+background-image:var(--texture-rib);border-bottom:var(--border-width) solid var(--border-etch)}
+.rail-head svg{width:16px;height:16px;color:var(--text-muted)}
+.rail-list{flex:1;min-height:0;overflow-y:auto;padding:var(--space-5) var(--space-4);
+display:flex;flex-direction:column;gap:var(--space-2)}
+.rail-note{padding:var(--space-4) var(--space-5);color:var(--text-faint);font:var(--type-data);
+font-size:var(--text-xs)}
+
+/* One conversation in the rail. Hover steps a shade darker; the open one is
+   the raised panel, which is the other direction on purpose — it sits on
+   top of the rail rather than under the pointer. */
+.conv{position:relative;display:block;padding:var(--space-4) var(--space-5);
+border:var(--border-width) solid transparent;border-radius:var(--radius-sm);color:var(--text-body);
+transition:var(--transition-control)}
+.conv:hover{background:var(--surface-well);color:var(--text-body)}
+.conv .name{display:block;font:var(--type-ui);font-size:var(--text-base);overflow:hidden;
+text-overflow:ellipsis;white-space:nowrap}
+.conv .state{display:block;margin-top:var(--space-2);font:var(--type-label);
+letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--text-faint)}
+.conv.on{background:var(--surface-raised);border-color:var(--border-hairline);
+box-shadow:var(--shadow-card)}
+.conv.on .name{font-weight:var(--weight-bold)}
+.conv.on .state{color:var(--text-muted)}
+.conv.unread .name{font-weight:var(--weight-bold);padding-right:var(--space-8)}
+.conv .tally.on{position:absolute;right:var(--space-5);top:50%;transform:translateY(-50%)}
+a.row .tally.on{align-self:center}
+
+/* --- The conversation ------------------------------------------------
+   Capped and centred in whatever room it is given: a message that runs the
+   width of a large screen is not a conversation, it is a wall. Backgrounds
+   still span the column, so only the reading measure is held. */
+
+.thread{flex:1;min-width:0;display:flex;flex-direction:column;min-height:0}
+.thread-body{flex:1;min-height:0;overflow-y:auto}
+.centred{padding-inline:max(var(--space-8),calc((100% - var(--chat-max)) / 2))}
+/* The column's own header bar: ribbed like the transport bar it hangs
+   under, closed with ink because it is structure. */
+.thread-head{position:sticky;top:0;z-index:1;display:flex;align-items:baseline;gap:var(--space-5);
+padding-block:var(--space-5);background:var(--surface-page);background-image:var(--texture-rib);
+border-bottom:var(--border-width) solid var(--border-strong)}
+.thread-head h1{font:var(--type-heading);letter-spacing:var(--tracking-tight)}
+.thread-head .where{font:var(--type-data);font-size:var(--text-xs);color:var(--text-faint)}
+.msgs{display:flex;flex-direction:column;gap:var(--space-6);padding-block:var(--space-8) var(--space-9)}
+
+/* A message is a molded card: hairline edge, 5px radius, one crisp etch line
+   and a short shadow — never a tinted cloud.
+
+   Two things are said at once and they are kept strictly apart. WHOSE it is
+   is said by ALIGNMENT and nothing else: your own sit right, everyone
+   else's sit left, and no colour anywhere carries it. WHICH CHANNEL it is
+   in is said by the card's outer edge: amber for the human channel, teal
+   for the machine channel, the same 3px in both cases, because the two
+   accents are peers and neither may outrank the other. The edge hugs the
+   column's outer side so either side can be read straight down. */
+.msg{display:flex;flex-direction:column;align-items:flex-start;
+--chan:var(--channel-human);--edge:var(--border-hairline)}
+.msg.machine{--chan:var(--channel-machine)}
+.msg.mine{align-items:flex-end}
+.bubble{max-width:min(62ch,80%);padding:var(--space-5) var(--space-6);
+padding-left:calc(var(--space-6) - 2px);background:var(--surface-card);
+border:var(--border-width) solid var(--edge);border-left:var(--channel-edge) solid var(--chan);
+border-radius:var(--radius-md);box-shadow:var(--shadow-card)}
+.msg.mine>.bubble{border-left:var(--border-width) solid var(--edge);
+border-right:var(--channel-edge) solid var(--chan);padding-left:var(--space-6);
+padding-right:calc(var(--space-6) - 2px)}
+/* A message with your name in it: the card's hairline hardens to the canon's
+   ink outline. It is findable scrolling back, it is quiet enough to read
+   past, and it steals no channel colour — the edge that says who spoke stays
+   exactly where and what it was. */
+.msg.mentions{--edge:var(--border-strong)}
+
+.byline{display:flex;align-items:center;gap:var(--space-4);margin-bottom:var(--space-3)}
+.byline .led{flex:none}
+.byline .name{font:var(--type-ui);font-size:var(--text-xs);font-weight:var(--weight-bold);
+color:var(--text-secondary)}
+.byline .at{font:var(--type-data);font-size:var(--text-2xs);color:var(--text-faint)}
+.bubble .body{margin:0;font:var(--type-body);white-space:pre-wrap;overflow-wrap:anywhere}
+/* A name that actually tapped somebody, in the channel of the voice it
+   tapped. Weight and ink, no chip: it is a word in a sentence and it has to
+   read as one. */
+.mtoken{font-weight:var(--weight-semibold)}
+.mtoken.human{color:var(--amber-700)}
+.mtoken.machine{color:var(--teal-700)}
+
+/* The quiet row under a message. It steps a shade darker on hover rather
+   than fading up from a lower opacity — the canon bans opacity as a state. */
+.bubble .under{display:flex;align-items:center;gap:var(--space-5);margin-top:var(--space-4);
+color:var(--text-faint);transition:color var(--dur-fast) var(--ease-mech)}
+.msg:hover>.bubble .under,.bubble:focus-within .under{color:var(--text-muted)}
+.verdict{font:var(--type-label);letter-spacing:var(--tracking-wide);text-transform:uppercase;
+color:inherit}
+.verdict.ok{color:var(--green-600)}
+.verdict.warn{color:var(--amber-700)}
+/* Reply is a control on the card, not a link out of it: it takes the row's
+   own ink and moves amber under the pointer, the way the canon moves links.
+   Teal here would read as the machine channel, and it is not one. */
+.reply-btn{padding:0;background:none;border:0;font:var(--type-label);
+letter-spacing:var(--tracking-wide);text-transform:uppercase;color:inherit;cursor:pointer}
+.reply-btn:hover{color:var(--text-link-hover)}
+
+/* Answers hang off the message they answer — on that message's own side, so
+   the indent reads as attachment rather than as a second column. */
+.replies{align-self:stretch;display:flex;flex-direction:column;gap:var(--space-4);
+margin-top:var(--space-4);padding-left:var(--space-7);
+border-left:var(--border-width-thick) solid var(--border-etch)}
+.msg.mine>.replies{padding-left:0;padding-right:var(--space-7);border-left:0;
+border-right:var(--border-width-thick) solid var(--border-etch)}
+.replies>.msg{align-items:flex-start}
+.msg.mine>.replies>.msg{align-items:flex-end}
+.replies .bubble{box-shadow:var(--shadow-key)}
+.replies .byline .name::before{content:"↳ ";color:var(--text-faint)}
+
+/* Anything the room did rather than said: a stamped strip and one plain
+   line. The strip shouts the state; the sentence does not, because a work
+   title in capitals is a title nobody wrote. */
+.sysline{align-self:center;display:flex;align-items:baseline;gap:var(--space-4);
+padding:var(--space-2) 0;color:var(--text-muted)}
+.sysline .what{font:var(--type-body);font-size:var(--text-sm)}
+.blank{padding:var(--space-12) 0;text-align:center;color:var(--text-muted)}
+
+/* --- The composer ----------------------------------------------------
+   Docked at the foot of the conversation and centred on the same measure —
+   a person writes where they read. The box is a well sunk into the housing;
+   Send is a molded key with milled lettering. */
+
+.dock{flex:none;padding-block:var(--space-5) var(--space-6);background:var(--surface-card);
+border-top:var(--border-width-thick) solid var(--border-strong)}
+.dock-row{display:flex;align-items:flex-end;gap:var(--space-5)}
+.dock textarea{flex:1;min-height:46px;max-height:180px;padding:var(--space-4) var(--space-5);
+background:var(--surface-well);border:var(--border-width) solid var(--border-etch);
+border-radius:var(--radius-md);box-shadow:var(--bevel-inset);resize:none;font:var(--type-body)}
+.dock .send{height:46px;border-radius:var(--radius-sm);padding:0 var(--space-6)}
+.dock-note{min-height:16px;margin-top:var(--space-3)}
+.note{font:var(--type-data);font-size:var(--text-2xs);color:var(--text-muted)}
+.reply-state{display:flex;align-items:center;gap:var(--space-4);margin-bottom:var(--space-4)}
+.reply-state .btn{padding:2px var(--space-4)}
+
+/* The mention picker, sitting on the box it writes into. Empty is closed:
+   the server serves an empty list and the browser empties it again, so there
+   is no open state to keep anywhere. */
+.suggest{position:relative}
+.suggest:empty{display:none}
+.suggest:not(:empty){display:flex;flex-direction:column;margin-bottom:var(--space-4);
+padding:var(--space-2);background:var(--surface-raised);
+border:var(--border-width) solid var(--border-strong);border-radius:var(--radius-md);
+box-shadow:var(--shadow-panel);max-height:212px;overflow-y:auto}
+.sug{display:flex;align-items:baseline;gap:var(--space-5);padding:var(--space-4) var(--space-5);
+background:none;border:0;border-radius:var(--radius-xs);text-align:left;cursor:pointer;
+transition:var(--transition-control)}
+.sug .who{font:var(--type-ui);color:var(--text-body)}
+.sug .handle{font:var(--type-data);font-size:var(--text-2xs);color:var(--text-faint)}
+.sug.on,.sug:hover{background:var(--surface-inset)}
+.sug.on .handle,.sug:hover .handle{color:var(--text-muted)}
+
+/* --- The details panel -----------------------------------------------
+   Who is in here, where it stands, what anyone is waiting for. Read from the
+   record, never a link that does not go anywhere. */
+
+.details{width:var(--details-width);flex:none;min-height:0;overflow-y:auto;display:flex;
+flex-direction:column;gap:var(--space-8);padding:var(--space-7) var(--space-6) var(--space-9);
+background:var(--surface-inset);border-left:var(--border-width) solid var(--border-etch)}
+.det-head{display:flex;align-items:center;gap:var(--space-4);margin-bottom:var(--space-5)}
+.det-head svg{width:16px;height:16px;color:var(--text-muted)}
+.details ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:var(--space-5)}
+.details li{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-3)}
+.details .who{font:var(--type-ui);font-size:var(--text-sm);color:var(--text-body)}
+.details .said{flex-basis:100%;font:var(--type-data);font-size:var(--text-2xs);
+color:var(--text-faint)}
+/* A role tag, not a name tag: shell-toned, so it cannot be read as one of
+   the two channel colours standing beside it. */
+.details .you{font:var(--type-label);letter-spacing:var(--tracking-wide);text-transform:uppercase;
+color:var(--text-secondary);background:var(--surface-well);
+border:var(--border-width) solid var(--border-etch);border-radius:var(--radius-pill);padding:1px 7px;
+text-shadow:var(--engrave-light)}
+.details .plain{margin:0;font:var(--type-body);font-size:var(--text-sm);color:var(--text-secondary)}
+.details .w{display:block;font:var(--type-body);font-size:var(--text-sm);color:var(--text-secondary);
+padding-left:var(--space-5);border-left:var(--border-width-thick) solid var(--border-etch)}
+.details .w.waiting{border-left-color:var(--amber-500)}
+.details .w.doing{border-left-color:var(--teal-500)}
+.details .what{color:var(--text-body)}
+.details .quiet{margin:var(--space-5) 0 0;font:var(--type-label);
+letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--text-faint)}
+.det-note{margin:0;font:var(--type-data);font-size:var(--text-xs);color:var(--text-faint)}
+
+/* --- The sheets ------------------------------------------------------
+   Every screen that is not the conversation: one scrolling sheet beside the
+   spine, so the way back to the others never moves. */
+
 .sheet{flex:1;min-height:0;overflow-y:auto}
 .sheet-in{max-width:var(--content-max);margin:0 auto;padding:var(--space-9) var(--space-8) var(--space-11)}
 .sheet h1{margin:0 0 var(--space-4)}
 .sheet .section{margin:var(--space-10) 0 var(--space-6)}
 .sheet .planes{margin-top:var(--space-8)}
+.sheet .act{margin-top:var(--space-8)}
 .rows{display:flex;flex-direction:column;gap:var(--space-4)}
-a.row{display:flex;align-items:baseline;gap:var(--space-5);padding:var(--space-5) var(--space-6);background:var(--surface-card);border:var(--border-width) solid var(--border-hairline);border-radius:var(--radius-md);box-shadow:var(--shadow-key);color:var(--text-body)}
-a.row:hover{background:var(--surface-raised);color:var(--text-body)}
+a.row{display:flex;align-items:baseline;gap:var(--space-5);padding:var(--space-5) var(--space-6);
+background:var(--surface-card);border:var(--border-width) solid var(--border-hairline);
+border-radius:var(--radius-md);box-shadow:var(--shadow-card);color:var(--text-body);
+transition:var(--transition-control)}
+a.row:hover{background:var(--surface-inset);color:var(--text-body)}
 .row .name{font:var(--type-ui);font-size:var(--text-base);font-weight:var(--weight-semibold)}
-.row .what{flex:1;min-width:0;font:var(--type-body);font-size:var(--text-sm);color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.row .state{font:var(--type-label);letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--text-faint)}
+.row .what{flex:1;min-width:0;font:var(--type-body);font-size:var(--text-sm);color:var(--text-muted);
+overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .state{font:var(--type-label);letter-spacing:var(--tracking-label);text-transform:uppercase;
+color:var(--text-faint)}
 
-/* Left rail — the person's conversations */
-.rail{width:var(--rail-width);flex:none;display:flex;flex-direction:column;min-height:0;background:var(--surface-inset);border-right:var(--border-width) solid var(--border-etch)}
-.rail-head{display:flex;align-items:center;gap:var(--space-4);padding:var(--space-6) var(--space-6) var(--space-5);color:var(--text-secondary)}
-.rail-head h2{margin:0;font:var(--type-heading);font-size:var(--text-base)}
-.rail-head svg{width:16px;height:16px;color:var(--text-muted)}
-.rail-list{flex:1;min-height:0;overflow-y:auto;padding:0 var(--space-4) var(--space-5);display:flex;flex-direction:column;gap:var(--space-2)}
-.rail-note{padding:var(--space-5) var(--space-5);color:var(--text-faint);font:var(--type-data);font-size:var(--text-xs)}
+/* A card's top edge is ribbed, the way the canon ribs header bars and card
+   top edges. Nothing else about the panel changes. */
+.card{position:relative}
+.card::before{content:"";position:absolute;inset:0 0 auto;height:var(--space-3);
+background-image:var(--texture-rib);border-radius:var(--radius-md) var(--radius-md) 0 0;
+pointer-events:none}
+.plane .row{gap:var(--space-4);flex-wrap:wrap}
+.plane .row+.vu{margin-top:var(--space-5)}
 
-/* One conversation in the rail */
-.conv{display:block;padding:var(--space-4) var(--space-5);border:var(--border-width) solid transparent;border-radius:var(--radius-md);color:var(--text-body);transition:var(--transition-control)}
-.conv:hover{background:var(--surface-card);color:var(--text-body)}
-.conv .name{display:block;font:var(--type-ui);font-size:var(--text-base);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.conv .state{display:block;margin-top:var(--space-2);font:var(--type-label);letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--text-faint)}
-.conv.on{background:var(--surface-raised);border-color:var(--border-hairline);box-shadow:var(--shadow-key)}
-.conv.on .name{font-weight:var(--weight-bold)}
-.conv.on .state{color:var(--text-muted)}
-.conv{position:relative}
-.conv.unread .name{font-weight:var(--weight-bold);padding-right:var(--space-8)}
-.conv .tally.on{position:absolute;right:var(--space-5);top:50%;transform:translateY(-50%)}
-a.row .tally.on{align-self:center}
+/* The house readout — the segmented VU ladder that stands in for every
+   progress bar. At rest every lamp is dark and the ladder reads as one
+   uniform faceplate: an unlit segment says nothing about where it sits on
+   the scale, or the far end would look permanently lit. The zones colour
+   only once the lamps reach them — teal up the range, amber near the top,
+   red at the very end. */
+.vu{display:flex;gap:2px;padding:3px;background:var(--surface-well);
+border:var(--border-width) solid var(--border-etch);border-radius:var(--radius-xs);
+box-shadow:var(--bevel-inset)}
+.vu .seg{flex:1;height:10px;background:var(--shell-400)}
+.vu .seg.lit{background:var(--teal-500)}
+.vu .seg.amber.lit{background:var(--amber-500)}
+.vu .seg.red.lit{background:var(--red-500)}
+.readout{display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-5);
+margin:var(--space-3) 0 0;font:var(--type-data);font-size:var(--text-xs);color:var(--text-muted)}
+.readout .cap{font:var(--type-label);letter-spacing:var(--tracking-label);text-transform:uppercase;
+color:var(--text-faint)}
 
-/* Centre column — the conversation itself. It is capped and centred in
-   whatever room it is given: a message that runs the width of a large
-   screen is not a conversation, it is a wall. The backgrounds still span
-   the column, so only the reading measure is held. */
-.thread{flex:1;min-width:0;display:flex;flex-direction:column;min-height:0}
-.thread-body{flex:1;min-height:0;overflow-y:auto}
-.centred{padding-inline:max(var(--space-8),calc((100% - var(--chat-max)) / 2))}
-.thread-head{position:sticky;top:0;z-index:1;display:flex;align-items:baseline;gap:var(--space-5);padding-block:var(--space-5);background:var(--surface-page);border-bottom:var(--border-width) solid var(--border-hairline)}
-.thread-head h1{font:var(--type-heading);letter-spacing:var(--tracking-tight)}
-.thread-head .where{font:var(--type-data);font-size:var(--text-xs);color:var(--text-faint)}
-.msgs{display:flex;flex-direction:column;gap:var(--space-6);padding-block:var(--space-8) var(--space-9)}
+/* --- The sign-in card ------------------------------------------------
+   The one screen behind no session: a wordmark, one panel, one key. */
 
-/* A message. Alignment is the attribution: mine on the right. */
-.msg{display:flex;flex-direction:column;align-items:flex-start}
-.msg.mine{align-items:flex-end}
-.bubble{max-width:min(62ch,80%);padding:var(--space-5) var(--space-6);background:var(--surface-card);border:var(--border-width) solid var(--border-hairline);border-radius:var(--radius-lg);box-shadow:var(--shadow-key)}
-.msg.mine>.bubble{background:var(--accent-soft);border-color:var(--amber-200)}
-.byline{display:flex;align-items:baseline;gap:var(--space-4);margin-bottom:var(--space-3)}
-.byline .name{font:var(--type-ui);font-size:var(--text-xs);font-weight:var(--weight-bold);color:var(--text-secondary)}
-.byline .at{font:var(--type-data);font-size:var(--text-2xs);color:var(--text-faint)}
-.bubble .body{margin:0;font:var(--type-body);white-space:pre-wrap;overflow-wrap:anywhere}
-/* A name that actually tapped somebody. Weight and ink, no chip: it is a
-   word in a sentence, and it has to read as one. */
-.mtoken{font-weight:var(--weight-semibold);color:var(--accent-press)}
-/* A message with your name in it: a bar down the inside edge, on the side
-   the message already sits. Enough to find scrolling back, quiet enough to
-   read past. */
-.msg.mentions>.bubble{box-shadow:var(--shadow-key),inset 3px 0 0 var(--accent)}
-.msg.mentions.mine>.bubble{box-shadow:var(--shadow-key),inset -3px 0 0 var(--accent)}
-.bubble .under{display:flex;align-items:center;gap:var(--space-5);margin-top:var(--space-4);opacity:.5;transition:opacity var(--dur-fast) var(--ease-mech)}
-.msg:hover>.bubble .under,.bubble:focus-within .under{opacity:1}
-.verdict{font:var(--type-label);letter-spacing:var(--tracking-wide);text-transform:uppercase;color:var(--text-faint)}
-.verdict.ok{color:var(--green-600)}
-.verdict.warn{color:var(--amber-700)}
-.reply-btn{padding:0;background:none;border:0;font:var(--type-ui);font-size:var(--text-2xs);color:var(--text-link);cursor:pointer}
-.reply-btn:hover{color:var(--text-link-hover)}
-
-/* Answers hang off the message they answer — on that message's own side,
-   so the indent reads as attachment rather than as a second column. */
-.replies{align-self:stretch;display:flex;flex-direction:column;gap:var(--space-4);margin-top:var(--space-4);padding-left:var(--space-7);border-left:var(--border-width-thick) solid var(--border-etch)}
-.msg.mine>.replies{padding-left:0;padding-right:var(--space-7);border-left:0;border-right:var(--border-width-thick) solid var(--border-etch)}
-.replies>.msg{align-items:flex-start}
-.msg.mine>.replies>.msg{align-items:flex-end}
-.replies .bubble{border-radius:var(--radius-md);box-shadow:none}
-.replies .byline .name::before{content:"↳ ";color:var(--text-faint)}
-
-/* Anything the room did rather than said */
-.sysline{align-self:center;padding:var(--space-2) var(--space-5);border:var(--border-width) dashed var(--border-hairline);border-radius:var(--radius-pill);font:var(--type-label);letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--text-faint)}
-.blank{padding:var(--space-12) 0;text-align:center;color:var(--text-muted)}
-
-/* The composer, docked at the foot of the conversation and centred on the
-   same measure — a person writes where they read. */
-.dock{flex:none;padding-block:var(--space-5) var(--space-6);background:var(--surface-card);border-top:var(--border-width) solid var(--border-hairline);box-shadow:0 -2px 10px rgba(27,25,23,.05)}
-.dock-row{display:flex;align-items:flex-end;gap:var(--space-5)}
-.dock textarea{flex:1;min-height:46px;max-height:180px;padding:var(--space-5) var(--space-6);border-radius:var(--radius-lg);resize:none;font:var(--type-body)}
-.dock .send{height:46px;border-radius:var(--radius-lg);padding:0 var(--space-6)}
-.dock-note{min-height:15px;margin-top:var(--space-3)}
-.reply-state{display:flex;align-items:center;gap:var(--space-4);margin-bottom:var(--space-4)}
-.reply-state .btn{padding:2px var(--space-4)}
-
-/* The mention picker, sitting on the box it writes into. Empty is closed:
-   the server serves an empty list and the browser empties it again, so
-   there is no open state to keep anywhere. */
-.suggest{position:relative}
-.suggest:empty{display:none}
-.suggest:not(:empty){display:flex;flex-direction:column;margin-bottom:var(--space-4);padding:var(--space-2);background:var(--surface-raised);border:var(--border-width) solid var(--border-etch);border-radius:var(--radius-lg);box-shadow:var(--shadow-panel);max-height:212px;overflow-y:auto}
-.sug{display:flex;align-items:baseline;gap:var(--space-5);padding:var(--space-4) var(--space-5);background:none;border:0;border-radius:var(--radius-md);text-align:left;cursor:pointer}
-.sug .who{font:var(--type-ui);color:var(--text-body)}
-.sug .handle{font:var(--type-data);font-size:var(--text-2xs);color:var(--text-faint)}
-.sug.on,.sug:hover{background:var(--accent-soft)}
-.sug.on .handle,.sug:hover .handle{color:var(--text-muted)}
-
-/* The details beside the conversation — who is in here, where it stands,
-   what anyone is waiting for. Read from the record, never a link that
-   does not go anywhere. */
-.details{width:var(--details-width);flex:none;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:var(--space-8);padding:var(--space-7) var(--space-6) var(--space-9);background:var(--surface-inset);border-left:var(--border-width) solid var(--border-etch)}
-.det-head{display:flex;align-items:center;gap:var(--space-4);margin-bottom:var(--space-5)}
-.det-head h2{margin:0;font:var(--type-heading);font-size:var(--text-base)}
-.det-head svg{width:16px;height:16px;color:var(--text-muted)}
-.details ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:var(--space-4)}
-.details li{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--space-3)}
-.details .who{font:var(--type-ui);font-size:var(--text-sm);color:var(--text-body)}
-.details .said{font:var(--type-data);font-size:var(--text-2xs);color:var(--text-faint)}
-.details .you{font:var(--type-label);letter-spacing:var(--tracking-wide);text-transform:uppercase;color:var(--amber-700);background:var(--accent-soft);border:var(--border-width) solid var(--amber-200);border-radius:var(--radius-pill);padding:1px 7px}
-.details .plain{margin:0;font:var(--type-body);font-size:var(--text-sm);color:var(--text-secondary)}
-.details .w{display:block;font:var(--type-body);font-size:var(--text-sm);color:var(--text-secondary);padding-left:var(--space-5);border-left:var(--border-width-thick) solid var(--border-etch)}
-.details .w.waiting{border-left-color:var(--amber-500)}
-.details .w.doing{border-left-color:var(--teal-500)}
-.details .what{color:var(--text-body)}
-.details .quiet{margin:var(--space-5) 0 0;font:var(--type-label);letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--text-faint)}
-.det-note{margin:0;font:var(--type-data);font-size:var(--text-xs);color:var(--text-faint)}
+.gate{max-width:420px;margin:10vh auto 0;padding:0 var(--space-6)}
+.gate-head{display:flex;align-items:center;gap:var(--space-4);margin-bottom:var(--space-6)}
+.gate-head .wordmark{font-family:var(--font-core);font-weight:var(--weight-bold);font-size:22px;
+letter-spacing:-.035em;font-variation-settings:'wdth' 88;color:var(--text-body);
+text-shadow:var(--engrave-light)}
+.gate .act{margin-top:var(--space-6)}
 
 /* Narrow rooms: the details step aside before the conversation does. */
 @media (max-width:1180px){.details{display:none}}
