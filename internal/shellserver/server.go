@@ -1,4 +1,4 @@
-// Package shellserver is the shell's engine: the soulsystem's human
+// Package shellserver is the shell's engine: Soulstream's human
 // cockpit, rendered server-side over a backend-held realm client and
 // pushed to the browser as Datastar SSE patches (design 0001 §5). The
 // shell is a pure consumer of public component surfaces and custodies

@@ -25,22 +25,22 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 	if sess == nil {
 		fmt.Fprintf(w, `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>shell — soulsystem</title><link rel="stylesheet" href="/assets/tokens.css"></head>
+<title>shell — soulstream</title><link rel="stylesheet" href="/assets/tokens.css"></head>
 <body><main style="max-width:420px;margin:10vh auto 0;padding:0 var(--space-6)">
 <div style="display:flex;align-items:center;gap:var(--space-4);margin-bottom:var(--space-6)">
-<span class="led"></span><span class="tbar-wordmark" style="font-family:var(--font-core);font-weight:var(--weight-bold);font-size:22px;letter-spacing:-.035em;font-variation-settings:'wdth' 88">soulsystem</span>
+<span class="led"></span><span class="tbar-wordmark" style="font-family:var(--font-core);font-weight:var(--weight-bold);font-size:22px;letter-spacing:-.035em;font-variation-settings:'wdth' 88">soulstream</span>
 <span class="strip">shell</span></div>
 <div class="card raised"><h1>Sign in</h1>
 <p class="lede">The cockpit shows your realm — sign in with your passkey.</p>
 <p style="margin-top:var(--space-6)"><a class="btn" style="border-bottom:none" href="/login">%sSign in with the fold</a></p>
-</div><p class="foot">soulsystem · shell · realm %s</p></main></body></html>`,
+</div><p class="foot">soulstream · shell · realm %s</p></main></body></html>`,
 			Icon("power"), esc(s.opts.Realm))
 		return
 	}
 	topicPath := r.URL.Query().Get("topic")
 	fmt.Fprintf(w, `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>shell — soulsystem</title><link rel="stylesheet" href="/assets/tokens.css">
+<title>shell — soulstream</title><link rel="stylesheet" href="/assets/tokens.css">
 <script type="module" src="/assets/datastar.js"></script></head>
 <body class="chat" data-init="@get('/live?topic=%s')">
 %s
@@ -78,7 +78,7 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 
 // topbar is the ink housing every signed-in screen hangs from.
 func (s *Server) topbar(who string) string {
-	return fmt.Sprintf(`<header class="tbar slim"><span class="wordmark">soulsystem</span>`+
+	return fmt.Sprintf(`<header class="tbar slim"><span class="wordmark">soulstream</span>`+
 		`<span class="strip">shell</span><span class="strip shell">realm · %s</span>`+
 		`<span class="spacer"></span><span class="who">%s</span><span class="led"></span></header>`,
 		esc(s.opts.Realm), esc(who))
@@ -98,7 +98,7 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>system status — soulsystem</title><link rel="stylesheet" href="/assets/tokens.css">
+<title>system status — soulstream</title><link rel="stylesheet" href="/assets/tokens.css">
 <script type="module" src="/assets/datastar.js"></script></head>
 <body>
 %s
@@ -109,7 +109,7 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 <button class="btn ghost" data-on:click="@post('/act/work-open?topic=%s')">Open work item</button></p>
 <div id="result">—</div>
 <p style="margin-top:var(--space-8)"><a href="/">← Back to conversations</a></p>
-<p class="foot">soulsystem · shell · your data lives in the realm, not here</p>
+<p class="foot">soulstream · shell · your data lives in the realm, not here</p>
 </main></body></html>`,
 		s.topbar(sess.Display), renderPlanes(v), qesc(v.TopicPath))
 }
