@@ -28,10 +28,34 @@ Founding articles, held by the standing e2e gate:
   bearer through the OIDC callout lane) and their own persona
   signature. The shell signs as no one.
 
+## Shape
+
+A pure shell, and modules beside it:
+
+- [`shell/`](shell) — the frame, and nothing else: sign-in and sessions
+  (generic OIDC, the bearer in memory and nowhere else), the page chrome
+  (top bar, the spine, the design assets), the Datastar/SSE plumbing, and
+  the module contract itself ([`shell/module.go`](shell/module.go) —
+  identity, activation, navigation contribution, route mounting). Its
+  packages import no module and nothing Soulstream-specific, and the check
+  is mechanical — the compiler's own import graph, riding `make test`
+  ([`internal/purity`](internal/purity)).
+- [`soulstream/`](soulstream) — the Soulstream module-support layer, where
+  everything the shell refuses to hold lives: bearer → sentinel + callout →
+  an admission that acts as the person, the clients, the persona directory,
+  the mention tray.
+- [`modules/overview`](modules/overview) and
+  [`modules/conversations`](modules/conversations) — the two human
+  surfaces, each registering through the one contract and knowing nothing
+  of the other.
+- [`embed/`](embed) — composition: the one place the pieces meet, and the
+  only one that knows both that this is a shell and that this is
+  Soulstream.
+
 ## Design
 
 The canon is vendored at [`docs/design-canon.md`](docs/design-canon.md)
-and implemented by `internal/shellserver/assets/tokens.css`: the token
+and implemented by `shell/assets/tokens.css`: the token
 blocks and the shared component layer are verbatim from the design
 system, and everything under `THE SHELL'S OWN COMPONENT LAYER` is this
 repo's. Cassette futurism in a light key — molded panels, milled
@@ -52,7 +76,8 @@ operator claim — `operated_by` plus the operator's countersignature —
 so the shell reads accountability rather than species: a voice that
 answers for itself is on the human channel, a voice somebody else
 answers for is on the machine one. The seam and its limits are written
-out in [`internal/shellserver/channel.go`](internal/shellserver/channel.go);
+out in
+[`modules/conversations/channel.go`](modules/conversations/channel.go);
 the People panel always names the operator beside the voice, so the
 claim is on the screen rather than implied by a shade of teal.
 

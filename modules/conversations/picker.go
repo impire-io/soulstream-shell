@@ -1,4 +1,4 @@
-package shellserver
+package conversations
 
 import (
 	"context"
@@ -8,6 +8,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/impire-io/soulstream-core/topic"
+
+	"github.com/impire-io/soulstream-shell/soulstream"
 )
 
 // The mention picker: typing @ into the message box offers the people in
@@ -41,15 +43,15 @@ const suggestLimit = 6
 // peopleIn is who is in a conversation, named — the same set the details
 // panel shows, read straight off the record over the shell's read lane. No
 // keyring: this is who may be tapped, not who signed what.
-func (s *Server) peopleIn(ctx context.Context, sess *session, path string) []participant {
+func (m *Module) peopleIn(ctx context.Context, sess *soulstream.Session, path string) []participant {
 	if path == "" {
 		return nil
 	}
-	mt, err := topic.Open(s.rc, path).Materialise(ctx)
+	mt, err := topic.Open(m.sp.Reader(), path).Materialise(ctx)
 	if err != nil {
 		return nil
 	}
-	names, voices := s.directory(ctx, mt)
+	names, voices := m.directory(ctx, mt)
 	v := view{Names: names, Voices: voices, Topic: mt}
 	if sess != nil {
 		v.Me = sess.Persona

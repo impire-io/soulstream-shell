@@ -1,10 +1,12 @@
-package shellserver
+package conversations
 
 import (
 	"fmt"
 	"strings"
 
 	"github.com/impire-io/soulstream-core/topic"
+
+	"github.com/impire-io/soulstream-shell/shell"
 )
 
 // The details panel: the column beside the conversation that answers the
@@ -135,29 +137,11 @@ func workWords(v view, w topic.WorkItem) string {
 	}
 }
 
-// sizeWords is a byte count as a person reads it: never more digits than the
-// number has any use for, and a scale that reaches as far as a store's own
-// budget does.
-func sizeWords(n uint64) string {
-	switch {
-	case n < 1024:
-		return fmt.Sprintf("%d B", n)
-	case n < 1<<20:
-		return fmt.Sprintf("%.0f KB", float64(n)/1024)
-	case n < 100<<20:
-		return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
-	case n < 1<<30:
-		return fmt.Sprintf("%.0f MB", float64(n)/(1<<20))
-	default:
-		return fmt.Sprintf("%.1f GB", float64(n)/(1<<30))
-	}
-}
-
 // detSection is one titled block of the panel. The title is a mono label
 // strip, the way the canon names the sections of an instrument.
 func detSection(icon, heading, body string) string {
 	return fmt.Sprintf(`<section class="det"><div class="det-head">%s`+
-		`<h2 class="label">%s</h2></div>%s</section>`, Icon(icon), esc(heading), body)
+		`<h2 class="label">%s</h2></div>%s</section>`, shell.Icon(icon), esc(heading), body)
 }
 
 // renderDetails is the whole panel — the live stream's third target.
@@ -236,7 +220,7 @@ func renderDetails(v view) string {
 		kept++
 		fmt.Fprintf(&files, `<li><span class="what">%s</span>`+
 			`<span class="said">%s · %s</span></li>`,
-			esc(a.Name), esc(nameOf(v, a.Author)), esc(sizeWords(a.Size)))
+			esc(a.Name), esc(nameOf(v, a.Author)), esc(shell.SizeWords(a.Size)))
 	}
 	files.WriteString(`</ul>`)
 	if kept > 0 {

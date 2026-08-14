@@ -1,8 +1,9 @@
-package shellserver
+package conversations
 
 import (
 	"fmt"
-	"net/url"
+
+	"github.com/impire-io/soulstream-shell/shell"
 )
 
 // The composer: the surface where a person writes into a conversation. It
@@ -15,10 +16,6 @@ import (
 // element.
 
 const composerPrompt = "Write a message…"
-
-// qesc renders a value safe both as a query parameter and inside the
-// HTML attribute that carries it.
-func qesc(s string) string { return esc(url.QueryEscape(s)) }
 
 // composerBox is the message box. On a landed message it is patched back
 // in with mode replace, not morphed: the morph deliberately keeps what a
@@ -75,7 +72,7 @@ func renderComposer(topicPath string) string {
 		`<button class="btn send" type="submit">%s<span>Send</span></button></div>`+
 		`<div class="dock-note">%s</div></form>`,
 		qesc(topicPath), composerReplyTo("", ""), composerPicks(), renderSuggest(nil),
-		composerBox(topicPath), Icon("send"), composerNote(""))
+		composerBox(topicPath), shell.Icon("send"), composerNote(""))
 }
 
 // replyLink is the per-message reply control inside the conversation. It

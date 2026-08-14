@@ -1,52 +1,58 @@
-package shellserver
+package conversations
 
 import (
-	"context"
 	"fmt"
+	"io/fs"
 	"net/http"
-	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/impire-io/soulstream-core/topic"
+
+	"github.com/impire-io/soulstream-shell/shell"
 )
 
-// A fragment that spans lines must reach the browser whole: an SSE field
-// ends at the first newline, so each line needs its own data line.
-func TestWriteElementsFramesEveryLine(t *testing.T) {
-	var b strings.Builder
-	writeElements(&b, "<div id=\"x\">\n  <svg />\n</div>", "mode replace")
-	want := "event: datastar-patch-elements\n" +
-		"data: mode replace\n" +
-		"data: elements <div id=\"x\">\n" +
-		"data: elements   <svg />\n" +
-		"data: elements </div>\n\n"
-	if b.String() != want {
-		t.Fatalf("frame =\n%q\nwant\n%q", b.String(), want)
+// tokens is the design token source, read from where the shell serves it.
+func tokens(t *testing.T) string {
+	t.Helper()
+	css, err := fs.ReadFile(shell.Assets(), "tokens.css")
+	if err != nil {
+		t.Fatal(err)
 	}
+	return string(css)
 }
 
-// The icons ride those frames once a second; each is kept to one line.
-func TestIconsAreOneLine(t *testing.T) {
-	if len(icons) == 0 {
-		t.Fatal("no icons embedded")
-	}
-	for name, svg := range icons {
-		if strings.Contains(string(svg), "\n") {
-			t.Errorf("icon %s spans lines: %q", name, svg)
-		}
-	}
+// routes records what a module claims, without serving any of it.
+type routes struct{ patterns []string }
+
+func (rt *routes) Handle(pattern string, _ http.Handler) {
+	rt.patterns = append(rt.patterns, pattern)
 }
 
-// An icon that carries only a viewBox grows to the width of whatever
-// holds it, and .btn svg is the only rule that would stop it.
-func TestIconsCarryTheirSize(t *testing.T) {
-	for name, svg := range icons {
-		if !strings.Contains(string(svg), `width="24"`) ||
-			!strings.Contains(string(svg), `height="24"`) {
-			t.Errorf("icon %s has no intrinsic size: %q", name, svg)
+func (rt *routes) HandleFunc(pattern string, _ func(http.ResponseWriter, *http.Request)) {
+	rt.patterns = append(rt.patterns, pattern)
+}
+
+// The module claims its own screen, its own channel and its own acts — and
+// nothing another surface could be serving.
+func TestTheModuleClaimsItsOwnRoutes(t *testing.T) {
+	m := New(nil, nil)
+	if got := m.Identity(); got.Slug != "conversations" || got.Name != "Conversations" {
+		t.Errorf("the module names itself %+v", got)
+	}
+	var rt routes
+	m.Mount(&rt)
+	want := []string{"GET /{$}", "GET /live", "POST /act/post-turn",
+		"GET /composer/reply", "GET /composer/suggest"}
+	if !reflect.DeepEqual(rt.patterns, want) {
+		t.Errorf("the module mounts %v, want %v", rt.patterns, want)
+	}
+	for _, p := range rt.patterns {
+		if strings.Contains(p, "/home") || strings.Contains(p, "/status") ||
+			strings.Contains(p, "/login") || strings.Contains(p, "/assets") {
+			t.Errorf("the module claims %q, which is not its own", p)
 		}
 	}
 }
@@ -88,12 +94,9 @@ func TestTheConversationColumnIsCentred(t *testing.T) {
 	if !strings.Contains(renderComposer("home/kitchen"), "centred") {
 		t.Error("the composer is not held to the conversation's measure")
 	}
-	css, err := assetsFS.ReadFile("assets/tokens.css")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(css), "--chat-max:") ||
-		!strings.Contains(string(css), ".centred{padding-inline:max(") {
+	css := tokens(t)
+	if !strings.Contains(css, "--chat-max:") ||
+		!strings.Contains(css, ".centred{padding-inline:max(") {
 		t.Error("the token source does not cap and centre the conversation")
 	}
 }
@@ -299,11 +302,7 @@ func TestOwnMessagesAreNotColoured(t *testing.T) {
 	if !strings.Contains(both, `<div class="msg human" data-op="op-1">`) {
 		t.Errorf("somebody else's channel moved with the reader's:\n%s", both)
 	}
-	css, err := assetsFS.ReadFile("assets/tokens.css")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(css), ".msg.mine>.bubble{background") {
+	if strings.Contains(tokens(t), ".msg.mine>.bubble{background") {
 		t.Error("the reader's own messages are tinted — side is the whole attribution")
 	}
 }
@@ -318,17 +317,14 @@ func TestTheMentionMarkTakesNoChannelColour(t *testing.T) {
 	if !strings.Contains(got, `<div class="msg machine mentions" data-op="op-4">`) {
 		t.Errorf("a machine-channel message that says your name lost its channel:\n%s", got)
 	}
-	css, err := assetsFS.ReadFile("assets/tokens.css")
-	if err != nil {
-		t.Fatal(err)
-	}
 	// The channel moves the card's edge; the mark moves the card's outline.
 	// Two custom properties, on purpose, so neither can be read as the other.
+	css := tokens(t)
 	for _, want := range []string{
 		"--chan:var(--channel-human)", ".msg.machine{--chan:var(--channel-machine)}",
 		".msg.mentions{--edge:var(--border-strong)}",
 	} {
-		if !strings.Contains(string(css), want) {
+		if !strings.Contains(css, want) {
 			t.Errorf("the token source does not hold the channel edge (%q)", want)
 		}
 	}
@@ -387,41 +383,6 @@ func TestThePickerSaysWhichChannelANameIs(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("the picker is missing %q:\n%s", want, got)
 		}
-	}
-}
-
-// The house readout is the segmented ladder, and it reads against the scale
-// the store declares for itself. A store with no declared roof has no scale,
-// and the instrument says so rather than inventing a ceiling to look empty
-// against: an unroofed store is not 0% full, it is unmeasured.
-func TestTheStorageReadoutIsAMeterAgainstADeclaredScale(t *testing.T) {
-	roofed := renderOverview(view{StreamMsg: 400, StreamBytes: 512 << 20, StreamRoof: 1 << 30})
-	if n := strings.Count(roofed, `<span class="seg`); n != vuSegments {
-		t.Errorf("the ladder has %d segments, want %d", n, vuSegments)
-	}
-	if lit := strings.Count(roofed, " lit"); lit != vuSegments/2 {
-		t.Errorf("half a budget lights %d of %d lamps", lit, vuSegments)
-	}
-	for _, want := range []string{`<span class="cap">of 1.0 GB</span>`,
-		`<span class="mono">50%</span>`, `aria-label="50% of the store&#39;s budget used"`,
-		"400 ops · 512 MB"} {
-		if !strings.Contains(roofed, want) {
-			t.Errorf("the storage readout is missing %q:\n%s", want, roofed)
-		}
-	}
-	bare := renderOverview(view{StreamMsg: 400, StreamBytes: 512 << 20})
-	if strings.Contains(bare, " lit") {
-		t.Errorf("a store with no declared budget still reads a level:\n%s", bare)
-	}
-	for _, want := range []string{`<span class="cap">no budget set</span>`,
-		`aria-label="the store declares no budget to measure against"`} {
-		if !strings.Contains(bare, want) {
-			t.Errorf("the unmeasured store does not say so (%q):\n%s", want, bare)
-		}
-	}
-	// And nothing anywhere is a progress bar.
-	if strings.Contains(bare, "<progress") || strings.Contains(roofed, "<progress") {
-		t.Error("the house readout is a progress bar")
 	}
 }
 
@@ -488,62 +449,27 @@ func TestUnknownVoicesKeepTheirRecordedName(t *testing.T) {
 	}
 }
 
-// The spine holds the few places a person can go, and Home is one of them
-// from every screen. The section they are on is marked, and only that one.
-func TestTheSpineReachesHomeFromAnywhere(t *testing.T) {
-	rail := renderIconRail(sectionChat, "home/kitchen", mentionTally(0))
-	for _, want := range []string{
-		`href="/home?topic=home%2Fkitchen"`, `<span class="lbl">Home</span>`,
-		`href="/?topic=home%2Fkitchen"`, `<span class="lbl">Conversations</span>`,
-		`href="/status?topic=home%2Fkitchen"`, `<span class="lbl">System status</span>`,
-		`action="/logout"`, `<span class="lbl">Sign out</span>`,
-	} {
-		if !strings.Contains(rail, want) {
-			t.Errorf("the spine is missing %s:\n%s", want, rail)
+// The mark this module hangs on its own key on the spine: its own patch
+// target, so the live stream keeps it current without morphing the spine
+// around it — an expanded spine survives every tick, as it did before there
+// was anything to count.
+func TestTheModulesMarkOnTheSpine(t *testing.T) {
+	if quiet := spineTally(0); quiet != `<span id="mentions" class="tally"></span>` {
+		t.Errorf("nothing is waiting and the mark still counts: %s", quiet)
+	}
+	loud := spineTally(3)
+	if loud != `<span id="mentions" class="tally on" title="3 messages mention you">3</span>` {
+		t.Errorf("the mark does not carry the count: %s", loud)
+	}
+	if !strings.Contains(spineTally(1), "1 message mentions you") {
+		t.Errorf("one waiting message reads as many: %s", spineTally(1))
+	}
+	// It is a target of its own: the stream's other three write the rail,
+	// the conversation and the details, and none of them is this.
+	for _, id := range []string{`id="dash"`, `id="conversations"`, `id="details"`} {
+		if strings.Contains(loud, id) {
+			t.Errorf("the mark writes into %s, a target of its own:\n%s", id, loud)
 		}
-	}
-	if n := strings.Count(rail, `class="ir on"`); n != 1 {
-		t.Errorf("%d spine entries are marked as where the person is, want 1:\n%s", n, rail)
-	}
-	if !strings.Contains(rail, `class="ir on" href="/?topic=home%2Fkitchen"`) {
-		t.Errorf("the conversation screen is not the marked one:\n%s", rail)
-	}
-	if !strings.Contains(renderIconRail(sectionHome, "", mentionTally(0)),
-		`class="ir on" href="/home"`) {
-		t.Error("the overview does not mark itself")
-	}
-	// Expanding is page-local: a signal and a class, no round-trip.
-	if !strings.Contains(rail, `data-class:open="$rail"`) ||
-		!strings.Contains(rail, `data-on:click="$rail = !$rail"`) {
-		t.Errorf("the spine asks the server to expand itself:\n%s", rail)
-	}
-	if strings.Contains(rail, `id="dash"`) || strings.Contains(rail, `id="conversations"`) ||
-		strings.Contains(rail, `id="details"`) {
-		t.Errorf("the spine writes into a target the live stream owns:\n%s", rail)
-	}
-}
-
-// The one thing on the spine the live stream does keep current is the
-// mentions tally — and it does so through a target of its own, so the spine
-// around it (and the labels a person pulled out) survives every tick.
-func TestTheSpineCarriesTheMentionsTally(t *testing.T) {
-	quiet := renderIconRail(sectionChat, "", mentionTally(0))
-	if n := strings.Count(quiet, `id="mentions"`); n != 1 {
-		t.Fatalf("the spine carries the tally %d times, want 1:\n%s", n, quiet)
-	}
-	if strings.Contains(quiet, `class="tally on"`) {
-		t.Errorf("nothing is waiting and the spine still counts:\n%s", quiet)
-	}
-	loud := renderIconRail(sectionChat, "", mentionTally(3))
-	if !strings.Contains(loud, `<span id="mentions" class="tally on" title="3 messages mention you">3</span>`) {
-		t.Errorf("the spine does not carry the count:\n%s", loud)
-	}
-	// It belongs to Conversations, not to Home or the status screen.
-	if strings.Index(loud, `id="mentions"`) < strings.Index(loud, `>Conversations<`) {
-		t.Errorf("the tally hangs off the wrong entry:\n%s", loud)
-	}
-	if !strings.Contains(mentionTally(1), "1 message mentions you") {
-		t.Errorf("one waiting message reads as many: %s", mentionTally(1))
 	}
 }
 
@@ -597,96 +523,9 @@ func TestTheRailMarksConversationsThatWantYou(t *testing.T) {
 	if strings.Contains(rail, `class="conv on unread"`) {
 		t.Errorf("the open conversation is marked unread:\n%s", rail)
 	}
-	// The overview lists the same conversations and says the same thing.
-	over := renderOverview(v)
-	if !strings.Contains(over, `class="tally on" title="2 messages mention you"`) {
-		t.Errorf("the overview does not mark the conversation:\n%s", over)
-	}
 	// Nothing waiting, nothing marked.
 	if strings.Contains(renderRail(meView()), "tally") {
 		t.Error("an empty tray still marks the rail")
-	}
-}
-
-// The tray is the session's own: slips fill it, opening a conversation
-// empties that conversation's share, and an inbox replayed after a
-// reconnect never resurrects a message already read.
-func TestTheTrayFillsAndEmptiesOnReading(t *testing.T) {
-	sess := &session{unread: map[string]map[string]bool{}, seen: map[string]bool{}}
-	board := []topic.BoardEntry{{Path: "home/attic"}, {Path: "home/kitchen"}}
-	sess.tap("home/attic", "op-1")
-	sess.tap("home/attic", "op-1") // the same slip twice is one message
-	sess.tap("home/attic", "op-2")
-	sess.tap("home/kitchen", "op-3")
-	if got := sess.standing(board); got["home/attic"] != 2 || got["home/kitchen"] != 1 {
-		t.Fatalf("the tray holds %v, want 2 in the attic and 1 in the kitchen", got)
-	}
-	if n := unreadTotal(sess.standing(board)); n != 3 {
-		t.Errorf("the whole tray counts %d, want 3", n)
-	}
-	sess.read("home/attic")
-	if got := sess.standing(board); got["home/attic"] != 0 || got["home/kitchen"] != 1 {
-		t.Fatalf("reading the attic left %v", got)
-	}
-	sess.tap("home/attic", "op-1") // the inbox replays
-	if got := sess.standing(board); got["home/attic"] != 0 {
-		t.Errorf("a replayed inbox resurrected a message already read: %v", got)
-	}
-	// A slip pointing somewhere the board does not reach is not a mark: it
-	// would open onto nothing, and nothing would ever clear it.
-	sess.tap("home/cellar", "op-9")
-	if got := sess.standing(board); len(got) != 1 {
-		t.Errorf("a slip for a conversation off the board became a mark: %v", got)
-	}
-}
-
-// The word the operator retired. The Go keeps it — realm.Client, the realm
-// package, the flag a deployment sets — but nothing a person reads says it.
-func TestNothingServedSaysTheRetiredWord(t *testing.T) {
-	v := meView()
-	v.Topic, v.Unread = working(), map[string]int{"home/attic": 1}
-	s := &Server{opts: Options{Realm: "home"}}
-	sess := &session{Persona: "u-me", name: "Daan", named: true}
-	rec := httptest.NewRecorder()
-	s.page(rec, httptest.NewRequest(http.MethodGet, "/", nil))
-
-	for what, served := range map[string]string{
-		"the rail":            renderRail(v),
-		"the conversation":    renderThread(v),
-		"the details":         renderDetails(v),
-		"the overview":        renderOverview(v),
-		"the status readouts": renderPlanes(v),
-		"the spine":           renderIconRail(sectionChat, "home/kitchen", mentionTally(1)),
-		"the composer":        renderComposer("home/kitchen"),
-		"the top bar":         s.topbar(context.Background(), sess),
-		"the sign-in card":    rec.Body.String(),
-	} {
-		if strings.Contains(strings.ToLower(served), "realm") {
-			t.Errorf("%s says the retired word:\n%s", what, served)
-		}
-	}
-}
-
-// The signed-in person reads their own name, everywhere they appear. The id
-// behind it stays reachable — as a tooltip, never as the thing on screen.
-func TestTheSignedInPersonIsNamedNotNumbered(t *testing.T) {
-	s := &Server{opts: Options{Realm: "home"}}
-	sess := &session{Persona: "u-f468aecb", name: "Daan", named: true}
-	bar := s.topbar(context.Background(), sess)
-	if !strings.Contains(bar, `<span class="who" title="u-f468aecb">Daan</span>`) {
-		t.Errorf("the top bar does not say the person's name:\n%s", bar)
-	}
-
-	v := meView()
-	v.Names["u-me"] = "Daan"
-	det := renderDetails(v)
-	if !strings.Contains(det, `<span class="who" title="@u-me">Daan</span><span class="you">you</span>`) {
-		t.Errorf("the People list does not put the pill on the name:\n%s", det)
-	}
-	// Everyone else keeps the handle behind their name too — it is the only
-	// place the surface says what to type to tap somebody.
-	if !strings.Contains(det, `<span class="who" title="@avery">Avery</span>`) {
-		t.Errorf("the other person carries no handle:\n%s", det)
 	}
 }
 
@@ -709,6 +548,40 @@ func working() *topic.MaterializedTopic {
 		{OpID: "a-2", Author: "avery", Name: "gone.txt", Size: 10, Removed: true},
 	}
 	return mt
+}
+
+// The word the operator retired. The Go keeps it — realm.Client, the realm
+// package, the flag a deployment sets — but nothing a person reads says it.
+func TestNothingServedSaysTheRetiredWord(t *testing.T) {
+	v := meView()
+	v.Topic, v.Unread = working(), map[string]int{"home/attic": 1}
+	for what, served := range map[string]string{
+		"the rail":         renderRail(v),
+		"the conversation": renderThread(v),
+		"the details":      renderDetails(v),
+		"the composer":     renderComposer("home/kitchen"),
+		"the spine mark":   spineTally(1),
+	} {
+		if strings.Contains(strings.ToLower(served), "realm") {
+			t.Errorf("%s says the retired word:\n%s", what, served)
+		}
+	}
+}
+
+// The signed-in person reads their own name, everywhere they appear. The id
+// behind it stays reachable — as a tooltip, never as the thing on screen.
+func TestTheSignedInPersonIsNamedNotNumbered(t *testing.T) {
+	v := meView()
+	v.Names["u-me"] = "Daan"
+	det := renderDetails(v)
+	if !strings.Contains(det, `<span class="who" title="@u-me">Daan</span><span class="you">you</span>`) {
+		t.Errorf("the People list does not put the pill on the name:\n%s", det)
+	}
+	// Everyone else keeps the handle behind their name too — it is the only
+	// place the surface says what to type to tap somebody.
+	if !strings.Contains(det, `<span class="who" title="@avery">Avery</span>`) {
+		t.Errorf("the other person carries no handle:\n%s", det)
+	}
 }
 
 // The details panel answers who is in the conversation, where it stands and
@@ -778,27 +651,6 @@ func TestDetailsPanelIsOneWholeTarget(t *testing.T) {
 	if !strings.Contains(blank, `id="details"`) ||
 		!strings.Contains(blank, "Open a conversation") {
 		t.Errorf("the empty details panel says nothing:\n%s", blank)
-	}
-}
-
-// The overview is a way into every conversation and a look at the house.
-func TestOverviewOpensOntoTheConversations(t *testing.T) {
-	got := renderOverview(view{
-		Board:     meView().Board,
-		StreamMsg: 12, StreamBytes: 1 << 20, FoldOK: true,
-	})
-	for _, want := range []string{
-		"Storage", "People &amp; sign-in", "12 ops",
-		`<a class="row" href="/?topic=home%2Fkitchen">`,
-		`<a class="row" href="/?topic=home%2Fattic">`,
-		"2 conversations",
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("the overview is missing %q:\n%s", want, got)
-		}
-	}
-	if got := renderOverview(view{}); !strings.Contains(got, "No conversations yet") {
-		t.Errorf("the empty overview says nothing:\n%s", got)
 	}
 }
 
@@ -978,18 +830,5 @@ func TestTheComposerAsksTheServerForTheList(t *testing.T) {
 	}
 	if strings.Contains(mentionScript, "fetch(") || strings.Contains(mentionScript, "EventSource") {
 		t.Error("the picker reaches the server on its own instead of through Datastar")
-	}
-}
-
-// The system-status screen still carries the house readouts in plain words.
-func TestStatusScreenKeepsThePlaneReadouts(t *testing.T) {
-	got := renderPlanes(view{StreamMsg: 12, StreamBytes: 3 << 20, FoldOK: true, Topic: convo()})
-	for _, want := range []string{"Storage", "People &amp; sign-in", "Work", "12 ops"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("status screen missing %q:\n%s", want, got)
-		}
-	}
-	if strings.Contains(got, "is the kettle on") {
-		t.Error("the status screen renders conversation content")
 	}
 }

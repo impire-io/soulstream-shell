@@ -1,4 +1,4 @@
-package shellserver
+package shell
 
 import (
 	"embed"
@@ -15,7 +15,7 @@ var assetsFS embed.FS
 // Assets is the embedded static tree served under /assets/ — the
 // design-system token source, vendored fonts, the Datastar bundle, and
 // the icon set. Fully self-contained: the shell makes no external
-// fetches (design 0001 §7, the offline render gate).
+// fetches (the offline render gate).
 func Assets() fs.FS {
 	sub, _ := fs.Sub(assetsFS, "assets")
 	return sub
@@ -46,6 +46,8 @@ func init() {
 }
 
 // Icon returns the inlined SVG for a vendored icon name ("" if absent).
+// Modules name an icon; the set itself is the shell's, so a screen cannot
+// reach for a mark the design does not have.
 func Icon(name string) template.HTML { return icons[name] }
 
 // favicon answers the request every browser makes on its own. The bytes

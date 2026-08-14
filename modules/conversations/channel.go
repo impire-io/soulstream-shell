@@ -1,4 +1,4 @@
-package shellserver
+package conversations
 
 import "fmt"
 
