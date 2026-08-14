@@ -67,6 +67,10 @@ require (
 
 replace github.com/impire-io/soulstream-shell => ../
 
+// TEMPORARY until soulstream-core tags: the agents arm connects on the
+// sentinel-and-token lane, which lands in the record library's next release.
+replace github.com/impire-io/soulstream-core => ../../soulstream-core
+
 // The outside module the probe arm composes. Its own module, in a namespace
 // nobody here owns, never tagged and never published — it is only ever the
 // working tree beside this one.

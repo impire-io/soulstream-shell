@@ -40,6 +40,7 @@ var modules = []string{
 	component + "/modules/overview",
 	component + "/modules/conversations",
 	component + "/modules/admin",
+	component + "/modules/agents",
 }
 
 // deps is the whole transitive import graph of a package pattern, as the

@@ -77,6 +77,10 @@ type Rig struct {
 	// own people, read back so a test can assert against the declaration
 	// rather than against a guess at it. Empty in the external-IdP arm.
 	AdminBase string
+	// AgentsDial is what this deployment declared about issuing agent
+	// credentials — the address it tells an agent to dial, and the address a
+	// test connects on when it plays one. Empty in the external-IdP arm.
+	AgentsDial string
 
 	cancel context.CancelFunc
 	conns  []*nats.Conn
@@ -179,6 +183,21 @@ func start(dir string, external bool) (*Rig, error) {
 	}
 
 	issuer, _ := st.SessionIssuer()
+	// Whether this deployment issues agent credentials from here, and the
+	// address it would tell an agent to dial.
+	//
+	// It is the second thing the two arms differ on, and for the reason
+	// design 0001 §4 gives: minting a credential in somebody else's name is a
+	// class-(b) op, refused to a person's own admission, so it needs the
+	// node's own standing. The bundled arm is the shell composed AS this
+	// node's plane and has that standing, and the address an agent dials is
+	// the node's own. The external arm is the shape where the deployment
+	// hands the shell less — and a shell without node standing has no
+	// business issuing credentials, so that deployment declares none.
+	agentsDial := n.URL()
+	if external {
+		agentsDial = ""
+	}
 	ready := make(chan string, 1)
 	errCh := make(chan error, 1)
 	go func() {
@@ -194,8 +213,9 @@ func start(dir string, external bool) (*Rig, error) {
 			// The deployment's own declaration, not the rig's: whichever arm
 			// this is, the fact reaching the shell is the one the product
 			// computes for a real soulnode.
-			AdminBase: st.AdminSurface(),
-			Ready:     func(addr string) { ready <- addr },
+			AdminBase:  st.AdminSurface(),
+			AgentsDial: agentsDial,
+			Ready:      func(addr string) { ready <- addr },
 		})
 	}()
 	var addr string
@@ -213,7 +233,8 @@ func start(dir string, external bool) (*Rig, error) {
 	return &Rig{
 		Dir: dir, State: st, Node: n, Token: token,
 		ShellURL: "http://" + addr, Issuer: issuer,
-		Invite: invite, AdminBase: st.AdminSurface(), cancel: cancel,
+		Invite: invite, AdminBase: st.AdminSurface(), AgentsDial: agentsDial,
+		cancel:  cancel,
 		signers: map[string]identity.Signer{},
 	}, nil
 }

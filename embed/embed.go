@@ -13,6 +13,7 @@ import (
 	"context"
 
 	"github.com/impire-io/soulstream-shell/modules/admin"
+	"github.com/impire-io/soulstream-shell/modules/agents"
 	"github.com/impire-io/soulstream-shell/modules/conversations"
 	"github.com/impire-io/soulstream-shell/modules/overview"
 	"github.com/impire-io/soulstream-shell/shell"
@@ -44,8 +45,18 @@ type Options struct {
 	// whose people live on an authorization server it does not run leaves
 	// this empty, and the module that administers people is then not part
 	// of that build at all: no key on the rail, no route, 404 like any path
-	// nobody claimed. It is the one option here a deployment may omit.
+	// nobody claimed.
 	AdminBase string
+	// AgentsDial is the address this deployment tells an agent to dial, and
+	// the whole of how it says it issues agent credentials at all. A
+	// deployment that leaves it empty runs no agents surface: no key on the
+	// rail, no route, 404 like any path nobody claimed.
+	//
+	// It is deliberately not NATSURL. The address this surface reaches the
+	// server on is the deployment's own business and may be one no agent
+	// could use; what goes into somebody else's configuration file has to be
+	// something the deployment is willing to stand behind.
+	AgentsDial string
 	// Ready, when set, receives the bound listen address.
 	Ready func(addr string)
 }
@@ -89,6 +100,7 @@ func Run(ctx context.Context, o Options) error {
 		Account:      o.Account,
 		Issuer:       o.Issuer,
 		AdminBase:    o.AdminBase,
+		AgentsDial:   o.AgentsDial,
 	})
 	if err != nil {
 		return err
@@ -96,9 +108,11 @@ func Run(ctx context.Context, o Options) error {
 	defer sp.Close()
 
 	// The order is the order of the rail: the house first, then the room,
-	// then the people who may come into it. Every one of them is registered
-	// the same way and on the same terms — which of them this deployment
-	// actually runs is each module's own answer, asked once at Run.
-	sh.Register(overview.New(sh, sp), conversations.New(sh, sp), admin.New(sh, sp))
+	// then the people who may come into it, then the machines they answer
+	// for. Every one of them is registered the same way and on the same
+	// terms — which of them this deployment actually runs is each module's
+	// own answer, asked once at Run.
+	sh.Register(overview.New(sh, sp), conversations.New(sh, sp),
+		admin.New(sh, sp), agents.New(sh, sp))
 	return sh.Run(ctx)
 }

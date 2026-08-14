@@ -54,11 +54,18 @@ type Config struct {
 	// shell does the signing in.
 	Issuer string
 	// AdminBase is the base URL of the people-and-sign-in administration
-	// surface this deployment runs, and the one optional field here: a
-	// deployment whose people are administered somewhere it does not run
-	// declares none, and every module that needs one is then not part of
-	// that deployment.
+	// surface this deployment runs. Optional: a deployment whose people are
+	// administered somewhere it does not run declares none, and every module
+	// that needs one is then not part of that deployment.
 	AdminBase string
+	// AgentsDial is the address this deployment tells an agent to dial, and
+	// its way of saying it issues agent credentials at all. Optional, on the
+	// same terms as AdminBase.
+	//
+	// It is separate from NATSURL deliberately: the address this surface
+	// reaches the server on is its own business, and is not always one it
+	// could honestly print in somebody else's configuration file.
+	AgentsDial string
 }
 
 // Support is the layer itself: one read lane for the surface, and a session

@@ -31,6 +31,8 @@ func main() {
 	flag.StringVar(&o.Realm, "realm", "home", "realm name")
 	flag.StringVar(&o.Account, "account", "", "realm account public key")
 	flag.StringVar(&o.Issuer, "issuer", "", "OIDC authorization server (e.g. the fold)")
+	flag.StringVar(&o.AgentsDial, "agents-dial", "",
+		"address to tell an agent to dial; empty runs no agents surface")
 	flag.Parse()
 	o.Ready = func(addr string) { log.Printf("soulstream-shell: shell console http://%s", addr) }
 
