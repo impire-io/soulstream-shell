@@ -67,6 +67,16 @@ require (
 
 replace github.com/impire-io/soulstream-shell => ../
 
+// TEMPORARY — remove when the fold ships a tag carrying the
+// last-administrator rule, and the node ships built on that tag.
+//
+// The lockout arm of the gate measures a refusal the published fold does
+// not have yet: that the last enabled administrator cannot be disabled
+// or demoted. Nothing in the shell imports the fold — this module boots
+// one, bundled inside the node — so without this pin the gate would
+// measure the old behaviour and pass on it.
+replace github.com/impire-io/soulstream-idp => ../../soulstream-idp
+
 // The outside module the probe arm composes. Its own module, in a namespace
 // nobody here owns, never tagged and never published — it is only ever the
 // working tree beside this one.

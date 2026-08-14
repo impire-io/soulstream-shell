@@ -79,7 +79,8 @@ func renderTable(list []soulstream.Person, err error, who string) string {
 // personRow is one person, marked when they are the one somebody came here
 // for. The acts are offered only where they mean something: an invite enrols
 // a passkey for somebody who may sign in, and there is nothing to take away
-// from somebody who already cannot.
+// from somebody who already cannot — nor from the last person who can
+// administer sign-ins here, whose row says so instead.
 func personRow(p soulstream.Person, lookedUp bool) string {
 	name := p.DisplayName
 	if name == "" {
@@ -93,13 +94,23 @@ func personRow(p soulstream.Person, lookedUp bool) string {
 	// the last column's own business rather than the table's.
 	var acts string
 	if p.Active() {
+		// Taking this one person's sign-in away would leave nobody able to
+		// administer sign-ins at all, so the sign-in surface refuses it. The
+		// screen does not offer a key that only ever earns a refusal — it
+		// says the thing the refusal would have said. Creating an invite is
+		// still offered: another passkey for the person holding the place
+		// open is the opposite of a way to lose it.
+		away := fmt.Sprintf(
+			`<button class="btn ghost" data-on:click="@post('/act/disable?who=%s')">`+
+				`Take sign-in away</button>`, qesc(p.Username))
+		if p.LastAdmin {
+			away = `<span class="note">the last administrator stays</span>`
+		}
 		acts = fmt.Sprintf(
 			`<div class="acts">`+
 				`<button class="btn ghost" data-on:click="@post('/act/invite?who=%s')">`+
-				`Create invite</button>`+
-				`<button class="btn ghost" data-on:click="@post('/act/disable?who=%s')">`+
-				`Take sign-in away</button></div>`,
-			qesc(p.Username), qesc(p.Username))
+				`Create invite</button>%s</div>`,
+			qesc(p.Username), away)
 	}
 	row := "<tr>"
 	if lookedUp {

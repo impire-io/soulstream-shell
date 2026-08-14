@@ -129,6 +129,36 @@ func TestTheInviteIsShownOnceAndSaysSo(t *testing.T) {
 	}
 }
 
+// The one row the screen offers no way to break: the last person who can
+// administer sign-ins here. The key is not drawn at all — a key that only
+// ever earns a refusal is worse than no key — and the row says what the
+// refusal would have said, in the same words. Everything else about that
+// person is unchanged, invites included.
+func TestTheLastAdministratorIsNotOfferedTheLethalKey(t *testing.T) {
+	list := people()
+	list[0].LastAdmin = true
+	body := renderPeople(list, nil, "")
+	if strings.Contains(body, "/act/disable?who=owner") {
+		t.Errorf("the screen offers to lock the deployment out of itself:\n%s", body)
+	}
+	if !strings.Contains(body, `<span class="note">the last administrator stays</span>`) {
+		t.Errorf("the screen withholds the key without saying why:\n%s", body)
+	}
+	if !strings.Contains(body, `@post('/act/invite?who=owner')`) {
+		t.Errorf("the screen withheld an invite from the person holding the place open:\n%s", body)
+	}
+	// It is one person's row, not a mood the whole table is in.
+	if n := strings.Count(body, "the last administrator stays"); n != 1 {
+		t.Errorf("%d rows say the last administrator stays, want 1:\n%s", n, body)
+	}
+	// And with a second administrator standing, the surface says so and the
+	// key comes back: the rule is about the last one, never a particular one.
+	if again := renderPeople(people(), nil, ""); !strings.Contains(again,
+		"/act/disable?who=owner") {
+		t.Errorf("the key never comes back:\n%s", again)
+	}
+}
+
 // A person without the standing is told so, in the surface's own words —
 // never shown a fault, and never left guessing.
 func TestAStandingRefusalReadsAsOne(t *testing.T) {
@@ -143,6 +173,24 @@ func TestAStandingRefusalReadsAsOne(t *testing.T) {
 		Msg: "store: unreachable"}
 	if w := refusalWords("Reading the list of people", broken); strings.Contains(w, "yours does not") {
 		t.Errorf("a fault reads as a standing refusal: %q", w)
+	}
+}
+
+// A rule the sign-in surface holds — the refusal that still arrives when
+// somebody else got there first, or another client asked — is passed on in
+// the surface's own words. Not "failed", which it did not, and not a
+// standing problem, which it is not: the sentence the surface wrote.
+func TestARuleRefusalArrivesInTheSurfacesOwnWords(t *testing.T) {
+	held := &soulstream.Refusal{Status: http.StatusConflict,
+		Msg: "the last administrator stays — add another administrator first"}
+	words := refusalWords("Disabling owner", held)
+	if !strings.Contains(words, "the last administrator stays — add another administrator first") {
+		t.Errorf("the surface's own words did not survive: %q", words)
+	}
+	for _, invented := range []string{"failed", "yours does not"} {
+		if strings.Contains(words, invented) {
+			t.Errorf("the screen added %q to a refusal that explained itself: %q", invented, words)
+		}
 	}
 }
 

@@ -151,6 +151,44 @@ func TestARefusalKeepsTheSurfacesOwnWords(t *testing.T) {
 	if !errors.As(err, &ref) || ref.Denied() {
 		t.Errorf("a fault reads as a standing refusal: %v", err)
 	}
+
+	// And a rule the surface holds is a third thing: the person had every
+	// standing, the call was well formed, and the answer is about the state
+	// it would have left behind.
+	s.status = http.StatusConflict
+	s.answer = `{"error":"the last administrator stays — add another administrator first"}`
+	err = sess.Admin().Disable(context.Background(), "owner")
+	if !errors.As(err, &ref) {
+		t.Fatalf("the refusal did not come back as one: %v", err)
+	}
+	if !ref.Rule() || ref.Denied() {
+		t.Errorf("a held rule reads as %+v", ref)
+	}
+	if !strings.Contains(ref.Msg, "the last administrator stays") {
+		t.Errorf("the surface's words were replaced by %q", ref.Msg)
+	}
+}
+
+// The surface says which person it is holding, so a screen never has to
+// work out for itself which group administers somebody else's deployment.
+func TestTheSurfaceNamesTheLastAdministrator(t *testing.T) {
+	s := &stubSurface{status: http.StatusOK, answer: `[
+		{"id":"u-1","username":"owner","status":"active","groups":["admin"],
+		 "credentials":1,"last_admin":true},
+		{"id":"u-2","username":"avery","status":"active","groups":["admin"],
+		 "credentials":1}]`}
+	sess, _ := sessionOn(t, s, "tok-abc")
+
+	people, err := sess.Admin().People(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !people[0].LastAdmin {
+		t.Errorf("the person the surface is holding did not arrive marked: %+v", people[0])
+	}
+	if people[1].LastAdmin {
+		t.Errorf("a person the surface said nothing about arrived marked: %+v", people[1])
+	}
 }
 
 // A deployment that declares no administration surface has none: the

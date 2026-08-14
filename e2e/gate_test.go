@@ -13,6 +13,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"html"
 	"io"
@@ -931,11 +932,22 @@ func TestShellGate(t *testing.T) {
 		// this list read at all.
 		`<span class="pill">admin</span>`,
 		`@post('/act/invite?who=` + ceremony.FoundingPersona,
-		`@post('/act/disable?who=` + ceremony.FoundingPersona,
 	} {
 		if !strings.Contains(screen, want) {
 			t.Fatalf("the people screen is missing %q: %s", want, screen)
 		}
+	}
+
+	// The one key the screen does not draw. This person is the only one
+	// who can administer sign-ins here, so taking theirs away would leave
+	// the deployment with nobody to administer it — which the sign-in
+	// surface refuses. The screen does not offer a key that only ever
+	// earns a refusal; it says the thing the refusal would have said.
+	if strings.Contains(screen, `/act/disable?who=`+ceremony.FoundingPersona) {
+		t.Fatalf("the screen offers to lock the deployment out of itself:\n%s", screen)
+	}
+	if !strings.Contains(screen, "the last administrator stays") {
+		t.Fatalf("the screen withholds the key without saying why:\n%s", screen)
 	}
 
 	// The act, round-tripped: the shell asks the sign-in surface as the
@@ -967,9 +979,90 @@ func TestShellGate(t *testing.T) {
 		t.Fatal("the invite was spent twice")
 	}
 
-	// The other act: taking a sign-in away, and the screen re-reads the
-	// surface rather than believing the click. The list that comes back is
-	// the sign-in surface's own answer to a fresh question.
+	// The act the screen withheld, asked for anyway — a stale page, a
+	// second browser, anything. The rule does not live on the page, so the
+	// answer comes back from the sign-in surface, and the screen puts up
+	// the words that surface used rather than a refusal of its own
+	// invention.
+	held := frameWith(t, post(t, cl, r.ShellURL+"/act/disable?who="+ceremony.FoundingPersona),
+		`id="people-result"`)
+	if !strings.Contains(held, "the last administrator stays") {
+		t.Fatalf("the shell swallowed the sign-in surface's refusal:\n%s", held)
+	}
+	if strings.Contains(held, "can no longer sign in") {
+		t.Fatalf("the screen reported an act the surface refused:\n%s", held)
+	}
+	if !strings.Contains(get(t, cl, r.ShellURL+"/people"),
+		`<span class="pill ok"><span class="led ok"></span>yes</span>`) {
+		t.Fatal("the refused act took the last administrator's sign-in away anyway")
+	}
+
+	// And the same refusal asked for the way a machine would: a bearer of
+	// this deployment's own issuing, straight at the surface, with no
+	// screen in between. The shell is not what is holding the line — the
+	// rule is enforced where it is authoritative, and the screen only
+	// reflects it.
+	bearer, err := r.Bearer(auth, ceremony.FoundingPersona)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, lethal := range []struct {
+		what, path string
+		body       any
+	}{
+		{"disabling the last administrator",
+			"/api/admin/users/" + ceremony.FoundingPersona + "/status",
+			map[string]any{"status": "disabled"}},
+		{"taking administration off the last administrator",
+			"/api/admin/users/" + ceremony.FoundingPersona + "/groups",
+			map[string]any{"groups": []string{"realm"}}},
+	} {
+		status, said, err := r.Ask(bearer, http.MethodPost, lethal.path, lethal.body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if status != http.StatusConflict || !strings.Contains(said, "the last administrator stays") {
+			t.Fatalf("%s: the surface answered %d %s", lethal.what, status, said)
+		}
+	}
+
+	// A second administrator, enrolled the whole way: created through the
+	// surface, invited through it, and their passkey registered against
+	// that invite. The rule is about the last administrator, never a
+	// particular one — so with two standing it lets go of the first.
+	const deputy = "deputy"
+	if status, said, err := r.Ask(bearer, http.MethodPost, "/api/admin/users",
+		map[string]any{"username": deputy, "display_name": "Deputy",
+			"groups": []string{"admin"}}); err != nil || status != http.StatusCreated {
+		t.Fatalf("creating a second administrator: %d %s %v", status, said, err)
+	}
+	invited, answer, err := r.Ask(bearer, http.MethodPost, "/api/admin/invites",
+		map[string]any{"username": deputy})
+	if err != nil || invited != http.StatusCreated {
+		t.Fatalf("inviting the second administrator: %d %s %v", invited, answer, err)
+	}
+	var forDeputy struct {
+		Invite string `json:"invite"`
+	}
+	if err := json.Unmarshal([]byte(answer), &forDeputy); err != nil || forDeputy.Invite == "" {
+		t.Fatalf("no invite for the second administrator in %s", answer)
+	}
+	deputyAuth, err := authtest.New("localhost", r.Issuer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.EnrollWith(deputyAuth, deputy, forDeputy.Invite); err != nil {
+		t.Fatal(err)
+	}
+
+	// The other act, now that it means something: taking a sign-in away,
+	// and the screen re-reads the surface rather than believing the click.
+	// The list that comes back is the sign-in surface's own answer to a
+	// fresh question.
+	back := get(t, cl, r.ShellURL+"/people")
+	if !strings.Contains(back, `/act/disable?who=`+ceremony.FoundingPersona) {
+		t.Fatalf("with two administrators the key never came back:\n%s", back)
+	}
 	off := post(t, cl, r.ShellURL+"/act/disable?who="+ceremony.FoundingPersona)
 	if note := frameWith(t, off, `id="people-result"`); !strings.Contains(note,
 		ceremony.FoundingPersona+" can no longer sign in") {

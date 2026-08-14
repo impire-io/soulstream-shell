@@ -39,6 +39,13 @@ type Person struct {
 	// Credentials is how many passkeys they have enrolled. Zero means
 	// somebody who exists but cannot yet sign in.
 	Credentials int `json:"credentials"`
+	// LastAdmin marks the one person left who can administer sign-ins
+	// here. Taking that away from them would leave the deployment with
+	// nobody to administer it, so the sign-in surface refuses it — and
+	// says which person it is holding, rather than leaving a screen to
+	// work it out from the group names, which would mean this layer
+	// deciding which group administers somebody else's deployment.
+	LastAdmin bool `json:"last_admin"`
 }
 
 // Active reports whether this person may sign in at all.
@@ -69,6 +76,13 @@ func (e *Refusal) Error() string { return e.Msg }
 func (e *Refusal) Denied() bool {
 	return e.Status == http.StatusUnauthorized || e.Status == http.StatusForbidden
 }
+
+// Rule is the third kind of no, and it is neither of the other two: the
+// request was well formed and the person had every standing for it, and
+// the surface refused the state it would have been left in. Its own
+// sentence is the whole explanation, so a screen shows that and adds
+// nothing.
+func (e *Refusal) Rule() bool { return e.Status == http.StatusConflict }
 
 // Admin is one signed-in person's own reach into the administration
 // surface: their bearer, their standing, nothing borrowed.

@@ -199,13 +199,20 @@ func (m *Module) actDisable(w http.ResponseWriter, r *http.Request) {
 }
 
 // refusalWords says what happened in the surface's own words. A refusal a
-// person is meant to read as "not yours to do" is named as that; anything
+// person is meant to read as "not yours to do" is named as that; a rule the
+// surface holds is passed on as it was said, because it was written to be
+// read and a second sentence about it would only get in the way; anything
 // else is reported as the fault it is, never dressed up.
 func refusalWords(what string, err error) string {
 	var ref *soulstream.Refusal
-	if errors.As(err, &ref) && ref.Denied() {
-		return what + " needs an account that administers sign-ins — yours does not. " +
-			"The sign-in surface said: " + ref.Msg
+	if errors.As(err, &ref) {
+		switch {
+		case ref.Denied():
+			return what + " needs an account that administers sign-ins — yours does not. " +
+				"The sign-in surface said: " + ref.Msg
+		case ref.Rule():
+			return what + ": " + ref.Msg
+		}
 	}
 	return what + " failed: " + err.Error()
 }
