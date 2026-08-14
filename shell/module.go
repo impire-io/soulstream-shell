@@ -58,6 +58,12 @@ type NavEntry struct {
 	// is waiting, a lamp, nothing at all. The module renders it, so the
 	// shell never has to know what is being counted.
 	Mark string
+	// Attrs is extra attributes on the key itself, spelled as they appear in
+	// the tag — for a module whose key does something beside going somewhere.
+	// The frame owns where the key sits and what it looks like; a module that
+	// wants the key to also pull out its own side column says so here, and
+	// the frame stays ignorant of what was pulled out.
+	Attrs string
 	// Foot puts the entry at the foot of the rail rather than the top,
 	// beside the way out.
 	Foot bool

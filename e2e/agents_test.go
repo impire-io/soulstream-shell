@@ -163,7 +163,8 @@ func TestAgentsGate(t *testing.T) {
 	// in — and puts the machine channel's lamp on it, from the operator
 	// claim on the record and nothing else.
 	screen = get(t, cl, r.ShellURL+"/agents")
-	for _, want := range []string{agentShown, `<td class="mono">` + agentHandle + `</td>`,
+	for _, want := range []string{agentShown,
+		`<td class="mono" title="` + agentHandle + `">` + agentHandle + `</td>`,
 		`class="led machine" title="operated by `, "@" + me,
 		"Take the credential away"} {
 		if !strings.Contains(screen, want) {

@@ -59,8 +59,12 @@ func navLink(e NavEntry, active string) string {
 	if e.Section == active {
 		cls, current = "ir on", ` aria-current="page"`
 	}
-	return fmt.Sprintf(`<a class="%s" href="%s" title="%s"%s>%s<span class="lbl">%s</span>%s</a>`,
-		cls, e.Href, Esc(e.Label), current, Icon(e.Icon), Esc(e.Label), e.Mark)
+	attrs := ""
+	if e.Attrs != "" {
+		attrs = " " + e.Attrs
+	}
+	return fmt.Sprintf(`<a class="%s" href="%s" title="%s"%s%s>%s<span class="lbl">%s</span>%s</a>`,
+		cls, e.Href, Esc(e.Label), current, attrs, Icon(e.Icon), Esc(e.Label), e.Mark)
 }
 
 // rail is the spine itself: a slim column of icons at the far left of every
@@ -128,6 +132,13 @@ type Page struct {
 
 // Render writes one whole screen: the shell's chrome around a module's
 // body.
+//
+// The frame carries two page-local signals and no more. rail is the spine's
+// own: whether it shows its labels. panel is the one a narrow frame needs —
+// whether a module's side column is pulled out over the content, because
+// below about 900px there is no room to seat it beside. The frame declares
+// them and styles what they do; which module has a side column, and what is
+// in it, stays the module's own business.
 func (s *Shell) Render(w http.ResponseWriter, r *http.Request, p Page) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	init := ""
@@ -135,7 +146,7 @@ func (s *Shell) Render(w http.ResponseWriter, r *http.Request, p Page) {
 		init = ` data-init="` + p.Init + `"`
 	}
 	fmt.Fprintf(w, `%s
-<body class="chat" data-signals="{rail:false}"%s>
+<body class="chat" data-signals="{rail:false,panel:false}"%s>
 %s
 <div class="frame">
 %s

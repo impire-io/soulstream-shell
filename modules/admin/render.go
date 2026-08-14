@@ -89,22 +89,29 @@ func personRow(p soulstream.Person, lookedUp bool) string {
 	if p.Active() {
 		state = `<span class="pill ok"><span class="led ok"></span>yes</span>`
 	}
+	// The keys stack when the row has no width to spare for them, which is
+	// the last column's own business rather than the table's.
 	var acts string
 	if p.Active() {
 		acts = fmt.Sprintf(
-			`<button class="btn ghost" data-on:click="@post('/act/invite?who=%s')">`+
-				`Create invite</button> `+
+			`<div class="acts">`+
+				`<button class="btn ghost" data-on:click="@post('/act/invite?who=%s')">`+
+				`Create invite</button>`+
 				`<button class="btn ghost" data-on:click="@post('/act/disable?who=%s')">`+
-				`Take sign-in away</button>`,
+				`Take sign-in away</button></div>`,
 			qesc(p.Username), qesc(p.Username))
 	}
 	row := "<tr>"
 	if lookedUp {
 		row = `<tr class="on">`
 	}
-	return fmt.Sprintf(`%s<td>%s</td><td class="mono">%s</td><td>%s</td>`+
+	// A sign-in name has no word breaks of its own and is let wrap in a
+	// narrow column, so the whole of it also rides in the hover: wrapped
+	// across two lines, it is still one name.
+	return fmt.Sprintf(`%s<td>%s</td><td class="mono" title="%s">%s</td><td>%s</td>`+
 		`<td>%s</td><td class="mono">%d</td><td>%s</td></tr>`,
-		row, esc(name), esc(p.Username), state, groupTags(p.Groups), p.Credentials, acts)
+		row, esc(name), esc(p.Username), esc(p.Username), state,
+		groupTags(p.Groups), p.Credentials, acts)
 }
 
 // groupTags is what a person's token would carry, as the sign-in surface

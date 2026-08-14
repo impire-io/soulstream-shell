@@ -79,10 +79,19 @@ func (m *Module) Active(context.Context) bool { return true }
 // Nav is this module's one key on the spine, carrying the open
 // conversation so coming back from another screen lands where the person
 // left, and the count of what is waiting for them.
+//
+// On this module's own screen the key does a second thing: it pulls out the
+// list of conversations. In a frame too narrow to seat that list beside the
+// conversation it is a drawer, and this is what opens it — the way to the
+// other conversations stays exactly where it is on every screen, at every
+// width. Nothing is taken away by claiming the click here: going to the
+// screen a person is already on is all it would otherwise do.
 func (m *Module) Nav(r *http.Request) []shell.NavEntry {
 	return []shell.NavEntry{{
 		Section: section, Icon: "messages-square", Label: "Conversations",
-		Href: chatPath + topicQuery(r.URL.Query().Get("topic")), Mark: m.tally(r),
+		Href:  chatPath + topicQuery(r.URL.Query().Get("topic")),
+		Mark:  m.tally(r),
+		Attrs: panelToggle(r.URL.Path),
 	}}
 }
 
@@ -102,6 +111,20 @@ func topicQuery(topicPath string) string {
 		return ""
 	}
 	return "?topic=" + qesc(topicPath)
+}
+
+// panelToggle is what the key does beyond going somewhere, on the one screen
+// where it has something else to do: pull out the list of conversations.
+//
+// Everywhere else it is a plain way here and nothing is claimed. Here, going
+// to the screen a person is already on is all the click would otherwise do,
+// so the click is spent on the thing the narrow frame actually needs — and
+// the list stays reachable from the same place at every width.
+func panelToggle(path string) string {
+	if path != chatPath {
+		return ""
+	}
+	return `data-on:click="evt.preventDefault(); $panel = !$panel"`
 }
 
 // tally is the mark on this module's key: how many messages are waiting
@@ -137,18 +160,40 @@ func (m *Module) chat(w http.ResponseWriter, r *http.Request) {
 		Section: section,
 		Live:    true,
 		Init:    fmt.Sprintf("@get('/live?topic=%s')", qesc(topicPath)),
-		Body: fmt.Sprintf(`<aside class="rail">
-<div class="rail-head">%s<h2 class="label">Conversations</h2></div>
+		Body:    chatBody(topicPath),
+		Tail:    "\n" + stickScript + "\n" + mentionScript + "\n",
+	})
+}
+
+// chatBody is the screen's three columns as the page first serves them, each
+// one waiting for the live stream's first tick.
+//
+// The list of conversations is a column of its own where there is room for
+// one and a drawer over the conversation where there is not. Which of the
+// two it is, is the frame's to decide by width — this markup is the same
+// either way, and the only thing held here is whether the drawer is out.
+// That is the frame's own panel signal, so the key on the spine, the way out
+// of the drawer and the scrim behind it are all saying the same word.
+//
+// It survives no reload, which is right: picking a conversation is a page
+// load, and a drawer that outlived one would be a drawer standing over the
+// very thing it was asked for. It survives every morph, which is also right:
+// the stream writes the list inside this markup, never this markup.
+func chatBody(topicPath string) string {
+	return fmt.Sprintf(`<aside class="rail" data-class:open="$panel">
+<div class="rail-head">%s<h2 class="label">Conversations</h2>
+<button type="button" class="rail-shut" title="Hide the conversations"
+ aria-label="Hide the conversations" data-on:click="$panel = false">%s</button></div>
 <nav id="conversations" class="rail-list"><p class="rail-note">loading…</p></nav>
 </aside>
+<div class="rail-scrim" data-on:click="$panel = false"></div>
 <section class="thread">
 <div id="dash" class="thread-body"><p class="blank">loading…</p></div>
 %s
 </section>
 <aside id="details" class="details"><p class="det-note">loading…</p></aside>`,
-			shell.Icon("messages-square"), renderComposer(topicPath)),
-		Tail: "\n" + stickScript + "\n" + mentionScript + "\n",
-	})
+		shell.Icon("messages-square"), shell.Icon("chevrons-right"),
+		renderComposer(topicPath))
 }
 
 // stickScript keeps the newest message in view.

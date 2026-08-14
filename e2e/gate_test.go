@@ -107,6 +107,14 @@ func signIn(t *testing.T, r *rig.Rig, auth *authtest.Authenticator) *http.Client
 		`id="conversations"`, `id="dash"`, `class="thread-body"`, `id="mentions"`,
 		`id="details"`, `id="composer"`, `class="dock centred"`, `id="composer-box"`,
 		"Write a message…", `href="/status`, "System status",
+		// And the shape holds at any width: the browser is told how wide it
+		// is, and the column that gives way when there is no room for four —
+		// the list of conversations — is still reachable from its own key on
+		// the spine, which is where it is at every other width too.
+		`<meta name="viewport" content="width=device-width, initial-scale=1">`,
+		`<body class="chat" data-signals="{rail:false,panel:false}"`,
+		`data-on:click="evt.preventDefault(); $panel = !$panel"`,
+		`class="rail" data-class:open="$panel"`, `class="rail-scrim"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("the signed-in page is not the chat shape (%q missing): %s", want, body)
@@ -455,6 +463,12 @@ func TestShellGate(t *testing.T) {
 			t.Fatalf("the system-status screen is missing %q: %s", want, status)
 		}
 	}
+	// From a screen with no list of conversations on it, the key on the spine
+	// is a plain way to one and claims nothing of the click: the drawer
+	// belongs to the screen that has a list to pull out, and to no other.
+	if strings.Contains(status, "$panel = !$panel") {
+		t.Fatalf("a screen with no conversations list still pulls one out: %s", status)
+	}
 	// Home is reachable from anywhere and renders inside the same frame: the
 	// house at a glance, and a way into every conversation.
 	overview := get(t, cl, r.ShellURL+"/home")
@@ -668,7 +682,8 @@ func TestShellGate(t *testing.T) {
 		t.Fatalf("%d rows are marked on the screen the link landed on: %s", n, marked)
 	}
 	if row := markedRow(marked); !strings.Contains(row,
-		`<td class="mono">`+ceremony.FoundingPersona+`</td>`) {
+		`<td class="mono" title="`+ceremony.FoundingPersona+`">`+
+			ceremony.FoundingPersona+`</td>`) {
 		t.Fatalf("the marked row is somebody else's: %s", row)
 	}
 	// A voice on the record that was never a sign-in resolves too, and is
@@ -908,7 +923,8 @@ func TestShellGate(t *testing.T) {
 	screen := get(t, cl, r.ShellURL+"/people")
 	for _, want := range []string{`class="ir on" href="/people`, "People &amp; sign-in",
 		"Sign-in name", "Passkeys", `id="people-table"`, `id="people-result"`,
-		`<td class="mono">` + ceremony.FoundingPersona + `</td>`,
+		`<td class="mono" title="` + ceremony.FoundingPersona + `">` +
+			ceremony.FoundingPersona + `</td>`,
 		`<span class="pill ok"><span class="led ok"></span>yes</span>`,
 		// The groups the sign-in surface holds for this person, which are
 		// the groups their own token carried here — the standing that got

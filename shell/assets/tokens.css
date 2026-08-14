@@ -226,6 +226,7 @@ td.mono,.mono{font:var(--type-data)}
 --details-width:288px;
 --chat-max:860px;     /* the conversation never grows wider than this */
 --channel-edge:3px;   /* how wide a card's channel edge is drawn */
+--pad-x:var(--space-8); /* the gutter every column is read at */
 }
 
 /* --- The frame ----------------------------------------------------- */
@@ -319,6 +320,21 @@ background:var(--surface-inset);border-right:var(--border-width) solid var(--bor
 padding:var(--space-5) var(--space-6);background:var(--surface-inset);
 background-image:var(--texture-rib);border-bottom:var(--border-width) solid var(--border-etch)}
 .rail-head svg{width:16px;height:16px;color:var(--text-muted)}
+/* The way to put the list away again, and the only control on this surface
+   that exists for one width alone: it appears when the list is a drawer over
+   the conversation and is nowhere at all when the list has a column of its
+   own. Same chevrons as the spine's own toggle, pointing the way the panel
+   travels — the surface has one vocabulary for tucking something away. */
+.rail-shut{display:none;align-items:center;margin-left:auto;padding:var(--space-2) var(--space-3);
+background:none;border:var(--border-width) solid transparent;border-radius:var(--radius-xs);
+color:var(--text-muted);cursor:pointer;transition:var(--transition-control)}
+.rail-shut:hover{background:var(--surface-well);color:var(--text-body)}
+.rail-shut:active{transform:translateY(2px)}
+.rail-shut svg{display:block;transform:rotate(180deg)}
+/* The scrim behind that drawer — the modal scrim, which is the one piece of
+   transparency the canon allows, and the only one on this surface. It is
+   nothing until the drawer is out (the media query below). */
+.rail-scrim{display:none}
 .rail-list{flex:1;min-height:0;overflow-y:auto;padding:var(--space-5) var(--space-4);
 display:flex;flex-direction:column;gap:var(--space-2)}
 .rail-note{padding:var(--space-4) var(--space-5);color:var(--text-faint);font:var(--type-data);
@@ -350,7 +366,7 @@ a.row .tally.on{align-self:center}
 
 .thread{flex:1;min-width:0;display:flex;flex-direction:column;min-height:0}
 .thread-body{flex:1;min-height:0;overflow-y:auto}
-.centred{padding-inline:max(var(--space-8),calc((100% - var(--chat-max)) / 2))}
+.centred{padding-inline:max(var(--pad-x),calc((100% - var(--chat-max)) / 2))}
 /* The column's own header bar: ribbed like the transport bar it hangs
    under, closed with ink because it is structure. */
 .thread-head{position:sticky;top:0;z-index:1;display:flex;align-items:baseline;gap:var(--space-5);
@@ -563,5 +579,117 @@ letter-spacing:-.035em;font-variation-settings:'wdth' 88;color:var(--text-body);
 text-shadow:var(--engrave-light)}
 .gate .act{margin-top:var(--space-6)}
 
-/* Narrow rooms: the details step aside before the conversation does. */
+/* --- Narrow rooms ----------------------------------------------------
+   The frame was drawn at one width, and a person who splits their screen
+   is not a person on a different product. Everything below is the same
+   instrument in a smaller housing: the densities tighten by one step on
+   the spacing scale, hairlines stay hairlines, mono strips stay mono, and
+   no column is redrawn as a stack of cards.
+
+   The one rule that outranks the rest: nothing the shell serves ever
+   scrolls sideways as a document. Content too wide to fit scrolls inside
+   its own box, and every column that cannot be narrowed steps aside in an
+   honest order instead — the details first (everything they say, the
+   conversation says too, only slower), then the conversations list gives
+   up its width, then its place. The spine never goes: it is the way to
+   everywhere else and it costs a thumb.
+
+   The measurement that decides whether this worked is taken in a browser
+   at 1000px and at 390px — scrollWidth against innerWidth. What is
+   asserted here is what a test can honestly reach: the rules exist, the
+   containers scroll, and nothing served is pinned wider than 360px. */
+
+/* Nothing is wider than the room it is in. A flex item defaults to
+   min-width:auto, which is what let a six-column table push the sheet past
+   the frame and straight out of reach — body.chat closes on overflow:hidden,
+   so what does not fit is not scrolled to, it is gone. */
+.frame{position:relative;overflow:hidden}
+.sheet{min-width:0}
+img,svg,input,textarea,select{max-width:100%}
+
+/* Wide content scrolls inside itself. The shared layer clips the table so
+   the wrapper's radius holds; clipping is right for the corners and wrong
+   for the sixth column, so the horizontal axis is handed back and the
+   vertical one keeps the clip. */
+.tablewrap{overflow-x:auto;overflow-y:hidden}
+/* An id has no word breaks of its own, so it is given leave to wrap before
+   the table is made to scroll for it. */
+td.mono,.details .said,.sug .handle{overflow-wrap:anywhere}
+/* The keys in a row's last column stack rather than widen the row. */
+.acts{display:flex;flex-wrap:wrap;gap:var(--space-3)}
+/* A form's fields sit beside each other where there is room for both and
+   stack where there is not, rather than every field running the width of
+   whatever screen it is on. */
+.fields{display:grid;gap:var(--space-5);margin-bottom:var(--space-6);
+grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr))}
+
+/* The transport bar truncates rather than pushes. The wordmark is the one
+   thing on it that never shrinks. */
+.tbar .wordmark{flex:none}
+.tbar .strip,.tbar .who{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tbar .strip{max-width:20ch}
+.tbar .who{max-width:18ch}
+
+/* Rows that were laid out along one line wrap instead of overflowing it. */
+.thread-head{flex-wrap:wrap}
+.thread-head .where{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dock textarea{min-width:0}
+.reply-state,.sysline,a.row,.readout,.gate-head,.byline{flex-wrap:wrap}
+.row .name{min-width:0;overflow-wrap:anywhere}
+.sug{min-width:0;flex-wrap:wrap}
+.sug .who{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* A card that has to hold 240px will not hold it in a 200px column. */
+.planes{grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr))}
+
+/* 1180 — the details step aside first. */
 @media (max-width:1180px){.details{display:none}}
+
+/* 1040 — the conversations list gives up its comfortable width before it
+   gives up its place. Names ellipsize; they always did. */
+@media (max-width:1040px){:root{--rail-width:208px}}
+
+/* 900 — and now its place. It tucks in behind the spine and comes back out
+   over the conversation when the spine's own key asks for it: the same
+   list, the same marks, the same counts, somewhere else. Closed, it is
+   moved out of the frame and out of the tab order both — a drawer nobody
+   can see is not a drawer anybody should land in. */
+@media (max-width:900px){
+.rail{position:absolute;z-index:5;inset-block:0;left:var(--spine-width);
+width:min(var(--rail-width),78vw);transform:translateX(-102%);visibility:hidden;
+border-right:var(--border-width-thick) solid var(--border-strong);box-shadow:var(--shadow-panel);
+transition:transform var(--dur-base) var(--ease-mech),
+visibility 0s var(--ease-linear) var(--dur-base)}
+.rail.open{transform:none;visibility:visible;transition-delay:0s}
+.rail-shut{display:inline-flex}
+.rail.open+.rail-scrim{display:block;position:absolute;inset:0;z-index:4;
+background:var(--surface-overlay);border:0;cursor:pointer}
+/* The spine stays above the scrim: the key that pulled the drawer out is
+   the key that puts it back. */
+.iconrail{position:relative;z-index:6}
+}
+
+/* 640 — a phone in one hand, or a quarter of a laptop. The gutters step
+   down one notch, the conversation takes more of the column because there
+   is less of it, and the expanded spine stops squeezing the conversation:
+   it lies over it the way the drawer does. */
+@media (max-width:640px){
+:root{--pad-x:var(--space-5)}
+.iconrail.open{position:absolute;inset-block:0;left:0;z-index:6;box-shadow:var(--shadow-panel)}
+.bubble{max-width:min(62ch,92%)}
+.replies{padding-left:var(--space-5)}
+.msg.mine>.replies{padding-right:var(--space-5)}
+.sheet-in{padding:var(--space-8) var(--space-6) var(--space-10)}
+.card{padding:var(--space-6)}
+thead th,tbody td{padding:var(--space-3) var(--space-4)}
+}
+
+/* 560 — the bar sheds the strip that says where this is, and the person's
+   own name takes a tighter cap. The wordmark and the product's own strip
+   stay: between them they still name the thing.
+
+   The name is cut rather than dropped, and it is the last thing on the bar
+   to give. Measured, it never has to: with the wordmark held and everything
+   beside it ellipsizing, there is room for a name at 360px. Cutting it is
+   what happens to somebody whose name is very long, and the whole of it is
+   in the hover either way. */
+@media (max-width:560px){.tbar .strip.shell{display:none}.tbar .who{max-width:12ch}}

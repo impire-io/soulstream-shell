@@ -85,6 +85,33 @@ func TestAVoiceStaysOnTheScreenAfterItsCredentialIsTakenAway(t *testing.T) {
 	}
 }
 
+// Six columns of names, ids and dates do not narrow past a point, so the
+// table scrolls inside its own box rather than pushing the screen sideways
+// and clipping its last column off the edge of the frame.
+func TestTheTableScrollsInsideItsOwnBox(t *testing.T) {
+	body := renderTable(agentList(), nil, names(), "")
+	if n := strings.Count(body, "<table"); n != 1 {
+		t.Fatalf("the screen serves %d tables, want 1", n)
+	}
+	if !strings.Contains(body, `<div class="tablewrap"><table>`) {
+		t.Errorf("the table is not inside the container that scrolls it:\n%s", body)
+	}
+	// Before it scrolls, it gives: the keys in the last column stack instead
+	// of widening every row, and a handle that has to wrap keeps the whole of
+	// itself in the hover.
+	if n := strings.Count(body, `<div class="acts">`); n != 2 {
+		t.Errorf("the acts stack on %d rows, want one per row (2)", n)
+	}
+	if !strings.Contains(body, `<td class="mono" title="scribe">scribe</td>`) {
+		t.Errorf("a handle that wraps cannot be read whole:\n%s", body)
+	}
+	// And the form above the table lays its fields out in whatever room there
+	// is, rather than running every one of them the width of the screen.
+	if !strings.Contains(renderAddForm(), `<div class="fields">`) {
+		t.Error("the form's fields do not lay themselves out")
+	}
+}
+
 // The credential is shown once and the screen says so, because the store
 // behind it keeps a digest it cannot reverse and reloading brings nothing
 // back.

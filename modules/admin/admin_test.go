@@ -93,6 +93,28 @@ func TestTheScreenOffersActsOnlyWhereTheyMeanSomething(t *testing.T) {
 	}
 }
 
+// Six columns of other people's names and ids do not narrow past a point,
+// so the table scrolls inside its own box rather than pushing the screen
+// sideways and clipping its last column off the edge of the frame.
+func TestTheTableScrollsInsideItsOwnBox(t *testing.T) {
+	body := renderPeople(people(), nil, "")
+	if n := strings.Count(body, "<table"); n != 1 {
+		t.Fatalf("the screen serves %d tables, want 1", n)
+	}
+	if !strings.Contains(body, `<div class="tablewrap"><table>`) {
+		t.Errorf("the table is not inside the container that scrolls it:\n%s", body)
+	}
+	// Before it scrolls, it gives: the keys in the last column stack instead
+	// of widening every row, and a sign-in name that has to wrap keeps the
+	// whole of itself in the hover.
+	if n := strings.Count(body, `<div class="acts">`); n != 1 {
+		t.Errorf("the acts stack on %d rows, want the one row that offers any", n)
+	}
+	if !strings.Contains(body, `<td class="mono" title="owner">owner</td>`) {
+		t.Errorf("a sign-in name that wraps cannot be read whole:\n%s", body)
+	}
+}
+
 // The one answer carrying a secret says out loud that it is the only time
 // it will ever be shown.
 func TestTheInviteIsShownOnceAndSaysSo(t *testing.T) {

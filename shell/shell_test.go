@@ -176,6 +176,67 @@ func TestTheSpineCarriesAModulesMark(t *testing.T) {
 	}
 }
 
+// A key on the spine may do something as well as go somewhere, and what it
+// does is the module's to say. The frame renders the attributes it was
+// handed onto that module's own key and reads none of them: it does not
+// learn what was pulled out, only that something was.
+func TestAModuleHangsItsOwnBehaviourOnItsOwnKey(t *testing.T) {
+	room := &fixture{slug: "room", on: true, entries: []NavEntry{
+		{Section: "home", Icon: "home", Label: "Home", Href: "/home"},
+		{Section: "chat", Icon: "messages-square", Label: "Conversations", Href: "/",
+			Attrs: `data-on:click="evt.preventDefault(); $panel = !$panel"`},
+	}}
+	s := newTestShell(t, room)
+	rail := s.rail(httptest.NewRequest(http.MethodGet, "/", nil), "chat")
+	want := `<a class="ir on" href="/" title="Conversations" aria-current="page" ` +
+		`data-on:click="evt.preventDefault(); $panel = !$panel">`
+	if !strings.Contains(rail, want) {
+		t.Errorf("the key does not carry what the module hung on it (%s):\n%s", want, rail)
+	}
+	if n := strings.Count(rail, "$panel = !$panel"); n != 1 {
+		t.Errorf("the module's own behaviour reached %d keys, want its own:\n%s", n, rail)
+	}
+	// And the frame declares the signal that behaviour is written against:
+	// the spine's own, and the one a frame too narrow to seat a module's side
+	// column beside the content needs.
+	rec := httptest.NewRecorder()
+	s.Render(rec, httptest.NewRequest(http.MethodGet, "/", nil),
+		Page{Section: "chat", Body: "quiet"})
+	if !strings.Contains(rec.Body.String(), `data-signals="{rail:false,panel:false}"`) {
+		t.Errorf("the frame does not declare its two signals:\n%s", rec.Body.String())
+	}
+}
+
+// Every screen tells the browser how wide it is. Without this one tag a
+// phone renders the whole frame at 980px and scales it down, which is the
+// difference between a narrow screen and a small photograph of a wide one —
+// and it is the one responsive rule no stylesheet can carry.
+func TestEveryScreenTellsTheBrowserHowWideItIs(t *testing.T) {
+	const meta = `<meta name="viewport" content="width=device-width, initial-scale=1">`
+	s := newTestShell(t, &fixture{slug: "room", on: true, entries: []NavEntry{
+		{Section: "chat", Icon: "home", Label: "Conversations", Href: "/"},
+	}})
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	for _, c := range []struct {
+		what  string
+		serve func(http.ResponseWriter)
+	}{
+		{"a live screen", func(w http.ResponseWriter) {
+			s.Render(w, r, Page{Section: "chat", Live: true, Body: "live"})
+		}},
+		{"a still screen", func(w http.ResponseWriter) {
+			s.Render(w, r, Page{Section: "chat", Body: "still"})
+		}},
+		{"the sign-in card", func(w http.ResponseWriter) { s.SignIn(w, r) }},
+	} {
+		rec := httptest.NewRecorder()
+		c.serve(rec)
+		if !strings.Contains(rec.Body.String(), meta) {
+			t.Errorf("%s does not tell the browser how wide it is:\n%s", c.what, rec.Body.String())
+		}
+	}
+}
+
 // A module this deployment does not run is nowhere: no key on the spine,
 // and no route — so its paths answer like any other path nobody claimed.
 func TestAModuleThisDeploymentDoesNotRunIsNowhere(t *testing.T) {
@@ -397,7 +458,7 @@ func TestAScreenIsAModulesBodyInTheFrame(t *testing.T) {
 	for _, want := range []string{
 		"<title>a screen — windmark</title>",
 		`<script type="module" src="/assets/datastar.js"></script>`,
-		`<body class="chat" data-signals="{rail:false}" data-init="@get('/live')">`,
+		`<body class="chat" data-signals="{rail:false,panel:false}" data-init="@get('/live')">`,
 		`<header class="tbar slim">`, `<nav class="iconrail"`,
 		`class="ir on" href="/"`, `<main id="body">what the module said</main>`,
 		"</div>\n<script>page.local()</script>\n</body></html>",

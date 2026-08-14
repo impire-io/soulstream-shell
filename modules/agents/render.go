@@ -61,11 +61,13 @@ func renderAddForm() string {
 		`<p class="lede">You vouch for what you add: your name goes on it, signed ` +
 		`with your own key, and stays there.</p>` +
 		`<form id="agent-add" data-on:submit="@post('/act/agent-add', {contentType:'form'})">` +
+		`<div class="fields">` +
 		`<label class="field">Handle` +
 		`<input name="handle" autocomplete="off" spellcheck="false" ` +
 		`placeholder="lowercase, no spaces"></label>` +
 		`<label class="field">Shown as` +
 		`<input name="shown" autocomplete="off" placeholder="what to call it on screen"></label>` +
+		`</div>` +
 		`<button class="btn" type="submit">Add agent</button>` +
 		`</form></div>`
 }
@@ -115,21 +117,28 @@ func agentRow(a soulstream.Agent, names map[string]string, lookedUp bool) string
 	if !a.Added.IsZero() {
 		added = a.Added.Format("2006-01-02")
 	}
+	// The keys stack when the row has no width to spare for them, which is
+	// the last column's own business rather than the table's.
 	var acts strings.Builder
+	acts.WriteString(`<div class="acts">`)
 	fmt.Fprintf(&acts, `<button class="btn ghost" data-on:click="@post('/act/agent-credential?who=%s')">`+
 		`New credential</button>`, qesc(a.Handle))
 	if a.Admitted() {
-		fmt.Fprintf(&acts, ` <button class="btn ghost" data-on:click="@post('/act/agent-revoke?who=%s')">`+
+		fmt.Fprintf(&acts, `<button class="btn ghost" data-on:click="@post('/act/agent-revoke?who=%s')">`+
 			`Take the credential away</button>`, qesc(a.Handle))
 	}
+	acts.WriteString(`</div>`)
 	row := "<tr>"
 	if lookedUp {
 		row = `<tr class="on">`
 	}
+	// A handle has no word breaks of its own and is let wrap in a narrow
+	// column, so the whole of it also rides in the hover: wrapped across two
+	// lines, it is still one name.
 	return fmt.Sprintf(`%s<td><span class="led machine" title="operated by %s"></span> %s</td>`+
-		`<td class="mono">%s</td><td>%s <span class="mono">@%s</span></td>`+
+		`<td class="mono" title="%s">%s</td><td>%s <span class="mono">@%s</span></td>`+
 		`<td>%s</td><td class="mono">%s</td><td>%s</td></tr>`,
-		row, esc(operator), esc(name), esc(a.Handle),
+		row, esc(operator), esc(name), esc(a.Handle), esc(a.Handle),
 		esc(operator), esc(a.OperatedBy), state, esc(added), acts.String())
 }
 

@@ -101,6 +101,105 @@ func TestTheConversationColumnIsCentred(t *testing.T) {
 	}
 }
 
+// A frame too narrow to seat four columns still reaches all four. The list
+// of conversations is the column that gives way — it tucks in behind the
+// spine and comes back out over the conversation — so what matters is that
+// it stays reachable from the same key it always was, and that every control
+// that moves it is saying the same word.
+func TestTheConversationsListIsReachableWhereTheFrameCannotSeatIt(t *testing.T) {
+	body := chatBody("home/kitchen")
+	for _, want := range []string{
+		// The list is the same list; only whether it is out is held anywhere.
+		`<aside class="rail" data-class:open="$panel">`,
+		`<nav id="conversations" class="rail-list">`,
+		// Three ways out of it, all the frame's own signal: the key that
+		// opened it, the key in the panel's own head, and the scrim behind.
+		`class="rail-shut"`, `data-on:click="$panel = false"`,
+		`<div class="rail-scrim" data-on:click="$panel = false"></div>`,
+		// The key that puts it away is named, because it is an icon alone.
+		`aria-label="Hide the conversations"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the conversations drawer is missing %q:\n%s", want, body)
+		}
+	}
+	// The scrim sits behind the drawer and in front of everything else, which
+	// is a claim about document order as much as about z-index.
+	if strings.Index(body, `class="rail-scrim"`) < strings.Index(body, `class="rail"`) {
+		t.Errorf("the scrim is written before the drawer it sits behind:\n%s", body)
+	}
+	if strings.Index(body, `class="rail-scrim"`) > strings.Index(body, `class="thread"`) {
+		t.Errorf("the scrim is written after the conversation it covers:\n%s", body)
+	}
+	// The stream's own target is inside all of this and untouched by it: an
+	// open drawer survives every tick, the way an expanded spine does.
+	if strings.Contains(renderRail(meView()), "$panel") {
+		t.Error("the live stream writes the drawer's own state")
+	}
+	// On its own screen the key on the spine is what pulls the list out.
+	// Anywhere else it is a plain way here and claims no click.
+	if got := panelToggle("/"); !strings.Contains(got, "$panel = !$panel") ||
+		!strings.Contains(got, "evt.preventDefault()") {
+		t.Errorf("the key on this module's own screen does not pull out the list: %q", got)
+	}
+	if got := panelToggle("/people"); got != "" {
+		t.Errorf("the key claims the click on somebody else's screen: %q", got)
+	}
+}
+
+// The frame collapses in steps, and the steps are written down in one place.
+// Every one of them takes something away that the screen no longer has room
+// for and says what: this is the ladder, asserted as a ladder, so a step
+// cannot be quietly dropped or reordered.
+func TestTheFrameCollapsesInHonestSteps(t *testing.T) {
+	css := tokens(t)
+	steps := []struct {
+		at   string
+		what string
+		rule string
+	}{
+		{"@media (max-width:1180px)", "the details step aside", ".details{display:none}"},
+		{"@media (max-width:1040px)", "the conversations list narrows", "--rail-width:208px"},
+		{"@media (max-width:900px)", "and then tucks in behind the spine",
+			".rail{position:absolute"},
+		{"@media (max-width:640px)", "the gutters step down a notch", "--pad-x:var(--space-5)"},
+		{"@media (max-width:560px)", "the bar sheds a strip", ".tbar .strip.shell{display:none}"},
+	}
+	at := -1
+	for _, s := range steps {
+		i := strings.Index(css, s.at)
+		if i < 0 {
+			t.Errorf("no step where %s (%s)", s.what, s.at)
+			continue
+		}
+		if i < at {
+			t.Errorf("the step where %s is written out of order (%s)", s.what, s.at)
+		}
+		at = i
+		if !strings.Contains(css, s.rule) {
+			t.Errorf("the step where %s does not carry %q", s.what, s.rule)
+		}
+	}
+	// The spine is the one column that never goes: it is the way to
+	// everywhere else, and there is no width at which it is worth the room
+	// it costs. Nothing may hide it.
+	if strings.Contains(css, ".iconrail{display:none") {
+		t.Error("the way to every other screen is hidden at some width")
+	}
+	// And the bar never stops saying who is signed in. A long name is cut,
+	// with the whole of it in the hover; no name is dropped.
+	if strings.Contains(css, ".tbar .who{display:none") {
+		t.Error("the bar stops saying who is signed in at some width")
+	}
+	// And the frame closes on its own edges, so a column that will not fit is
+	// clipped there rather than pushing the document sideways.
+	for _, want := range []string{".frame{position:relative;overflow:hidden}", ".sheet{min-width:0}"} {
+		if !strings.Contains(css, want) {
+			t.Errorf("the frame does not hold its own width (%q)", want)
+		}
+	}
+}
+
 // convo builds a small conversation: a message from someone else, the
 // signed-in person's answer to it, and their own message.
 func convo() *topic.MaterializedTopic {
