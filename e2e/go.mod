@@ -4,7 +4,7 @@ go 1.26.2
 
 require (
 	github.com/impire-io/soulstream v0.9.0
-	github.com/impire-io/soulstream-core v0.8.1
+	github.com/impire-io/soulstream-core v0.8.2
 	github.com/impire-io/soulstream-identity v0.2.0
 	github.com/impire-io/soulstream-idp v0.4.0
 	github.com/impire-io/soulstream-shell v0.3.0
@@ -66,10 +66,6 @@ require (
 )
 
 replace github.com/impire-io/soulstream-shell => ../
-
-// TEMPORARY until soulstream-core tags: the agents arm connects on the
-// sentinel-and-token lane, which lands in the record library's next release.
-replace github.com/impire-io/soulstream-core => ../../soulstream-core
 
 // The outside module the probe arm composes. Its own module, in a namespace
 // nobody here owns, never tagged and never published — it is only ever the
