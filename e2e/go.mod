@@ -3,11 +3,11 @@ module soulstream-shell.invalid/e2e
 go 1.26.2
 
 require (
-	github.com/impire-io/soulstream v0.9.0
+	github.com/impire-io/soulstream v0.10.0
 	github.com/impire-io/soulstream-core v0.8.2
 	github.com/impire-io/soulstream-identity v0.2.0
 	github.com/impire-io/soulstream-idp v0.4.0
-	github.com/impire-io/soulstream-shell v0.3.0
+	github.com/impire-io/soulstream-shell v0.4.0
 	github.com/nats-io/nats.go v1.52.0
 	soulstream-shell.invalid/moduleprobe v0.0.0
 )
