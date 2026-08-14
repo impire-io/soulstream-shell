@@ -71,7 +71,7 @@ func TestTheKeyOnTheSpineCarriesTheOpenConversation(t *testing.T) {
 // only where it means something: nothing to take away from somebody who
 // already cannot sign in.
 func TestTheScreenOffersActsOnlyWhereTheyMeanSomething(t *testing.T) {
-	body := renderPeople(people(), nil)
+	body := renderPeople(people(), nil, "")
 	for _, want := range []string{
 		"People &amp; sign-in", "Sign-in name", "Passkeys",
 		"Daan", "avery", `class="pill ok"`, `class="pill warn"`,
@@ -124,9 +124,77 @@ func TestAStandingRefusalReadsAsOne(t *testing.T) {
 	}
 }
 
+// The module builds its own way in. Somewhere else in the product a person
+// is named on a screen; what that screen gets back is a path this package
+// spelled, carrying the conversation the person was reading, and no words of
+// its own — what this place is called is the name it registered under, and
+// the frame fills that in.
+func TestTheModuleBuildsTheWayIntoItsOwnScreen(t *testing.T) {
+	m := New(nil, nil)
+	l, ok := m.Link("person", map[string]string{"who": "avery", "topic": "home/kitchen"})
+	if !ok {
+		t.Fatal("the module refused a link to a person it administers")
+	}
+	if l.Href != "/people?who=avery&amp;topic=home%2Fkitchen" {
+		t.Errorf("the way in reads %q", l.Href)
+	}
+	if l.Label != "" {
+		t.Errorf("the module named the place itself: %q", l.Label)
+	}
+	if l, ok := m.Link("person", map[string]string{"who": "avery"}); !ok ||
+		l.Href != "/people?who=avery" {
+		t.Errorf("with no conversation open the way in reads %q", l.Href)
+	}
+	// What it will not build: a screen it does not have, and a person it was
+	// not told the name of. Both come back as nothing to point at.
+	for _, c := range []struct {
+		what  string
+		route string
+		who   string
+	}{
+		{"a kind of screen this module does not have", "invoice", "avery"},
+		{"a link to nobody in particular", "person", ""},
+	} {
+		if l, ok := m.Link(c.route, map[string]string{"who": c.who}); ok {
+			t.Errorf("%s resolved to %q", c.what, l.Href)
+		}
+	}
+}
+
+// Somebody who arrived here looking for one person is answered about that
+// person: the row marked where the list holds them, and said in words where
+// it does not — plenty of voices on the record were never a sign-in, and
+// this screen only ever knew about sign-ins.
+func TestTheScreenAnswersAboutThePersonSomebodyCameFor(t *testing.T) {
+	held := renderPeople(people(), nil, "avery")
+	if !strings.Contains(held, `Looking up <span class="mono">avery</span>`) {
+		t.Errorf("the screen does not say who it was asked about:\n%s", held)
+	}
+	if n := strings.Count(held, `<tr class="on">`); n != 1 {
+		t.Errorf("%d rows are marked, want the one:\n%s", n, held)
+	}
+	if !strings.Contains(held, `<tr class="on"><td>avery</td>`) {
+		t.Errorf("the marked row is not the person's:\n%s", held)
+	}
+	stranger := renderPeople(people(), nil, "u-f468aecb")
+	if !strings.Contains(stranger,
+		`Nobody who signs in here answers to <span class="mono">u-f468aecb</span>`) {
+		t.Errorf("the screen leaves somebody hunting a row that was never there:\n%s", stranger)
+	}
+	if strings.Contains(stranger, `<tr class="on">`) {
+		t.Errorf("a row is marked for somebody who is not in the list:\n%s", stranger)
+	}
+	// Opened from the spine rather than followed into, the screen is what it
+	// always was: no lookup line, no marked row.
+	plain := renderPeople(people(), nil, "")
+	if strings.Contains(plain, "Looking up") || strings.Contains(plain, `<tr class="on">`) {
+		t.Errorf("the screen answers a question nobody asked:\n%s", plain)
+	}
+}
+
 // An empty list is a sentence, not an empty table.
 func TestAnEmptyListSaysSo(t *testing.T) {
-	if got := renderTable(nil, nil); !strings.Contains(got, "Nobody can sign in here yet") {
+	if got := renderTable(nil, nil, ""); !strings.Contains(got, "Nobody can sign in here yet") {
 		t.Errorf("an empty list renders as %q", got)
 	}
 }

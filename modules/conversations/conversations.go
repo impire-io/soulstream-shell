@@ -39,6 +39,22 @@ const chatPath = "/"
 // a person is on it.
 const section = "chat"
 
+// Where else in this product a person on screen here can be looked up: the
+// module that administers who may sign in, and the kind of screen wanted
+// from it. Two words and a param name — no import, no build tag, and no way
+// for this package to learn whether such a module exists. The shell asks the
+// modules this deployment actually runs, and the People panel renders a
+// plain name whenever the answer is nothing (see details.go).
+//
+// This is the whole of the coupling, and it is deliberately the weak kind: a
+// deployment that runs no sign-in administration and a word misspelled here
+// come back identically, as no link, which is the only failure a person
+// should ever be shown.
+const (
+	adminModule = "admin"
+	routePerson = "person"
+)
+
 // Module is the conversations surface.
 type Module struct {
 	sh *shell.Shell
@@ -191,6 +207,11 @@ type view struct {
 	// name — the operator claim the channel colours are read from. A persona
 	// missing here answers for itself (see channel.go).
 	Voices map[string]voice
+	// Lookups is where else in this deployment each of these people can be
+	// read about — one resolved link per persona, and no entry at all for a
+	// persona nothing else in the build can say anything about. The shell
+	// resolves them; this module never learns what answered.
+	Lookups map[string]shell.Link
 	// Unread is how many messages in each conversation have this person's
 	// name in them and have not been looked at yet — this session's own
 	// tray, kept in memory and never on the record.
@@ -205,7 +226,8 @@ type view struct {
 // with every verdict earned, and everyone either of them names.
 func (m *Module) observe(ctx context.Context, topicPath string, sess *soulstream.Session) view {
 	v := view{TopicPath: topicPath, Names: map[string]string{},
-		Voices: map[string]voice{}, Unread: map[string]int{}}
+		Voices: map[string]voice{}, Lookups: map[string]shell.Link{},
+		Unread: map[string]int{}}
 	if sess != nil {
 		v.Me = sess.Persona
 		v.Names[sess.Persona] = sess.ScreenName(ctx)
@@ -239,7 +261,29 @@ func (m *Module) observe(ctx context.Context, topicPath string, sess *soulstream
 		}
 	}
 	v.Voices = voices
+	v.Lookups = m.lookups(v.Names, v.TopicPath)
 	return v
+}
+
+// lookups asks the frame, once per render, where else each person in this
+// conversation can be read about. Everything about the answer belongs to
+// whoever answers: this module supplies a persona and the conversation to
+// come back to, and puts whatever href it is handed on the screen.
+//
+// In a deployment that administers nobody, every ask comes back empty and
+// the panel says the same names in plain text. Nothing here has to know
+// which deployment it is in — that is the shell's to know and this module's
+// to render either way.
+func (m *Module) lookups(names map[string]string, topicPath string) map[string]shell.Link {
+	out := map[string]shell.Link{}
+	for persona := range names {
+		if l, ok := m.sh.Link(adminModule, routePerson, map[string]string{
+			"who": persona, "topic": topicPath,
+		}); ok {
+			out[persona] = l
+		}
+	}
+	return out
 }
 
 // directory resolves everyone a conversation mentions by name once per

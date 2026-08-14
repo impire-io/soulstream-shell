@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"net/url"
@@ -178,6 +179,23 @@ func statusOf(t *testing.T, cl *http.Client, method, u string) int {
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, resp.Body)
 	return resp.StatusCode
+}
+
+// lookupRe pulls the ways into another module's screen out of a rendered
+// panel: where each one goes, and what the place at the other end is called.
+var lookupRe = regexp.MustCompile(`<a class="lookup" href="([^"]+)" title="([^"]+)"`)
+
+// markedRow is the one row a screen marks, from <tr to </tr>.
+func markedRow(screen string) string {
+	i := strings.Index(screen, `<tr class="on">`)
+	if i < 0 {
+		return ""
+	}
+	j := strings.Index(screen[i:], "</tr>")
+	if j < 0 {
+		return screen[i:]
+	}
+	return screen[i : i+j]
 }
 
 // inviteRe pulls the shown-once invite out of the fragment that shows it.
@@ -601,8 +619,69 @@ func TestShellGate(t *testing.T) {
 			t.Fatalf("the details panel is missing %q:\n%s", want, side)
 		}
 	}
-	if strings.Contains(side, "<a ") {
-		t.Fatalf("the details panel offers a link that goes nowhere:\n%s", side)
+	// Bar 4, cross-linking, the arm where the other module is running.
+	//
+	// Every name in the panel is a way into the screen that administers that
+	// person's sign-in. The module that renders the panel imports no part of
+	// the module that owns that screen: it names it, says what kind of screen
+	// it wants and who it is about, and the frame puts that to the modules
+	// this deployment actually runs. So the path is the other module's own
+	// spelling, and the words on the link are the name it registered under —
+	// neither of them written anywhere in the module that shows them.
+	links := lookupRe.FindAllStringSubmatch(side, -1)
+	if n := strings.Count(side, "<a "); n == 0 || n != len(links) {
+		t.Fatalf("%d links in the panel and %d of them into another module's screen:\n%s",
+			n, len(links), side)
+	}
+	into := map[string]string{}
+	for _, l := range links {
+		if l[2] != "People &amp; sign-in" {
+			t.Fatalf("the way into the other module's screen is called %q here:\n%s", l[2], side)
+		}
+		u, err := url.Parse(html.UnescapeString(l[1]))
+		if err != nil {
+			t.Fatalf("the panel offers an unparseable link %q: %v", l[1], err)
+		}
+		if u.Path != "/people" || u.Query().Get("topic") != path {
+			t.Fatalf("the link reads %q — the wrong screen, or it drops the conversation "+
+				"the person would come back to", l[1])
+		}
+		into[u.Query().Get("who")] = html.UnescapeString(l[1])
+	}
+	for _, who := range []string{ceremony.FoundingPersona, posted.Author} {
+		if into[who] == "" {
+			t.Fatalf("the panel points nowhere for %s:\n%s", who, side)
+		}
+	}
+
+	// And it goes where it says. The screen at the other end answers about
+	// the person it was followed for: their row marked, and said in words.
+	marked := get(t, cl, r.ShellURL+into[ceremony.FoundingPersona])
+	for _, want := range []string{`class="ir on" href="/people`,
+		`Looking up <span class="mono">` + ceremony.FoundingPersona + `</span>`} {
+		if !strings.Contains(marked, want) {
+			t.Fatalf("the followed link did not land on that person (%q missing): %s",
+				want, marked)
+		}
+	}
+	if n := strings.Count(marked, `<tr class="on">`); n != 1 {
+		t.Fatalf("%d rows are marked on the screen the link landed on: %s", n, marked)
+	}
+	if row := markedRow(marked); !strings.Contains(row,
+		`<td class="mono">`+ceremony.FoundingPersona+`</td>`) {
+		t.Fatalf("the marked row is somebody else's: %s", row)
+	}
+	// A voice on the record that was never a sign-in resolves too, and is
+	// answered rather than left hunting a row that was never there. The
+	// panel cannot know which of its people this deployment administers —
+	// that is the other module's to say, and it says it.
+	stranger := get(t, cl, r.ShellURL+into[posted.Author])
+	if !strings.Contains(stranger, `Nobody who signs in here answers to `+
+		`<span class="mono">`+posted.Author+`</span>`) {
+		t.Fatalf("the screen does not say it has nothing on %s: %s", posted.Author, stranger)
+	}
+	if strings.Contains(stranger, `<tr class="on">`) {
+		t.Fatalf("a row is marked for somebody who cannot sign in here at all: %s", stranger)
 	}
 
 	// A person reads their own name on their own screen. The fold mints an

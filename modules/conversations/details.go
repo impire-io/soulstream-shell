@@ -137,6 +137,34 @@ func workWords(v view, w topic.WorkItem) string {
 	}
 }
 
+// personName is a name in the People panel, and the one place this screen
+// reaches into another screen.
+//
+// The name is what a person reads; the id behind it is the tooltip, written
+// the way it would be typed. It is the only place the surface says how to
+// tap somebody on the shoulder, because @-mentions only resolve against the
+// id the record carries — never a display name.
+//
+// Where this deployment runs something that knows more about that person,
+// the name is a link into it, and the tooltip on the link is whatever that
+// place calls itself — words from a module this one cannot see. Where it
+// does not, the name is exactly the text it always was: no dead link, no
+// greyed-out control, nothing pretending there is a screen behind it.
+func personName(v view, p participant) string {
+	youMark := ""
+	if p.Me {
+		youMark = `<span class="you">you</span>`
+	}
+	name := fmt.Sprintf(`<span class="who" title="@%s">%s</span>%s`,
+		esc(p.Persona), esc(p.Name), youMark)
+	l, ok := v.Lookups[p.Persona]
+	if !ok {
+		return name
+	}
+	return fmt.Sprintf(`<a class="lookup" href="%s" title="%s">%s</a>`,
+		l.Href, esc(l.Label), name)
+}
+
 // detSection is one titled block of the panel. The title is a mono label
 // strip, the way the canon names the sections of an instrument.
 func detSection(icon, heading, body string) string {
@@ -160,22 +188,12 @@ func renderDetails(v view) string {
 		people.WriteString(`<li class="det-note">Nobody has spoken here yet.</li>`)
 	}
 	for _, p := range who {
-		youMark := ""
-		if p.Me {
-			youMark = `<span class="you">you</span>`
-		}
-		// The name is what a person reads; the id behind it is the tooltip,
-		// written the way it would be typed. It is the only place the surface
-		// says how to tap somebody on the shoulder, because @-mentions only
-		// resolve against the id the record carries — never a display name.
-		//
 		// The pip in front of the name is the channel, and the line under it
 		// says what that channel was read from: a voice somebody else answers
 		// for names them here, so the colour is never the only place the claim
-		// appears.
-		fmt.Fprintf(&people, `<li>%s<span class="who" title="@%s">%s</span>%s`+
-			`<span class="said">%s%s</span></li>`,
-			channelPip(v, p.Persona), esc(p.Persona), esc(p.Name), youMark,
+		// appears. The name itself may be a way somewhere else (personName).
+		fmt.Fprintf(&people, `<li>%s%s<span class="said">%s%s</span></li>`,
+			channelPip(v, p.Persona), personName(v, p),
 			answersFor(v, p), esc(saidWords(p)))
 	}
 	people.WriteString(`</ul>`)

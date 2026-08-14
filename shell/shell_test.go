@@ -222,6 +222,88 @@ func TestAModuleThisDeploymentDoesNotRunIsNowhere(t *testing.T) {
 	}
 }
 
+// owner is a fixture that also owns screens other modules may point at: the
+// optional half of the contract. It is a separate type on purpose — a plain
+// fixture must stay unlinkable, or the check that an unwilling module is
+// never linked into would pass for the wrong reason.
+type owner struct {
+	fixture
+	route string
+	label string
+}
+
+func (o *owner) Link(route string, params map[string]string) (Link, bool) {
+	if route != o.route || params["who"] == "" {
+		return Link{}, false
+	}
+	return Link{Href: "/" + o.slug + "?who=" + params["who"], Label: o.label}, true
+}
+
+// One module points at another's screen through the frame and never through
+// its package: it names who it wants, what kind of screen, and what the
+// screen is about. The module that owns the screen builds the link, so the
+// asking module spells none of its paths — and the place at the other end
+// is named by the module that owns it, or by the name it registered under.
+func TestOneModulePointsAtAnothersScreenThroughTheFrame(t *testing.T) {
+	people := &owner{fixture: fixture{slug: "people", on: true}, route: "person"}
+	s := newTestShell(t, people)
+
+	l, ok := s.Link("people", "person", map[string]string{"who": "avery"})
+	if !ok {
+		t.Fatal("the deployment runs the module and it still did not answer")
+	}
+	if l.Href != "/people?who=avery" {
+		t.Errorf("the link goes to %q", l.Href)
+	}
+	if l.Label != "people" {
+		t.Errorf("the link is called %q, want the name the module registered under", l.Label)
+	}
+	named := &owner{fixture: fixture{slug: "people", on: true}, route: "person",
+		label: "Who can sign in"}
+	if l, _ := newTestShell(t, named).Link("people", "person",
+		map[string]string{"who": "avery"}); l.Label != "Who can sign in" {
+		t.Errorf("the module's own words for the place were overwritten with %q", l.Label)
+	}
+}
+
+// hollow answers yes with nowhere to go. The shell hands that to nobody: a
+// link is a place, and a module cannot make one out of an empty string by
+// agreeing that it has.
+type hollow struct{ fixture }
+
+func (h *hollow) Link(string, map[string]string) (Link, bool) {
+	return Link{Label: "nowhere in particular"}, true
+}
+
+// The five ways an ask comes back empty, all of them the same answer to the
+// asking module: there is nowhere to point, render what you render for a
+// stranger. A deployment that does not run the module is the one that
+// matters — the module is not in the registry, so nothing about it resolves.
+func TestALinkResolvesOnlyIntoAModuleThisDeploymentRuns(t *testing.T) {
+	absent := &owner{fixture: fixture{slug: "people", on: false}, route: "person"}
+	present := &owner{fixture: fixture{slug: "people", on: true}, route: "person"}
+	unwilling := &fixture{slug: "quiet", on: true}
+	nowhere := &hollow{fixture: fixture{slug: "hollow", on: true}}
+
+	for _, c := range []struct {
+		what             string
+		mod              Module
+		slug, route, who string
+	}{
+		{"a module this deployment does not run", absent, "people", "person", "avery"},
+		{"a module nobody registered", present, "strangers", "person", "avery"},
+		{"a module that accepts no links", unwilling, "quiet", "person", "avery"},
+		{"a route the module does not offer", present, "people", "invoice", "avery"},
+		{"params the module cannot use", present, "people", "person", ""},
+		{"a module that answers with nowhere to go", nowhere, "hollow", "person", "avery"},
+	} {
+		s := newTestShell(t, c.mod)
+		if l, ok := s.Link(c.slug, c.route, map[string]string{"who": c.who}); ok {
+			t.Errorf("%s resolved to %q", c.what, l.Href)
+		}
+	}
+}
+
 // The frame says nothing about the product it frames that the product did
 // not hand it. Every word on the sign-in card, the top bar and the foot of
 // a sheet is composed in — which is what lets the same frame carry

@@ -9,6 +9,7 @@ require (
 	github.com/impire-io/soulstream-idp v0.4.0
 	github.com/impire-io/soulstream-shell v0.2.0
 	github.com/nats-io/nats.go v1.52.0
+	soulstream-shell.invalid/moduleprobe v0.0.0
 )
 
 require (
@@ -65,6 +66,11 @@ require (
 )
 
 replace github.com/impire-io/soulstream-shell => ../
+
+// The outside module the probe arm composes. Its own module, in a namespace
+// nobody here owns, never tagged and never published — it is only ever the
+// working tree beside this one.
+replace soulstream-shell.invalid/moduleprobe => ./moduleprobe
 
 // TEMPORARY until soulstream tags the shell plane's AdminBase wiring
 // (ceremony.State.AdminSurface, node.startHelm). Remove with the pin bump.

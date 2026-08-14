@@ -609,9 +609,46 @@ func TestDetailsPanelReadsTheConversation(t *testing.T) {
 	if strings.Contains(got, "gone.txt") {
 		t.Errorf("a withdrawn attachment is still listed:\n%s", got)
 	}
-	// Nothing in here pretends to be a way somewhere.
+	// Nothing in here pretends to be a way somewhere. This view resolved no
+	// links, which is what the panel is handed by a deployment running
+	// nothing else that knows about people — and then a name is text.
 	if strings.Contains(got, "<a ") || strings.Contains(got, "<button") {
 		t.Errorf("the details panel offers something that does not navigate:\n%s", got)
+	}
+}
+
+// A name in the panel is a way into whatever else this deployment runs that
+// knows about that person — and the same name, as text, where it runs
+// nothing. Both arms come off one field: the links the shell resolved for
+// this render. This module builds no part of the href and none of the words
+// on it; it does not know what answered, or whether anything could.
+func TestAPersonInThePanelLeadsWhereThereIsSomewhereToLead(t *testing.T) {
+	v := meView()
+	v.Names["u-me"] = "Daan"
+	v.Lookups = map[string]shell.Link{
+		"avery": {Href: "/people?who=avery&amp;topic=home%2Fkitchen", Label: "People & sign-in"},
+	}
+	got := renderDetails(v)
+	if !strings.Contains(got, `<a class="lookup" href="/people?who=avery&amp;topic=home%2Fkitchen"`+
+		` title="People &amp; sign-in"><span class="who" title="@avery">Avery</span></a>`) {
+		t.Errorf("the name does not lead where the shell said it could:\n%s", got)
+	}
+	// Nobody else resolved, so nobody else is a link — including the person
+	// reading, whose own pill stays where it was.
+	if n := strings.Count(got, "<a "); n != 1 {
+		t.Errorf("%d names lead somewhere, want the one that resolved:\n%s", n, got)
+	}
+	if !strings.Contains(got,
+		`<span class="who" title="@u-me">Daan</span><span class="you">you</span>`) {
+		t.Errorf("the reader's own name did not stay plain:\n%s", got)
+	}
+	// And when it is the reader who resolves, the pill rides inside the link
+	// rather than being left outside it.
+	v.Lookups = map[string]shell.Link{"u-me": {Href: "/people?who=u-me", Label: "Who signs in"}}
+	if mine := renderDetails(v); !strings.Contains(mine,
+		`<a class="lookup" href="/people?who=u-me" title="Who signs in">`+
+			`<span class="who" title="@u-me">Daan</span><span class="you">you</span></a>`) {
+		t.Errorf("the reader's own name leads somewhere but leaves the pill behind:\n%s", mine)
 	}
 }
 

@@ -73,6 +73,9 @@ func TestExternalIdPGate(t *testing.T) {
 		method, path string
 	}{
 		{http.MethodGet, "/people"},
+		// Including the path a link from another screen would have pointed
+		// at, had one resolved.
+		{http.MethodGet, "/people?who=" + ceremony.FoundingPersona},
 		{http.MethodPost, "/act/invite?who=" + ceremony.FoundingPersona},
 		{http.MethodPost, "/act/disable?who=" + ceremony.FoundingPersona},
 	} {
@@ -101,6 +104,20 @@ func TestExternalIdPGate(t *testing.T) {
 	thread := elementsIn(frameFor(t, patchFrames(t, live), `id="dash"`))
 	if !strings.Contains(thread, seededTurn) {
 		t.Fatalf("the conversation is empty:\n%s", thread)
+	}
+
+	// Bar 4, cross-linking, the arm where there is nowhere to point. The same
+	// panel, rendered by the same module, asking the same question of the
+	// frame — and this build runs nothing that administers a sign-in, so the
+	// ask comes back empty and every name is plain text. Not a greyed-out
+	// control, not a link to a 404: the panel simply says who is in the room,
+	// the way it did before any of this existed.
+	side := elementsIn(frameFor(t, patchFrames(t, live), `id="details"`))
+	if !strings.Contains(side, `<span class="who" title="@`+ceremony.FoundingPersona+`">`) {
+		t.Fatalf("the People panel does not name the voice in the room:\n%s", side)
+	}
+	if strings.Contains(side, "<a ") {
+		t.Fatalf("the panel points at a screen this deployment does not run:\n%s", side)
 	}
 
 	// And it writes: the message lands on the record as the signed-in

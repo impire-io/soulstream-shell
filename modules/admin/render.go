@@ -19,20 +19,41 @@ const (
 	tableID  = "people-table"
 )
 
-// renderPeople is the whole screen's body.
-func renderPeople(list []soulstream.Person, err error) string {
+// renderPeople is the whole screen's body. who is the person somebody came
+// here looking for — empty when they simply opened the screen.
+func renderPeople(list []soulstream.Person, err error, who string) string {
 	var b strings.Builder
 	b.WriteString(`<h1>People &amp; sign-in</h1>`)
 	b.WriteString(`<p class="lede">Everyone who can sign in here, read live from the ` +
 		`sign-in surface — the shell keeps none of it.</p>`)
-	b.WriteString(renderTable(list, err))
+	b.WriteString(lookedUpNote(list, err, who))
+	b.WriteString(renderTable(list, err, who))
 	b.WriteString(resultNote(""))
 	return b.String()
 }
 
+// lookedUpNote answers the question somebody arrived with. A name this list
+// holds is pointed at; a name it does not hold is answered rather than left
+// to a person hunting a row that was never there — plenty of voices on the
+// record were never a sign-in, and this screen only ever knew about
+// sign-ins.
+func lookedUpNote(list []soulstream.Person, err error, who string) string {
+	if who == "" || err != nil {
+		return ""
+	}
+	for _, p := range list {
+		if p.Username == who {
+			return fmt.Sprintf(`<p class="lede">Looking up <span class="mono">%s</span>, `+
+				`marked below.</p>`, esc(who))
+		}
+	}
+	return fmt.Sprintf(`<p class="lede">Nobody who signs in here answers to `+
+		`<span class="mono">%s</span> — everyone who does is below.</p>`, esc(who))
+}
+
 // renderTable is the list itself, and a patch target of its own so an act
 // that changes what is true can hand back what is now true.
-func renderTable(list []soulstream.Person, err error) string {
+func renderTable(list []soulstream.Person, err error, who string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, `<div id="%s">`, tableID)
 	switch {
@@ -47,7 +68,7 @@ func renderTable(list []soulstream.Person, err error) string {
 			`<th>Groups</th><th>Passkeys</th><th>Actions</th>` +
 			`</tr></thead><tbody>`)
 		for _, p := range list {
-			b.WriteString(personRow(p))
+			b.WriteString(personRow(p, p.Username == who))
 		}
 		b.WriteString(`</tbody></table></div>`)
 	}
@@ -55,10 +76,11 @@ func renderTable(list []soulstream.Person, err error) string {
 	return b.String()
 }
 
-// personRow is one person. The acts are offered only where they mean
-// something: an invite enrols a passkey for somebody who may sign in, and
-// there is nothing to take away from somebody who already cannot.
-func personRow(p soulstream.Person) string {
+// personRow is one person, marked when they are the one somebody came here
+// for. The acts are offered only where they mean something: an invite enrols
+// a passkey for somebody who may sign in, and there is nothing to take away
+// from somebody who already cannot.
+func personRow(p soulstream.Person, lookedUp bool) string {
 	name := p.DisplayName
 	if name == "" {
 		name = p.Username
@@ -76,9 +98,13 @@ func personRow(p soulstream.Person) string {
 				`Take sign-in away</button>`,
 			qesc(p.Username), qesc(p.Username))
 	}
-	return fmt.Sprintf(`<tr><td>%s</td><td class="mono">%s</td><td>%s</td>`+
+	row := "<tr>"
+	if lookedUp {
+		row = `<tr class="on">`
+	}
+	return fmt.Sprintf(`%s<td>%s</td><td class="mono">%s</td><td>%s</td>`+
 		`<td>%s</td><td class="mono">%d</td><td>%s</td></tr>`,
-		esc(name), esc(p.Username), state, groupTags(p.Groups), p.Credentials, acts)
+		row, esc(name), esc(p.Username), state, groupTags(p.Groups), p.Credentials, acts)
 }
 
 // groupTags is what a person's token would carry, as the sign-in surface

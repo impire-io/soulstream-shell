@@ -27,6 +27,12 @@ Founding articles, held by the standing e2e gate:
   the signed-in person's own admission (sentinel + their fold-issued
   bearer through the OIDC callout lane) and their own persona
   signature. The shell signs as no one.
+- **A frame anybody can build on.** The gate composes a module written
+  in its own Go module, outside this namespace, importing the exported
+  frame and nothing else ([`e2e/moduleprobe`](e2e/moduleprobe)): it
+  registers, takes a key on the spine and renders a screen, on a frame
+  carrying a product that is not this one — with no shell change to let
+  it in.
 
 ## Shape
 
@@ -36,18 +42,29 @@ A pure shell, and modules beside it:
   (generic OIDC, the bearer in memory and nowhere else), the page chrome
   (top bar, the spine, the design assets), the Datastar/SSE plumbing, and
   the module contract itself ([`shell/module.go`](shell/module.go) —
-  identity, activation, navigation contribution, route mounting). Its
-  packages import no module and nothing Soulstream-specific, and the check
-  is mechanical — the compiler's own import graph, riding `make test`
+  identity, activation, navigation contribution, route mounting), with the
+  one cross-module facility that lets separate modules feel like one
+  product ([`shell/link.go`](shell/link.go): a module asks the frame, by
+  slug and route, for a way into another module's screen; only the modules
+  this deployment runs answer, and nothing else resolves). Its packages
+  import no module and nothing Soulstream-specific, and the check is
+  mechanical — the compiler's own import graph, riding `make test`
   ([`internal/purity`](internal/purity)).
 - [`soulstream/`](soulstream) — the Soulstream module-support layer, where
   everything the shell refuses to hold lives: bearer → sentinel + callout →
   an admission that acts as the person, the clients, the persona directory,
   the mention tray.
-- [`modules/overview`](modules/overview) and
-  [`modules/conversations`](modules/conversations) — the two human
-  surfaces, each registering through the one contract and knowing nothing
-  of the other.
+- [`modules/overview`](modules/overview),
+  [`modules/conversations`](modules/conversations) and
+  [`modules/admin`](modules/admin) — the human surfaces, each registering
+  through the one contract and importing none of the others (measured off
+  the import graph in the gate). The third is the one that is not always
+  there: a deployment whose people sign in against an authorization server
+  it does not run has nobody here to administer, so that module is not part
+  of the build at all. Where it is, a name in the conversation's People
+  panel is a way into that person's sign-in — asked for through the frame,
+  by slug and route, never by import; where it is not, the same name is
+  plain text.
 - [`embed/`](embed) — composition: the one place the pieces meet, and the
   only one that knows both that this is a shell and that this is
   Soulstream.

@@ -14,6 +14,12 @@
 // (ceremony.State), never from a constant written here — so what the gate
 // measures is the product's wiring and not the test's opinion of it.
 //
+// It also stands up the least a shell can run on (StartIssuer): an
+// authorization server alone, with no node, no record and no
+// module-support layer beside it. That is the position a module written
+// outside the product composes from, and the arm that measures one starts
+// there.
+//
 // The consumer-position gate and the screens helper both drive this, so
 // what a person is shown in a screenshot is what the gate measures. Like
 // the gate module that holds it, this package sits outside the impire-io
@@ -141,7 +147,8 @@ func start(dir string, external bool) (*Rig, error) {
 		st.DoorAuthIssuer = "http://localhost:" + asPort
 		st.DoorAuthAudience = "soulstream-external"
 		invite, err = startExternalAS(ctx, filepath.Join(dir, "external-as"),
-			st.DoorAuthIssuer, "127.0.0.1:"+asPort, st.DoorAuthAudience)
+			st.DoorAuthIssuer, "127.0.0.1:"+asPort, st.DoorAuthAudience,
+			ceremony.FoundingPersona, []string{"admin", "realm"})
 		if err != nil {
 			cancel()
 			return nil, err
@@ -211,15 +218,70 @@ func start(dir string, external bool) (*Rig, error) {
 	}, nil
 }
 
+// Issuer is an authorization server and nothing else: the whole of what a
+// shell needs to run, with no part of this product beside it. No node, no
+// record, no module-support layer — a deployment composing the frame with
+// modules of its own has exactly this much.
+//
+// It is the position an outside module is measured from, and the reason
+// it can be: everything the frame needs is here, and everything Soulstream
+// is, is not.
+type Issuer struct {
+	// URL is where people sign in, and what a shell composed against this
+	// discovers itself through.
+	URL string
+	// Invite is the single-use enrolment invite it minted for the seeded
+	// person.
+	Invite string
+
+	cancel context.CancelFunc
+}
+
+// StartIssuer runs one, seeding the one person who will sign in.
+func StartIssuer(dir, username string) (*Issuer, error) {
+	port, err := reservePort()
+	if err != nil {
+		return nil, fmt.Errorf("rig: reserve sign-in port: %w", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	url := "http://localhost:" + port
+	invite, err := startExternalAS(ctx, dir, url, "127.0.0.1:"+port,
+		"soulstream-shell-outside", username, nil)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	return &Issuer{URL: url, Invite: invite, cancel: cancel}, nil
+}
+
+// Close drains it.
+func (i *Issuer) Close() { i.cancel() }
+
+// Enroll spends the invite on a passkey for the seeded person.
+func (i *Issuer) Enroll(auth *authtest.Authenticator, username string) error {
+	return enroll(i.URL, auth, username, i.Invite)
+}
+
+// SignInTo walks the ceremony against whatever shell is serving at shellURL
+// and returns a cookie-jarred client holding that shell's session, plus the
+// page it landed on.
+func (i *Issuer) SignInTo(shellURL string, auth *authtest.Authenticator, username string,
+) (*http.Client, string, error) {
+	return signInTo(shellURL, i.URL, auth, username)
+}
+
 // startExternalAS runs a fold standalone, through its own public embed
 // seam, on its own embedded store — an authorization server the product
 // composes no part of and can only reach over HTTP. It returns the
-// single-use invite that enrols the founding person's passkey there.
+// single-use invite that enrols the named person's passkey there.
 //
-// The seeded groups are deliberately the bundled plane's own, admin
-// included: the only difference between the two arms is the shape of the
-// deployment, never the standing of the person signing in.
-func startExternalAS(ctx context.Context, stateDir, issuer, listen, audience string) (string, error) {
+// Where it stands in for the deployment's own sign-in plane, the seeded
+// groups are deliberately that plane's own, admin included: the only
+// difference between those two arms is the shape of the deployment, never
+// the standing of the person signing in.
+func startExternalAS(ctx context.Context, stateDir, issuer, listen, audience, username string,
+	roles []string,
+) (string, error) {
 	if err := os.MkdirAll(stateDir, 0o700); err != nil {
 		return "", fmt.Errorf("rig: external AS state: %w", err)
 	}
@@ -231,9 +293,7 @@ func startExternalAS(ctx context.Context, stateDir, issuer, listen, audience str
 			Issuer: issuer, Listen: listen, StateDir: stateDir,
 			TokenAudience: audience, EnableDCR: true,
 			SeedUsers: []foldembed.SeedUser{{
-				Username:    ceremony.FoundingPersona,
-				DisplayName: ceremony.FoundingPersona,
-				Roles:       []string{"admin", "realm"},
+				Username: username, DisplayName: username, Roles: roles,
 			}},
 			InviteSink: func(_, token string) { invites <- token },
 			Ready:      func(addr string) { ready <- addr },
@@ -461,9 +521,24 @@ func (r *Rig) Enroll(auth *authtest.Authenticator, username string) error {
 // uses it, and the only way to find out whether the sign-in surface really
 // issued the one a screen showed: a token it never minted is refused here.
 func (r *Rig) EnrollWith(auth *authtest.Authenticator, username, invite string) error {
+	return enroll(r.Issuer, auth, username, invite)
+}
+
+// SignIn drives the shell's /login through the fold and returns a
+// cookie-jarred client holding the shell session, plus the page it landed
+// on.
+func (r *Rig) SignIn(auth *authtest.Authenticator, username string) (*http.Client, string, error) {
+	return signInTo(r.ShellURL, r.Issuer, auth, username)
+}
+
+// enroll and signInTo are the ceremony itself, against whichever
+// authorization server and whichever shell they are pointed at: the rig's
+// own pair in every arm that runs the product, and an authorization server
+// standing alone in the arm that runs none of it (see Issuer).
+func enroll(issuer string, auth *authtest.Authenticator, username, invite string) error {
 	cl := &http.Client{}
 	q := url.Values{"username": {username}, "invite": {invite}}
-	raw, err := postJSON(cl, r.Issuer+"/enroll/begin?"+q.Encode(), r.Issuer, nil)
+	raw, err := postJSON(cl, issuer+"/enroll/begin?"+q.Encode(), issuer, nil)
 	if err != nil {
 		return err
 	}
@@ -476,19 +551,17 @@ func (r *Rig) EnrollWith(auth *authtest.Authenticator, username, invite string) 
 	if err != nil {
 		return fmt.Errorf("rig: authenticator: %w", err)
 	}
-	_, err = postJSON(cl, r.Issuer+"/enroll/finish?ceremonyID="+
-		url.QueryEscape(begin.CeremonyID), r.Issuer, created)
+	_, err = postJSON(cl, issuer+"/enroll/finish?ceremonyID="+
+		url.QueryEscape(begin.CeremonyID), issuer, created)
 	return err
 }
 
-// SignIn drives the shell's /login through the fold and returns a
-// cookie-jarred client holding the shell session, plus the page it landed
-// on.
-func (r *Rig) SignIn(auth *authtest.Authenticator, username string) (*http.Client, string, error) {
+func signInTo(shellURL, issuer string, auth *authtest.Authenticator, username string,
+) (*http.Client, string, error) {
 	jar, _ := cookiejar.New(nil)
 	cl := &http.Client{Jar: jar}
 
-	resp, err := cl.Get(r.ShellURL + "/login")
+	resp, err := cl.Get(shellURL + "/login")
 	if err != nil {
 		return nil, "", fmt.Errorf("rig: /login: %w", err)
 	}
@@ -504,7 +577,7 @@ func (r *Rig) SignIn(auth *authtest.Authenticator, username string) (*http.Clien
 	}
 	q := url.Values{"authRequestID": {authReqID}, "csrf": {string(m[1])},
 		"username": {username}}
-	raw, err := postJSON(cl, r.Issuer+"/login/begin?"+q.Encode(), r.Issuer, nil)
+	raw, err := postJSON(cl, issuer+"/login/begin?"+q.Encode(), issuer, nil)
 	if err != nil {
 		return nil, "", err
 	}
@@ -522,7 +595,7 @@ func (r *Rig) SignIn(auth *authtest.Authenticator, username string) (*http.Clien
 		return nil, "", fmt.Errorf("rig: authenticator: %w", err)
 	}
 	q.Set("ceremonyID", begin.CeremonyID)
-	raw, err = postJSON(cl, r.Issuer+"/login/finish?"+q.Encode(), r.Issuer, cred)
+	raw, err = postJSON(cl, issuer+"/login/finish?"+q.Encode(), issuer, cred)
 	if err != nil {
 		return nil, "", err
 	}
@@ -534,7 +607,7 @@ func (r *Rig) SignIn(auth *authtest.Authenticator, username string) (*http.Clien
 	}
 	redirect := fin.Redirect
 	if strings.HasPrefix(redirect, "/") {
-		redirect = r.Issuer + redirect
+		redirect = issuer + redirect
 	}
 	final, err := cl.Get(redirect)
 	if err != nil {
@@ -542,7 +615,7 @@ func (r *Rig) SignIn(auth *authtest.Authenticator, username string) (*http.Clien
 	}
 	body, _ := io.ReadAll(final.Body)
 	_ = final.Body.Close()
-	if !strings.HasPrefix(final.Request.URL.String(), r.ShellURL) {
+	if !strings.HasPrefix(final.Request.URL.String(), shellURL) {
 		return nil, "", fmt.Errorf("rig: ceremony ended at %s, not the shell", final.Request.URL)
 	}
 	return cl, string(body), nil

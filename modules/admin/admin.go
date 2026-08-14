@@ -38,6 +38,18 @@ var (
 // This module's key on the spine.
 const sectionPeople = "people"
 
+// routePerson is what this module answers to when somewhere else in the
+// product has a person on screen and wants to point at their sign-in: the
+// route name in the shell's cross-link facility, with one param, "who",
+// spelled the way the sign-in surface spells a person.
+//
+// It is a word two packages agree on rather than a symbol either of them
+// imports — the asking module does not know this one exists, and this one
+// never learns who asked. Getting the word wrong resolves to no link at
+// all, which is exactly what a deployment that does not run this module
+// gets, and is the failure to have.
+const routePerson = "person"
+
 // Module is the people-and-sign-in surface.
 type Module struct {
 	sh *shell.Shell
@@ -68,6 +80,30 @@ func (m *Module) Nav(r *http.Request) []shell.NavEntry {
 		Section: sectionPeople, Icon: "users", Label: "People & sign-in",
 		Href: "/people" + topicQuery(r.URL.Query().Get("topic")),
 	}}
+}
+
+// Link is the other half of this module's place in the product: elsewhere a
+// person is named on a screen, and this is where what they may sign in with
+// lives. The link lands on the list with that person looked up on it —
+// honestly, including when nobody here answers to the name, which is the
+// ordinary case for a voice on the record that was never a sign-in.
+//
+// Only this module builds this module's paths. The open conversation rides
+// along the way it does on every key of the spine, so the way back from
+// here lands where the person left.
+func (m *Module) Link(route string, params map[string]string) (shell.Link, bool) {
+	who := params["who"]
+	if route != routePerson || who == "" {
+		return shell.Link{}, false
+	}
+	href := "/people?who=" + qesc(who)
+	if topicPath := params["topic"]; topicPath != "" {
+		href += "&amp;topic=" + qesc(topicPath)
+	}
+	// The label is left to the shell: what this place is called is the name
+	// this module registered under, and saying it twice invites the two to
+	// drift.
+	return shell.Link{Href: href}, true
 }
 
 // Mount claims the screen and the two acts offered from it.
@@ -107,7 +143,10 @@ func (m *Module) reach(r *http.Request) (*soulstream.Admin, error) {
 var errNoSession = errors.New("no session — sign in first")
 
 // people is the screen: everyone who can sign in, and the two acts a
-// person with the standing may take on them.
+// person with the standing may take on them. Somebody who arrived here from
+// elsewhere in the product came looking for one of them (see Link), so that
+// one is marked and said out loud — and said out loud too when the list
+// turns out not to hold them.
 func (m *Module) people(w http.ResponseWriter, r *http.Request) {
 	a, err := m.reach(r)
 	if err != nil {
@@ -117,7 +156,7 @@ func (m *Module) people(w http.ResponseWriter, r *http.Request) {
 	list, err := a.People(r.Context())
 	m.sh.Render(w, r, shell.Page{
 		Title: "people and sign-in", Section: sectionPeople, Live: true,
-		Body: m.sh.Sheet(renderPeople(list, err)),
+		Body: m.sh.Sheet(renderPeople(list, err, r.URL.Query().Get("who"))),
 	})
 }
 
@@ -154,7 +193,9 @@ func (m *Module) actDisable(w http.ResponseWriter, r *http.Request) {
 	}
 	shell.Patch(w, resultNote(fmt.Sprintf("%s can no longer sign in.", who)))
 	list, err := a.People(r.Context())
-	shell.Patch(w, renderTable(list, err))
+	// The row that just changed is the row to keep an eye on, so the re-read
+	// list comes back with it still marked.
+	shell.Patch(w, renderTable(list, err, who))
 }
 
 // refusalWords says what happened in the surface's own words. A refusal a
