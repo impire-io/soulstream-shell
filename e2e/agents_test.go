@@ -297,6 +297,20 @@ func TestAgentsGate(t *testing.T) {
 		_ = again.Close()
 		t.Fatal("a credential that was taken away still gets an agent in")
 	}
+
+	// And an agent shut out can be let back in, without being made again.
+	// The card does not move: who vouched for this voice is a thing that
+	// happened, and handing it a new way in does not unhappen it.
+	fresh := credentialFrom(t, post(t, cl, r.ShellURL+"/act/agent-credential?who="+agentHandle))
+	if fresh["SOULSTREAM_TOKEN"] == env["SOULSTREAM_TOKEN"] {
+		t.Fatal("the new credential is the old one")
+	}
+	back, err := dialAs(ctx, fresh)
+	if err != nil {
+		t.Fatalf("the replacement credential does not get the agent back in: %v", err)
+	}
+	_ = back.Close()
+	attested(ctx, t, r, agentHandle, me)
 }
 
 // The other arm: a deployment that declares no agents surface has none —
