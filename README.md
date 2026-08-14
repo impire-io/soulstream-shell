@@ -1,8 +1,11 @@
 # soulstream-shell — the shell
 
-The soulsystem's human cockpit: one browser surface where a person
-observes the whole running system — topics, work, signatures, plane
-health — and acts in it, beside the MCP door that serves machines.
+The soulsystem's human cockpit: one browser surface where a person reads
+the conversations of their realm and writes into them — a rail of
+conversations on the left, one conversation in the middle, a composer
+docked under it — beside the MCP door that serves machines. The house
+readouts (storage, sign-in, work) sit one link away, on the
+system-status screen.
 Design and journey live in the ecosystem hq
 ([impire-io/soul-hq](https://github.com/impire-io/soul-hq), design doc
 `02-DESIGN/soulstream-shell/0001-soulstream-shell-the-shell.md`).
@@ -40,6 +43,11 @@ The shell registers itself with the issuer via RFC 7591 DCR at startup.
 `make check` — fmt, tidy, build, test (including the consumer-position
 e2e, which boots a real soulnode realm at its published tag), lint.
 All green before every commit; none skipped.
+
+`make screens` stands the same rig up and leaves it running, with a
+seeded conversation and a signed-in session, so the surface can be
+looked at rather than read about. It prints the address and the session
+cookie and blocks until `^C`; nothing outlives the temp dir it founds.
 
 ## License
 

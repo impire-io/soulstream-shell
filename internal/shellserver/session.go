@@ -167,9 +167,11 @@ func (s *Server) callback(w http.ResponseWriter, r *http.Request) {
 	if persona == "" {
 		persona = idt.Subject
 	}
+	// The name to put on screen: what the fold knows, else what the realm's
+	// own persona directory publishes, else the id the record carries.
 	display := claims.Name
 	if display == "" {
-		display = persona
+		display = s.displayName(r.Context(), persona)
 	}
 
 	nc2, err := nats.Connect(s.opts.NATSURL,

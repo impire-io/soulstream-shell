@@ -42,28 +42,85 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>shell — soulsystem</title><link rel="stylesheet" href="/assets/tokens.css">
 <script type="module" src="/assets/datastar.js"></script></head>
-<body data-init="@get('/live?topic=%s')">
-<header class="tbar"><span class="wordmark">soulsystem</span><span class="strip">shell</span>
-<span class="strip shell">realm · %s</span><span class="spacer"></span>
-<span class="who">%s</span><span class="led"></span></header>
-<main style="max-width:var(--content-max);margin:0 auto;padding:var(--space-8)">
-<div id="dash">loading…</div>
+<body class="chat" data-init="@get('/live?topic=%s')">
 %s
-<p style="margin-top:var(--space-7)">
-<button data-on:click="@post('/act/work-open?topic=%s')">Open work item</button>
-<form method="post" action="/logout" style="display:inline"><button class="btn ghost">Sign out</button></form>
-</p>
+<div class="frame">
+<aside class="rail">
+<div class="rail-head">%s<h2>Conversations</h2></div>
+<nav id="conversations" class="rail-list"><p class="rail-note">loading…</p></nav>
+<div class="rail-foot"><a href="/status?topic=%s">%sSystem status</a>
+<form method="post" action="/logout"><button class="btn ghost">Sign out</button></form></div>
+</aside>
+<section class="thread">
+<div id="dash" class="thread-body"><p class="blank">loading…</p></div>
+%s
+</section>
+</div>
+<script>
+// Keep the newest message in view. The stream morphs the conversation once
+// a second and #dash survives every morph, so one observer holds — and it
+// only follows for someone already at the foot: a person reading back is
+// left where they are.
+(() => {
+  const el = document.getElementById("dash");
+  let stick = true;
+  el.addEventListener("scroll", () => {
+    stick = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  });
+  new MutationObserver(() => { if (stick) el.scrollTop = el.scrollHeight; })
+    .observe(el, {childList: true, subtree: true, characterData: true});
+})();
+</script>
+</body></html>`,
+		qesc(topicPath), s.topbar(sess.Display), Icon("messages-square"),
+		qesc(topicPath), Icon("gauge"), renderComposer(topicPath))
+}
+
+// topbar is the ink housing every signed-in screen hangs from.
+func (s *Server) topbar(who string) string {
+	return fmt.Sprintf(`<header class="tbar slim"><span class="wordmark">soulsystem</span>`+
+		`<span class="strip">shell</span><span class="strip shell">realm · %s</span>`+
+		`<span class="spacer"></span><span class="who">%s</span><span class="led"></span></header>`,
+		esc(s.opts.Realm), esc(who))
+}
+
+// status is the house readouts — storage, sign-in, work — off the
+// conversation's side rail. They are no longer the centre of the surface,
+// so they render on request rather than once a second.
+func (s *Server) status(w http.ResponseWriter, r *http.Request) {
+	sess := s.currentSession(r)
+	if sess == nil {
+		http.Redirect(w, r, "/", http.StatusFound)
+		return
+	}
+	v := s.observe(r.Context(), r.URL.Query().Get("topic"), sess)
+	s.health(r.Context(), &v)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprintf(w, `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>system status — soulsystem</title><link rel="stylesheet" href="/assets/tokens.css">
+<script type="module" src="/assets/datastar.js"></script></head>
+<body>
+%s
+<main style="max-width:var(--content-max);margin:0 auto;padding:var(--space-8)">
+<h1 style="margin:0 0 var(--space-7)">System status</h1>
+%s
+<p style="margin-top:var(--space-8)">
+<button class="btn ghost" data-on:click="@post('/act/work-open?topic=%s')">Open work item</button></p>
 <div id="result">—</div>
+<p style="margin-top:var(--space-8)"><a href="/">← Back to conversations</a></p>
 <p class="foot">soulsystem · shell · your data lives in the realm, not here</p>
 </main></body></html>`,
-		qesc(topicPath), esc(s.opts.Realm), esc(sess.Display),
-		renderComposer(topicPath), qesc(topicPath))
+		s.topbar(sess.Display), renderPlanes(v), qesc(v.TopicPath))
 }
 
 // live is the Datastar SSE channel: the observed state re-rendered and
-// morphed into #dash. Session-gated like every realm-bearing surface.
+// morphed into the stream's own two targets — the rail of conversations and
+// the conversation itself. Session-gated like every realm-bearing surface,
+// and the session is also what tells the render whose messages are theirs.
 func (s *Server) live(w http.ResponseWriter, r *http.Request) {
-	if s.currentSession(r) == nil {
+	sess := s.currentSession(r)
+	if sess == nil {
 		http.Error(w, "sign in first", http.StatusUnauthorized)
 		return
 	}
@@ -76,8 +133,9 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 	}
 	topicPath := r.URL.Query().Get("topic")
 	for {
-		v := s.observe(r.Context(), topicPath, "")
-		writeElements(w, s.renderDash(v))
+		v := s.observe(r.Context(), topicPath, sess)
+		writeElements(w, renderRail(v))
+		writeElements(w, renderThread(v))
 		fl.Flush()
 		select {
 		case <-r.Context().Done():
@@ -116,7 +174,7 @@ func (s *Server) resolveTopic(ctx context.Context, want string) string {
 	if want != "" {
 		return want
 	}
-	return s.observe(ctx, "", "").TopicPath
+	return s.observe(ctx, "", nil).TopicPath
 }
 
 // actWorkOpen is a class-(a) mutation: an op on the record through the
@@ -204,5 +262,5 @@ func (s *Server) composerReply(w http.ResponseWriter, r *http.Request) {
 		patch(w, composerReplyTo("", ""))
 		return
 	}
-	patch(w, composerReplyTo(opID, author))
+	patch(w, composerReplyTo(opID, s.displayName(r.Context(), author)))
 }

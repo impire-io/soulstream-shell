@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"html"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -20,6 +19,7 @@ import (
 
 	"github.com/impire-io/soulstream-core/identity"
 	"github.com/impire-io/soulstream-core/realm"
+	"github.com/impire-io/soulstream-core/registry"
 	"github.com/impire-io/soulstream-core/topic"
 	siclient "github.com/impire-io/soulstream-identity/client"
 )
@@ -63,9 +63,10 @@ type Server struct {
 
 	oidcState *oidcRP
 
-	mu       sync.Mutex
-	sessions map[string]*session
-	keyCache map[string]string // persona -> public key (directory reads)
+	mu        sync.Mutex
+	sessions  map[string]*session
+	keyCache  map[string]string    // persona -> public key (directory reads)
+	nameCache map[string]nameEntry // persona -> on-screen name (registry reads)
 
 	httpSrv *http.Server
 }
@@ -78,7 +79,8 @@ func Run(ctx context.Context, opts Options) error {
 		opts.SentinelPath == "" || opts.Account == "" || opts.Issuer == "" {
 		return errors.New("shell: every Options field except Ready is required")
 	}
-	s := &Server{opts: opts, sessions: map[string]*session{}, keyCache: map[string]string{}}
+	s := &Server{opts: opts, sessions: map[string]*session{},
+		keyCache: map[string]string{}, nameCache: map[string]nameEntry{}}
 
 	var err error
 	s.nc, err = nats.Connect(opts.NATSURL, nats.UserCredentials(opts.CredsPath),
@@ -106,6 +108,7 @@ func Run(ctx context.Context, opts Options) error {
 	mux := http.NewServeMux()
 	mux.Handle("GET /assets/", http.StripPrefix("/assets/", http.FileServerFS(Assets())))
 	mux.HandleFunc("GET /{$}", s.page)
+	mux.HandleFunc("GET /status", s.status)
 	mux.HandleFunc("GET /live", s.live)
 	mux.HandleFunc("GET /login", s.login)
 	mux.HandleFunc("GET /callback", s.callback)
@@ -174,10 +177,66 @@ func (s *Server) keyringFor(mt *topic.MaterializedTopic) *identity.Keyring {
 	return kr
 }
 
+// nameEntry is one cached on-screen name. A persona the directory does not
+// name yet is remembered too, briefly, so a missing profile costs one read a
+// minute rather than one a second — and still appears when it is published.
+type nameEntry struct {
+	name  string
+	found bool
+	at    time.Time
+}
+
+// displayName resolves a persona's on-screen name from the realm's own
+// persona directory (design 0001 §6 — the shell owns the id→name mapping on
+// screen). A persona with no published profile keeps the id the record
+// carries; a directory that does not answer is not an error here.
+func (s *Server) displayName(ctx context.Context, persona string) string {
+	s.mu.Lock()
+	e, ok := s.nameCache[persona]
+	s.mu.Unlock()
+	if ok && (e.found || time.Since(e.at) < time.Minute) {
+		return e.name
+	}
+	e = nameEntry{name: persona, at: time.Now()}
+	if p, found, err := registry.Lookup(ctx, s.rc, persona); err == nil && found &&
+		p.DisplayName != "" {
+		e.name, e.found = p.DisplayName, true
+	}
+	s.mu.Lock()
+	s.nameCache[persona] = e
+	s.mu.Unlock()
+	return e.name
+}
+
+// namesFor resolves every voice in a topic once per render.
+func (s *Server) namesFor(ctx context.Context, mt *topic.MaterializedTopic) map[string]string {
+	names := map[string]string{}
+	add := func(p string) {
+		if p == "" || names[p] != "" {
+			return
+		}
+		names[p] = s.displayName(ctx, p)
+	}
+	if mt != nil {
+		for _, c := range mt.Contributions {
+			add(c.Author)
+		}
+		for _, w := range mt.WorkItems {
+			add(w.Author)
+		}
+	}
+	return names
+}
+
 // view is one render of the whole observed state.
 type view struct {
-	Realm     string
-	Who       string // "" when signed out
+	Realm string
+	// Me is the signed-in person's own principal, taken from their session
+	// and never from the request: it is what decides whose messages are
+	// theirs. "" when signed out.
+	Me string
+	// Names maps a persona to the name shown for it on screen.
+	Names     map[string]string
 	Board     []topic.BoardEntry
 	Topic     *topic.MaterializedTopic
 	TopicPath string
@@ -187,8 +246,12 @@ type view struct {
 	Err       string
 }
 
-func (s *Server) observe(ctx context.Context, topicPath, who string) view {
-	v := view{Realm: s.opts.Realm, Who: who, TopicPath: topicPath}
+func (s *Server) observe(ctx context.Context, topicPath string, sess *session) view {
+	v := view{Realm: s.opts.Realm, TopicPath: topicPath, Names: map[string]string{}}
+	if sess != nil {
+		v.Me = sess.Persona
+		v.Names[sess.Persona] = sess.Display
+	}
 	entries, err := topic.Board(ctx, s.rc)
 	if err != nil {
 		v.Err = fmt.Sprintf("board: %v", err)
@@ -210,6 +273,18 @@ func (s *Server) observe(ctx context.Context, topicPath, who string) view {
 			v.Err = fmt.Sprintf("topic %s: %v", v.TopicPath, err)
 		}
 	}
+	for p, n := range s.namesFor(ctx, v.Topic) {
+		if v.Names[p] == "" {
+			v.Names[p] = n
+		}
+	}
+	return v
+}
+
+// health fills in the house readouts. Only the system-status screen asks
+// for them: the conversation re-renders once a second and has no business
+// probing the sign-in surface that often.
+func (s *Server) health(ctx context.Context, v *view) {
 	if info, err := s.rc.JetStream().Stream(ctx, "SOULSTREAM"); err == nil {
 		if si, err := info.Info(ctx); err == nil {
 			v.StreamMsg = si.State.Msgs
@@ -217,7 +292,6 @@ func (s *Server) observe(ctx context.Context, topicPath, who string) view {
 		}
 	}
 	v.FoldOK = probe(s.opts.Issuer + "/.well-known/openid-configuration")
-	return v
 }
 
 func probe(url string) bool {
@@ -231,97 +305,3 @@ func probe(url string) bool {
 }
 
 func esc(s string) string { return html.EscapeString(s) }
-
-func trunc(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n] + "…"
-}
-
-func sigMark(v topic.SigStatus) string {
-	switch v {
-	case topic.SigVerified:
-		return `<span class="pill ok">verified</span>`
-	case topic.SigUnknownKey:
-		return `<span class="pill">unknown-key</span>`
-	case topic.SigUnsigned:
-		return `<span class="pill">unsigned</span>`
-	default:
-		return `<span class="pill warn">` + esc(string(v)) + `</span>`
-	}
-}
-
-// renderDash renders the #dash fragment — the whole observed state in
-// the cassette-light language, plain words on every label (C8).
-func (s *Server) renderDash(v view) string {
-	var b strings.Builder
-	b.WriteString(`<div id="dash">`)
-	if v.Err != "" {
-		fmt.Fprintf(&b, `<p class="lede">%s</p>`, esc(v.Err))
-	}
-	// The plane cards.
-	b.WriteString(`<div class="planes">`)
-	fmt.Fprintf(&b, `<div class="card plane"><div class="head">%s<h2>Storage</h2></div>`+
-		`<div class="row"><span class="pill ok"><span class="led machine"></span>keeping</span>`+
-		`<span class="mono">%d ops · %.1f MB</span></div></div>`,
-		Icon("cassette-tape"), v.StreamMsg, v.StreamMB)
-	fold := `<span class="pill warn">unreachable</span>`
-	if v.FoldOK {
-		fold = `<span class="pill ok"><span class="led"></span>serving</span>`
-	}
-	fmt.Fprintf(&b, `<div class="card plane"><div class="head">%s<h2>People &amp; sign-in</h2></div>`+
-		`<div class="row">%s<span class="mono">passkeys</span></div></div>`,
-		Icon("key"), fold)
-	open, claimed := 0, 0
-	if v.Topic != nil {
-		for _, w := range v.Topic.WorkItems {
-			switch string(w.Status) {
-			case "open":
-				open++
-			case "claimed":
-				claimed++
-			}
-		}
-	}
-	fmt.Fprintf(&b, `<div class="card plane"><div class="head">%s<h2>Work</h2></div>`+
-		`<div class="row"><span class="mono">open %d · claimed %d</span></div></div>`,
-		Icon("activity"), open, claimed)
-	b.WriteString(`</div>`)
-
-	// Topics table.
-	b.WriteString(`<div class="section"><div class="eyebrow">` + string(Icon("disc-3")) +
-		`<span class="strip shell">active topics</span></div><div class="tablewrap"><table>` +
-		`<thead><tr><th>Topic</th><th>Lifecycle</th></tr></thead><tbody>`)
-	for _, e := range v.Board {
-		cur := ""
-		if e.Path == v.TopicPath {
-			cur = " ▸"
-		}
-		fmt.Fprintf(&b, `<tr><td><a href="/?topic=%s"><b>%s</b></a>%s<br><span class="mono">%s</span></td><td class="mono">%s</td></tr>`,
-			esc(e.Path), esc(e.Announcement.Name), cur, esc(e.Path), esc(string(e.Lifecycle)))
-	}
-	b.WriteString(`</tbody></table></div></div>`)
-
-	// The selected topic.
-	if v.Topic != nil {
-		fmt.Fprintf(&b, `<div class="section"><div class="eyebrow">%s<span class="strip shell">latest activity · %s</span></div><div class="screen">`,
-			Icon("database"), esc(v.TopicPath))
-		for _, c := range v.Topic.Contributions {
-			lead := ""
-			if c.Anchor != "" {
-				lead = "↳ "
-			}
-			fmt.Fprintf(&b, `<p><span class="dim">%s</span> %s%s · %s %s %s</p>`,
-				c.Timestamp.Format("15:04:05"), lead, esc(trunc(c.Body, 80)),
-				esc(c.Author), sigMark(c.Sig), replyLink(v.TopicPath, c.OpID))
-		}
-		for _, w := range v.Topic.WorkItems {
-			fmt.Fprintf(&b, `<p><span class="dim">%s</span> work %q · %s · %s</p>`,
-				w.Timestamp.Format("15:04:05"), esc(w.Title), esc(string(w.Status)), esc(w.Owner))
-		}
-		b.WriteString(`<p class="dim">— recording —</p></div></div>`)
-	}
-	b.WriteString(`</div>`)
-	return b.String()
-}
