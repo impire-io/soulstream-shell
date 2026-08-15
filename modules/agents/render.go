@@ -169,8 +169,60 @@ func renderCredential(c soulstream.Credential, what string) string {
 			`this agent runs on another machine, and safe to copy: it admits nobody by itself`+
 			`<textarea readonly rows="6" data-sentinel>%s</textarea></label>`, esc(c.Sentinel))
 	}
+	b.WriteString(renderSetupGuides(c))
 	b.WriteString(`</div>`)
 	return b.String()
+}
+
+// renderSetupGuides is where the configuration above meets the program that
+// will use it: one fold per assistant people actually run, each saying — in
+// that program's own terms — where the configuration goes. Every fold repeats
+// only public halves or shapes; the one secret on this screen stays in the
+// block above, already filled in where a fold carries a block of its own.
+func renderSetupGuides(c soulstream.Credential) string {
+	var b strings.Builder
+	b.WriteString(`<div class="setup"><h3>Where this goes</h3>` +
+		`<p>One machine needs the <span class="mono">soulstream-mcp</span> program on its path ` +
+		`(<span class="mono">go install github.com/impire-io/soulstream-core/cmd/soulstream-mcp@latest</span>, ` +
+		`or a release download). Then pick your assistant:</p>`)
+
+	b.WriteString(`<details data-setup="claude-code"><summary>Claude Code</summary>` +
+		`<p>Save the configuration above as <span class="mono">.mcp.json</span> in the folder ` +
+		`the agent works from — it is already the exact file. If a <span class="mono">.mcp.json</span> ` +
+		`exists there, add the <span class="mono">"soulstream"</span> entry under its ` +
+		`<span class="mono">mcpServers</span>. The tools appear on the next start; ` +
+		`headless runs want <span class="mono">--mcp-config .mcp.json</span>.</p></details>`)
+
+	fmt.Fprintf(&b, `<details data-setup="codex"><summary>Codex</summary>`+
+		`<p>Codex reads TOML, not JSON — the same values go in `+
+		`<span class="mono">~/.codex/config.toml</span>:</p>`+
+		`<textarea readonly rows="9" data-codex-config>%s</textarea></details>`,
+		esc(codexConfig(c)))
+
+	b.WriteString(`<details data-setup="other"><summary>Anything else that speaks MCP ` +
+		`(pi.dev, opencode, …)</summary>` +
+		`<p>Every such assistant has a place to declare an MCP server. Declare one named ` +
+		`<span class="mono">soulstream</span> that runs the command ` +
+		`<span class="mono">soulstream-mcp</span> with the five environment variables from the ` +
+		`configuration above, spelled exactly that way. No arguments, no URL endpoint — ` +
+		`it is a stdio server the assistant starts itself.</p></details>`)
+
+	b.WriteString(`</div>`)
+	return b.String()
+}
+
+// codexConfig is the same configuration in the shape codex reads: one TOML
+// table in its config file, values identical to the JSON block above.
+func codexConfig(c soulstream.Credential) string {
+	return fmt.Sprintf(`[mcp_servers.soulstream]
+command = "soulstream-mcp"
+
+[mcp_servers.soulstream.env]
+SOULSTREAM_URL = %q
+SOULSTREAM_CREDS = %q
+SOULSTREAM_TOKEN = %q
+SOULSTREAM_REALM = %q
+SOULSTREAM_PERSONA = %q`, c.Dial, c.SentinelPath, c.Secret, c.Realm, c.Handle)
 }
 
 // mcpConfig is the agent's configuration as its own program reads it: the

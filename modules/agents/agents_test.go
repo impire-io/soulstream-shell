@@ -157,6 +157,46 @@ func TestTheConfigurationIsTheShapeTheAgentsOwnProgramReads(t *testing.T) {
 	}
 }
 
+// The shown-once screen also says where the configuration goes, per
+// assistant: Claude Code takes the block as its own file, codex takes the
+// same values as TOML, and everything else that speaks MCP gets the shape in
+// plain words. The codex fold repeats the exact variable names — one spelled
+// wrong is an agent that does not start.
+func TestTheCredentialScreenSaysWhereItGoes(t *testing.T) {
+	body := renderCredential(soulstream.Credential{
+		Handle: "scribe", ShownAs: "Scribe", Secret: "sit_deadbeef",
+		Dial: "nats://127.0.0.1:4222", Realm: "home",
+		SentinelPath: "/state/sentinel.creds",
+	}, "is ready")
+	for _, want := range []string{
+		"Where this goes",
+		`data-setup="claude-code"`, ".mcp.json",
+		`data-setup="codex"`, "[mcp_servers.soulstream]",
+		`data-setup="other"`, "pi.dev",
+		"go install github.com/impire-io/soulstream-core/cmd/soulstream-mcp@latest",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the set-up guidance does not carry %q", want)
+		}
+	}
+	toml := codexConfig(soulstream.Credential{
+		Handle: "scribe", Secret: "sit_deadbeef", Dial: "nats://127.0.0.1:4222",
+		Realm: "home", SentinelPath: "/state/sentinel.creds",
+	})
+	for _, want := range []string{
+		`command = "soulstream-mcp"`,
+		`SOULSTREAM_URL = "nats://127.0.0.1:4222"`,
+		`SOULSTREAM_CREDS = "/state/sentinel.creds"`,
+		`SOULSTREAM_TOKEN = "sit_deadbeef"`,
+		`SOULSTREAM_REALM = "home"`,
+		`SOULSTREAM_PERSONA = "scribe"`,
+	} {
+		if !strings.Contains(toml, want) {
+			t.Errorf("the codex shape does not carry %s", want)
+		}
+	}
+}
+
 // An empty roster is a sentence, not an empty container.
 func TestAnEmptyRosterSaysSo(t *testing.T) {
 	if !strings.Contains(renderTable(nil, nil, nil, ""), "No agents yet.") {
