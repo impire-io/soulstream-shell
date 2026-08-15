@@ -5,7 +5,7 @@ conversations of their realm and writes into them — a slim spine of
 sections at the far left, the conversations beside it, one conversation
 held to a reading measure in the middle with a composer docked under
 it, and that conversation's details (who is in it, where it stands,
-what anyone is waiting for) on the right — beside the MCP door that
+what anyone is waiting for) on the right — beside the MCP endpoint that
 serves machines. The house readouts (storage, sign-in, work) live on
 the overview and the system-status screen, both one key away on the
 spine.
@@ -18,14 +18,14 @@ Founding articles, held by the standing e2e gate:
 - **Pure consumer.** The shell is built exclusively on public, tagged
   component surfaces — soulstream's realm and topic packages,
   soulidentity's client, any OIDC authorization server (the bundled
-  soulfold by default). The e2e module's path sits outside this
+  soulstream-idp by default). The e2e module's path sits outside this
   namespace, so an `internal/` import cannot compile.
 - **Custodies nothing.** Sessions live in memory; credentials never
   reach the browser; the store of record stays the realm's. The e2e
   scans for credential-shaped leaks with a positive control.
 - **Delegated authority, never borrowed identity.** Every act rides
-  the signed-in person's own admission (sentinel + their fold-issued
-  bearer through the OIDC callout lane) and their own persona
+  the signed-in person's own admission (sentinel + the bearer their
+  sign-in issued, through the OIDC callout lane) and their own persona
   signature. The shell signs as no one.
 - **A frame anybody can build on.** The gate composes a module written
   in its own Go module, outside this namespace, importing the exported
@@ -106,7 +106,7 @@ soulnode. Standalone:
 ```
 soulstream-shell -listen 127.0.0.1:8500 -nats nats://127.0.0.1:4222 \
   -creds <read-lane.creds> -creds-user <name> -sentinel <sentinel.creds> \
-  -realm home -account <realm-account-pub> -issuer <fold-or-AS-url>
+  -realm home -account <realm-account-pub> -issuer <signin-or-AS-url>
 ```
 
 The shell registers itself with the issuer via RFC 7591 DCR at startup.

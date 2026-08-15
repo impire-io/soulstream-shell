@@ -2,6 +2,7 @@ package soulstream
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -201,5 +202,119 @@ func TestNoDeclarationMeansNoSurface(t *testing.T) {
 	sess := &Session{Persona: "owner", sp: sp, bearer: "tok-abc"}
 	if sess.Admin() != nil {
 		t.Error("a session reaches an administration surface the deployment does not run")
+	}
+}
+
+// The rest of the published contract, each call measured for the wire
+// shape the surface actually reads: the path, the method, and the body
+// spelled the way the API spells them.
+func TestEveryAdminCallSpeaksTheSurfacesOwnShapes(t *testing.T) {
+	ctx := context.Background()
+	cases := []struct {
+		name               string
+		call               func(a *Admin) error
+		method, path, body string
+	}{
+		{"create", func(a *Admin) error {
+			return a.Create(ctx, "avery", "Avery", []string{"realm"})
+		}, http.MethodPost, "/api/admin/users",
+			`{"display_name":"Avery","groups":["realm"],"username":"avery"}`},
+		{"groups", func(a *Admin) error {
+			return a.SetGroups(ctx, "avery", []string{"realm", "keeper"})
+		}, http.MethodPost, "/api/admin/users/avery/groups",
+			`{"groups":["realm","keeper"]}`},
+		{"enable", func(a *Admin) error {
+			return a.Enable(ctx, "avery")
+		}, http.MethodPost, "/api/admin/users/avery/status", `{"status":"active"}`},
+		{"client-add", func(a *Admin) error {
+			return a.CreateClient(ctx, "kiosk", "Kiosk", []string{"http://k/cb"})
+		}, http.MethodPost, "/api/admin/clients",
+			`{"client_id":"kiosk","name":"Kiosk","redirect_uris":["http://k/cb"]}`},
+		{"client-delete", func(a *Admin) error {
+			return a.DeleteClient(ctx, "kiosk")
+		}, http.MethodDelete, "/api/admin/clients/kiosk", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stub := &stubSurface{status: http.StatusOK, answer: `{}`}
+			sess, _ := sessionOn(t, stub, "brr_token")
+			if err := tc.call(sess.Admin()); err != nil {
+				t.Fatalf("%s: %v", tc.name, err)
+			}
+			if stub.bearer != "Bearer brr_token" {
+				t.Errorf("%s rode %q, want the person's own bearer", tc.name, stub.bearer)
+			}
+			if stub.method != tc.method || stub.path != tc.path {
+				t.Errorf("%s asked %s %s, want %s %s", tc.name,
+					stub.method, stub.path, tc.method, tc.path)
+			}
+			if tc.body != "" && canonJSON(t, stub.body) != tc.body {
+				t.Errorf("%s sent %s, want %s", tc.name, canonJSON(t, stub.body), tc.body)
+			}
+		})
+	}
+}
+
+// canonJSON re-marshals with sorted keys so the wire assertion is about
+// shape, not map order.
+func canonJSON(t *testing.T, raw string) string {
+	t.Helper()
+	var v map[string]any
+	if err := json.Unmarshal([]byte(raw), &v); err != nil {
+		t.Fatalf("not JSON: %q", raw)
+	}
+	out, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(out)
+}
+
+// The groups and the applications come back as the surface published them.
+func TestGroupsAndClientsComeBackWhole(t *testing.T) {
+	ctx := context.Background()
+	stub := &stubSurface{status: http.StatusOK, answer: `["admin","realm"]`}
+	sess, _ := sessionOn(t, stub, "brr")
+	groups, err := sess.Admin().Groups(ctx)
+	if err != nil || len(groups) != 2 || groups[0] != "admin" {
+		t.Fatalf("groups = %v, %v", groups, err)
+	}
+	stub2 := &stubSurface{status: http.StatusOK,
+		answer: `[{"client_id":"shell","name":"Shell","redirect_uris":["http://s/cb"]}]`}
+	sess2, _ := sessionOn(t, stub2, "brr")
+	clients, err := sess2.Admin().Clients(ctx)
+	if err != nil || len(clients) != 1 || clients[0].ClientID != "shell" ||
+		clients[0].RedirectURIs[0] != "http://s/cb" {
+		t.Fatalf("clients = %v, %v", clients, err)
+	}
+}
+
+// IsAdmin reads the person's own token, and only for the one purpose of
+// drawing the key: the roles claim carries it or it does not, and a token
+// that is not a token carries nothing.
+func TestIsAdminReadsTheTokensOwnRoles(t *testing.T) {
+	mint := func(roles string) string {
+		payload := base64.RawURLEncoding.EncodeToString(
+			[]byte(`{"sub":"u-1","roles":` + roles + `}`))
+		return "eyJhbGciOiJSUzI1NiJ9." + payload + ".sig"
+	}
+	cases := []struct {
+		name   string
+		bearer string
+		want   bool
+	}{
+		{"admin", mint(`["admin","realm"]`), true},
+		{"plain", mint(`["realm"]`), false},
+		{"no roles", mint(`[]`), false},
+		{"opaque token", "sit_notajwt", false},
+		{"empty", "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sess := &Session{bearer: tc.bearer}
+			if got := sess.IsAdmin(); got != tc.want {
+				t.Errorf("IsAdmin(%s) = %v, want %v", tc.name, got, tc.want)
+			}
+		})
 	}
 }

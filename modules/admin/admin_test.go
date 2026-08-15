@@ -2,7 +2,6 @@ package admin
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
@@ -40,30 +39,35 @@ func TestTheModuleClaimsItsOwnRoutes(t *testing.T) {
 	}
 	var rt routes
 	m.Mount(&rt)
-	want := []string{"GET /people", "POST /act/invite", "POST /act/disable"}
+	want := []string{
+		"GET /people",
+		"POST /act/person-add",
+		"POST /act/invite",
+		"POST /act/disable",
+		"POST /act/enable",
+		"POST /act/groups",
+		"POST /act/client-add",
+		"POST /act/client-delete",
+	}
 	if !reflect.DeepEqual(rt.patterns, want) {
 		t.Errorf("the module mounts %v, want %v", rt.patterns, want)
 	}
 }
 
 // Its one key on the spine carries the open conversation, so the way back
-// from here lands where the person left.
+// from here lands where the person left. The key's shape is tested here;
+// whether it is drawn at all is the session gate's business, proven in the
+// e2e — an administrator sees it, anybody else does not.
 func TestTheKeyOnTheSpineCarriesTheOpenConversation(t *testing.T) {
-	m := New(nil, nil)
-	r := httptest.NewRequest(http.MethodGet, "/people?topic=home/kitchen", nil)
-	nav := m.Nav(r)
-	if len(nav) != 1 {
-		t.Fatalf("the module contributes %d entries, want 1", len(nav))
+	entry := navEntry("home/kitchen")
+	if entry.Icon != "users" || entry.Label != "People & sign-in" {
+		t.Errorf("the entry reads %+v", entry)
 	}
-	if nav[0].Icon != "users" || nav[0].Label != "People & sign-in" {
-		t.Errorf("the entry reads %+v", nav[0])
+	if !strings.HasSuffix(entry.Href, "?topic=home%2Fkitchen") {
+		t.Errorf("the entry drops the open conversation: %q", entry.Href)
 	}
-	if !strings.HasSuffix(nav[0].Href, "?topic=home%2Fkitchen") {
-		t.Errorf("the entry drops the open conversation: %q", nav[0].Href)
-	}
-	bare := m.Nav(httptest.NewRequest(http.MethodGet, "/people", nil))
-	if bare[0].Href != "/people" {
-		t.Errorf("with no conversation open the entry reads %q", bare[0].Href)
+	if bare := navEntry(""); bare.Href != "/people" {
+		t.Errorf("with no conversation open the entry reads %q", bare.Href)
 	}
 }
 
@@ -71,7 +75,7 @@ func TestTheKeyOnTheSpineCarriesTheOpenConversation(t *testing.T) {
 // only where it means something: nothing to take away from somebody who
 // already cannot sign in.
 func TestTheScreenOffersActsOnlyWhereTheyMeanSomething(t *testing.T) {
-	body := renderPeople(people(), nil, "")
+	body := renderPeople(view{People: people()})
 	for _, want := range []string{
 		"People &amp; sign-in", "Sign-in name", "Passkeys",
 		"Daan", "avery", `class="pill ok"`, `class="pill warn"`,
@@ -82,8 +86,11 @@ func TestTheScreenOffersActsOnlyWhereTheyMeanSomething(t *testing.T) {
 			t.Errorf("the screen is missing %q", want)
 		}
 	}
-	if strings.Contains(body, "who=avery") {
+	if strings.Contains(body, "/act/disable?who=avery") {
 		t.Error("the screen offers to take a sign-in away from somebody who has none")
+	}
+	if !strings.Contains(body, "/act/enable?who=avery") {
+		t.Error("somebody shut out is offered no way back in")
 	}
 	// The plain-language rule: the screen names no component and no byname.
 	for _, banned := range []string{"realm", "fold", "idp", "soulstream-idp", "OIDC"} {
@@ -97,7 +104,7 @@ func TestTheScreenOffersActsOnlyWhereTheyMeanSomething(t *testing.T) {
 // so the table scrolls inside its own box rather than pushing the screen
 // sideways and clipping its last column off the edge of the frame.
 func TestTheTableScrollsInsideItsOwnBox(t *testing.T) {
-	body := renderPeople(people(), nil, "")
+	body := renderPeople(view{People: people()})
 	if n := strings.Count(body, "<table"); n != 1 {
 		t.Fatalf("the screen serves %d tables, want 1", n)
 	}
@@ -107,8 +114,8 @@ func TestTheTableScrollsInsideItsOwnBox(t *testing.T) {
 	// Before it scrolls, it gives: the keys in the last column stack instead
 	// of widening every row, and a sign-in name that has to wrap keeps the
 	// whole of itself in the hover.
-	if n := strings.Count(body, `<div class="acts">`); n != 1 {
-		t.Errorf("the acts stack on %d rows, want the one row that offers any", n)
+	if n := strings.Count(body, `<div class="acts">`); n != 2 {
+		t.Errorf("the acts stack on %d rows, want one per person (2)", n)
 	}
 	if !strings.Contains(body, `<td class="mono" title="owner">owner</td>`) {
 		t.Errorf("a sign-in name that wraps cannot be read whole:\n%s", body)
@@ -137,7 +144,7 @@ func TestTheInviteIsShownOnceAndSaysSo(t *testing.T) {
 func TestTheLastAdministratorIsNotOfferedTheLethalKey(t *testing.T) {
 	list := people()
 	list[0].LastAdmin = true
-	body := renderPeople(list, nil, "")
+	body := renderPeople(view{People: list})
 	if strings.Contains(body, "/act/disable?who=owner") {
 		t.Errorf("the screen offers to lock the deployment out of itself:\n%s", body)
 	}
@@ -153,7 +160,7 @@ func TestTheLastAdministratorIsNotOfferedTheLethalKey(t *testing.T) {
 	}
 	// And with a second administrator standing, the surface says so and the
 	// key comes back: the rule is about the last one, never a particular one.
-	if again := renderPeople(people(), nil, ""); !strings.Contains(again,
+	if again := renderPeople(view{People: people()}); !strings.Contains(again,
 		"/act/disable?who=owner") {
 		t.Errorf("the key never comes back:\n%s", again)
 	}
@@ -236,7 +243,7 @@ func TestTheModuleBuildsTheWayIntoItsOwnScreen(t *testing.T) {
 // it does not — plenty of voices on the record were never a sign-in, and
 // this screen only ever knew about sign-ins.
 func TestTheScreenAnswersAboutThePersonSomebodyCameFor(t *testing.T) {
-	held := renderPeople(people(), nil, "avery")
+	held := renderPeople(view{People: people(), Who: "avery"})
 	if !strings.Contains(held, `Looking up <span class="mono">avery</span>`) {
 		t.Errorf("the screen does not say who it was asked about:\n%s", held)
 	}
@@ -246,7 +253,7 @@ func TestTheScreenAnswersAboutThePersonSomebodyCameFor(t *testing.T) {
 	if !strings.Contains(held, `<tr class="on"><td>avery</td>`) {
 		t.Errorf("the marked row is not the person's:\n%s", held)
 	}
-	stranger := renderPeople(people(), nil, "u-f468aecb")
+	stranger := renderPeople(view{People: people(), Who: "u-f468aecb"})
 	if !strings.Contains(stranger,
 		`Nobody who signs in here answers to <span class="mono">u-f468aecb</span>`) {
 		t.Errorf("the screen leaves somebody hunting a row that was never there:\n%s", stranger)
@@ -256,7 +263,7 @@ func TestTheScreenAnswersAboutThePersonSomebodyCameFor(t *testing.T) {
 	}
 	// Opened from the spine rather than followed into, the screen is what it
 	// always was: no lookup line, no marked row.
-	plain := renderPeople(people(), nil, "")
+	plain := renderPeople(view{People: people()})
 	if strings.Contains(plain, "Looking up") || strings.Contains(plain, `<tr class="on">`) {
 		t.Errorf("the screen answers a question nobody asked:\n%s", plain)
 	}

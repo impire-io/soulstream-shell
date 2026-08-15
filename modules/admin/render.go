@@ -7,29 +7,72 @@ import (
 	"github.com/impire-io/soulstream-shell/soulstream"
 )
 
-// The screen: one table of the people who can sign in, two acts per row,
-// and one result line under it. Plain words throughout — a person managing
-// their colleagues' access reads about people and sign-ins, never about the
-// components that hold them.
+// The screen: the people who can sign in with the acts an administrator
+// takes on them, the form that names a new one, and the applications that
+// sign people in — with one result line under all of it. Plain words
+// throughout — a person managing their colleagues' access reads about
+// people and sign-ins, never about the components that hold them.
 
-// resultID and tableID are the screen's two patch targets. An act answers
-// with a fragment for one or both; nothing else on the page moves.
+// The screen's patch targets. An act answers with a fragment for one or
+// more; nothing else on the page moves.
 const (
-	resultID = "people-result"
-	tableID  = "people-table"
+	resultID  = "people-result"
+	tableID   = "people-table"
+	clientsID = "people-clients"
 )
 
-// renderPeople is the whole screen's body. who is the person somebody came
-// here looking for — empty when they simply opened the screen.
-func renderPeople(list []soulstream.Person, err error, who string) string {
+// view is one read of everything the screen shows.
+type view struct {
+	People     []soulstream.Person
+	Err        error
+	Groups     []string
+	Clients    []soulstream.Client
+	ClientsErr error
+	// Who is the person somebody came here looking for — empty when they
+	// simply opened the screen.
+	Who string
+}
+
+// renderPeople is the whole screen's body, in the canon's rhythm: header,
+// the form that names a new person, the roster, the applications — each a
+// section of its own.
+func renderPeople(v view) string {
 	var b strings.Builder
 	b.WriteString(`<h1>People &amp; sign-in</h1>`)
 	b.WriteString(`<p class="lede">Everyone who can sign in here, read live from the ` +
-		`sign-in surface — the shell keeps none of it.</p>`)
-	b.WriteString(lookedUpNote(list, err, who))
-	b.WriteString(renderTable(list, err, who))
+		`sign-in service — the shell keeps none of it.</p>`)
+	b.WriteString(lookedUpNote(v.People, v.Err, v.Who))
+	b.WriteString(`<div class="section">` + renderAddForm(v.Groups) + `</div>`)
+	b.WriteString(`<div class="section">` + renderTable(v.People, v.Err, v.Who) + `</div>`)
+	b.WriteString(`<div class="section">` + renderClientsSection(v.Clients, v.ClientsErr) + `</div>`)
 	b.WriteString(resultNote(""))
 	return b.String()
+}
+
+// renderAddForm names a new person. Creation grants existence, never
+// admission — the form says what happens next (an invite), so nobody is
+// left wondering why the person they added cannot sign in yet.
+func renderAddForm(groups []string) string {
+	hint := "space-separated"
+	if len(groups) > 0 {
+		hint = "space-separated — here: " + strings.Join(groups, " ")
+	}
+	return `<div class="card"><h2>Add a person</h2>` +
+		`<p class="lede">They exist from here on; they sign in only after you create ` +
+		`an invite for them and they enroll a passkey with it.</p>` +
+		`<form id="person-add" data-on:submit="@post('/act/person-add', {contentType:'form'})">` +
+		`<div class="fields">` +
+		`<label class="field">Sign-in name` +
+		`<input name="username" autocomplete="off" spellcheck="false" ` +
+		`placeholder="lowercase, no spaces"></label>` +
+		`<label class="field">Shown as` +
+		`<input name="shown" autocomplete="off" placeholder="what to call them on screen"></label>` +
+		`<label class="field">Groups` +
+		`<input name="groups" autocomplete="off" spellcheck="false" ` +
+		`placeholder="` + esc(hint) + `"></label>` +
+		`</div>` +
+		`<button class="btn" type="submit">Add person</button>` +
+		`</form></div>`
 }
 
 // lookedUpNote answers the question somebody arrived with. A name this list
@@ -78,9 +121,9 @@ func renderTable(list []soulstream.Person, err error, who string) string {
 
 // personRow is one person, marked when they are the one somebody came here
 // for. The acts are offered only where they mean something: an invite enrols
-// a passkey for somebody who may sign in, and there is nothing to take away
-// from somebody who already cannot — nor from the last person who can
-// administer sign-ins here, whose row says so instead.
+// a passkey for somebody who may sign in, somebody shut out is offered the
+// way back in, and there is nothing to take away from the last person who
+// can administer sign-ins here — whose row says so instead.
 func personRow(p soulstream.Person, lookedUp bool) string {
 	name := p.DisplayName
 	if name == "" {
@@ -95,7 +138,7 @@ func personRow(p soulstream.Person, lookedUp bool) string {
 	var acts string
 	if p.Active() {
 		// Taking this one person's sign-in away would leave nobody able to
-		// administer sign-ins at all, so the sign-in surface refuses it. The
+		// administer sign-ins at all, so the sign-in service refuses it. The
 		// screen does not offer a key that only ever earns a refusal — it
 		// says the thing the refusal would have said. Creating an invite is
 		// still offered: another passkey for the person holding the place
@@ -111,6 +154,11 @@ func personRow(p soulstream.Person, lookedUp bool) string {
 				`<button class="btn ghost" data-on:click="@post('/act/invite?who=%s')">`+
 				`Create invite</button>%s</div>`,
 			qesc(p.Username), away)
+	} else {
+		acts = fmt.Sprintf(
+			`<div class="acts">`+
+				`<button class="btn ghost" data-on:click="@post('/act/enable?who=%s')">`+
+				`Let them sign in again</button></div>`, qesc(p.Username))
 	}
 	row := "<tr>"
 	if lookedUp {
@@ -122,20 +170,79 @@ func personRow(p soulstream.Person, lookedUp bool) string {
 	return fmt.Sprintf(`%s<td>%s</td><td class="mono" title="%s">%s</td><td>%s</td>`+
 		`<td>%s</td><td class="mono">%d</td><td>%s</td></tr>`,
 		row, esc(name), esc(p.Username), esc(p.Username), state,
-		groupTags(p.Groups), p.Credentials, acts)
+		groupsCell(p), p.Credentials, acts)
 }
 
-// groupTags is what a person's token would carry, as the sign-in surface
-// spells it. The names are the deployment's own, never rewritten here.
-func groupTags(groups []string) string {
-	if len(groups) == 0 {
-		return `<span class="note">none</span>`
-	}
+// groupsCell is what a person's token would carry, editable in place: the
+// memberships as the sign-in service spells them, in a small form whose
+// save posts the whole new list. The service's rules — the last-admin
+// refusal among them — answer in its words.
+func groupsCell(p soulstream.Person) string {
+	return fmt.Sprintf(
+		`<form class="rowform" data-on:submit="@post('/act/groups?who=%s', {contentType:'form'})">`+
+			`<input name="groups" value="%s" autocomplete="off" spellcheck="false" `+
+			`aria-label="groups for %s">`+
+			`<button class="btn ghost" type="submit">Save</button></form>`,
+		qesc(p.Username), esc(strings.Join(p.Groups, " ")), esc(p.Username))
+}
+
+// renderClientsSection is the applications that sign people in: the
+// registered ones, and the form that registers another. It is its own
+// heading because it is its own kind of thing — apps, not people — and its
+// own patch target so the acts on it move nothing else.
+func renderClientsSection(clients []soulstream.Client, err error) string {
 	var b strings.Builder
-	for _, g := range groups {
-		fmt.Fprintf(&b, `<span class="pill">%s</span> `, esc(g))
+	b.WriteString(`<h2>Apps that sign people in</h2>`)
+	b.WriteString(`<p class="lede">Applications registered to sign people in here — the shell ` +
+		`itself is one of them. Each may only return people to the exact addresses listed.</p>`)
+	b.WriteString(renderClients(clients, err))
+	b.WriteString(`<div class="card"><h2>Register an app</h2>` +
+		`<form id="client-add" data-on:submit="@post('/act/client-add', {contentType:'form'})">` +
+		`<div class="fields">` +
+		`<label class="field">App id` +
+		`<input name="id" autocomplete="off" spellcheck="false" placeholder="lowercase, no spaces"></label>` +
+		`<label class="field">Shown as` +
+		`<input name="name" autocomplete="off" placeholder="what to call it on screen"></label>` +
+		`<label class="field">Return addresses` +
+		`<input name="uris" autocomplete="off" spellcheck="false" ` +
+		`placeholder="space-separated, exact"></label>` +
+		`</div>` +
+		`<button class="btn" type="submit">Register app</button>` +
+		`</form></div>`)
+	return b.String()
+}
+
+// renderClients is the registered applications, and a patch target of its
+// own so an act that changes what is true can hand back what is now true.
+func renderClients(clients []soulstream.Client, err error) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, `<div id="%s">`, clientsID)
+	switch {
+	case err != nil:
+		fmt.Fprintf(&b, `<p class="blank">%s</p>`,
+			esc(refusalWords("Reading the list of apps", err)))
+	case len(clients) == 0:
+		b.WriteString(`<p class="blank">No apps registered yet.</p>`)
+	default:
+		b.WriteString(`<div class="tablewrap"><table><thead><tr>` +
+			`<th>Name</th><th>App id</th><th>Returns people to</th><th>Actions</th>` +
+			`</tr></thead><tbody>`)
+		for _, c := range clients {
+			name := c.Name
+			if name == "" {
+				name = c.ClientID
+			}
+			fmt.Fprintf(&b, `<tr><td>%s</td><td class="mono" title="%s">%s</td>`+
+				`<td class="mono">%s</td><td><div class="acts">`+
+				`<button class="btn ghost" data-on:click="@post('/act/client-delete?id=%s')">`+
+				`Remove</button></div></td></tr>`,
+				esc(name), esc(c.ClientID), esc(c.ClientID),
+				esc(strings.Join(c.RedirectURIs, " ")), qesc(c.ClientID))
+		}
+		b.WriteString(`</tbody></table></div>`)
 	}
-	return strings.TrimSpace(b.String())
+	b.WriteString(`</div>`)
+	return b.String()
 }
 
 // renderInvite is the one answer on this screen carrying a secret. The
@@ -155,11 +262,9 @@ func renderInvite(who string, inv soulstream.Invite) string {
 }
 
 // resultNote is the screen's result line — what happened to the last act,
-// in plain words. It is also what replaces a shown-once invite the moment
-// anything else happens.
+// in plain words, and nothing at all when nothing has happened yet. The div
+// is always served: it is the patch target every act answers to, and what
+// replaces a shown-once invite the moment anything else happens.
 func resultNote(msg string) string {
-	if msg == "" {
-		msg = "—"
-	}
 	return fmt.Sprintf(`<div id="%s" class="note">%s</div>`, resultID, esc(msg))
 }

@@ -927,10 +927,10 @@ func TestShellGate(t *testing.T) {
 		`<td class="mono" title="` + ceremony.FoundingPersona + `">` +
 			ceremony.FoundingPersona + `</td>`,
 		`<span class="pill ok"><span class="led ok"></span>yes</span>`,
-		// The groups the sign-in surface holds for this person, which are
-		// the groups their own token carried here — the standing that got
-		// this list read at all.
-		`<span class="pill">admin</span>`,
+		// The groups the sign-in surface holds for this person — editable in
+		// place, because administering them is this screen's job now.
+		`@post('/act/groups?who=` + ceremony.FoundingPersona,
+		`name="groups"`,
 		`@post('/act/invite?who=` + ceremony.FoundingPersona,
 	} {
 		if !strings.Contains(screen, want) {
@@ -1055,6 +1055,74 @@ func TestShellGate(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// The whole lifecycle, shell-native: an administrator names a new
+	// person from this screen, changes their groups, shuts them out and
+	// lets them back in, and administers the applications that sign people
+	// in — the reason the shell exists as the one console.
+	const librarian = "librarian"
+	added := postForm(t, cl, r.ShellURL+"/act/person-add",
+		url.Values{"username": {librarian}, "shown": {"Librarian"}, "groups": {"realm"}})
+	if !strings.Contains(frameWith(t, added, `id="people-result"`), librarian+" exists now") {
+		t.Fatalf("adding a person did not say so:\n%s", added)
+	}
+	if !strings.Contains(frameWith(t, added, `id="people-table"`), librarian) {
+		t.Fatalf("the re-read list does not hold the new person:\n%s", added)
+	}
+	regrouped := postForm(t, cl, r.ShellURL+"/act/groups?who="+librarian,
+		url.Values{"groups": {"realm keeper"}})
+	if note := frameWith(t, regrouped, `id="people-result"`); !strings.Contains(note, "keeper") {
+		t.Fatalf("changing groups did not say what they are now:\n%s", note)
+	}
+	_ = post(t, cl, r.ShellURL+"/act/disable?who="+librarian)
+	backIn := post(t, cl, r.ShellURL+"/act/enable?who="+librarian)
+	if !strings.Contains(frameWith(t, backIn, `id="people-result"`), librarian+" can sign in again") {
+		t.Fatalf("enabling did not say so:\n%s", backIn)
+	}
+
+	// The applications, administered from the same screen: registered,
+	// listed on a re-read of the surface, and removed.
+	appsOn := get(t, cl, r.ShellURL+"/people")
+	if !strings.Contains(appsOn, "Apps that sign people in") ||
+		!strings.Contains(appsOn, `id="people-clients"`) {
+		t.Fatalf("the screen does not administer the apps:\n%s", appsOn)
+	}
+	registered := postForm(t, cl, r.ShellURL+"/act/client-add", url.Values{
+		"id": {"kiosk"}, "name": {"Kiosk"}, "uris": {"http://127.0.0.1:9999/cb"}})
+	if !strings.Contains(frameWith(t, registered, `id="people-clients"`), "kiosk") {
+		t.Fatalf("the registered app is not on the re-read list:\n%s", registered)
+	}
+	removed := post(t, cl, r.ShellURL+"/act/client-delete?id=kiosk")
+	if strings.Contains(frameWith(t, removed, `id="people-clients"`), `title="kiosk"`) {
+		t.Fatalf("the removed app is still on the list:\n%s", removed)
+	}
+
+	// Administration is the administrators': a person without the role is
+	// shown no key to this screen, and when they come anyway the sign-in
+	// surface — not the shell — refuses them, in its own words.
+	librarianInvite := post(t, cl, r.ShellURL+"/act/invite?who="+librarian)
+	lm := inviteRe.FindStringSubmatch(frameWith(t, librarianInvite, `id="people-result"`))
+	if lm == nil {
+		t.Fatalf("no invite for the librarian:\n%s", librarianInvite)
+	}
+	librarianAuth, err := authtest.New("localhost", r.Issuer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.EnrollWith(librarianAuth, librarian, lm[1]); err != nil {
+		t.Fatal(err)
+	}
+	lcl, lhome, err := r.SignIn(librarianAuth, librarian)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(lhome, "People &amp; sign-in") {
+		t.Fatalf("a person who cannot administer sign-ins is shown the key:\n%s", lhome)
+	}
+	asLibrarian := get(t, lcl, r.ShellURL+"/people")
+	if !strings.Contains(asLibrarian, "needs an account that administers sign-ins") {
+		t.Fatalf("the surface's refusal did not reach the screen:\n%s", asLibrarian)
+	}
+
 	// The other act, now that it means something: taking a sign-in away,
 	// and the screen re-reads the surface rather than believing the click.
 	// The list that comes back is the sign-in surface's own answer to a
@@ -1072,8 +1140,11 @@ func TestShellGate(t *testing.T) {
 	if !strings.Contains(table, `<span class="pill warn">no</span>`) {
 		t.Fatalf("the re-read list still says they can sign in:\n%s", table)
 	}
-	if strings.Contains(table, "/act/disable?who=") {
+	if strings.Contains(table, "/act/disable?who="+ceremony.FoundingPersona) {
 		t.Fatalf("the screen offers to take away a sign-in that is already gone:\n%s", table)
+	}
+	if !strings.Contains(table, "/act/enable?who="+ceremony.FoundingPersona) {
+		t.Fatalf("somebody shut out is offered no way back in:\n%s", table)
 	}
 
 	// Sign out closes the session.

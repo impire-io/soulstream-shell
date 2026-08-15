@@ -119,6 +119,72 @@ func (a *Admin) Disable(ctx context.Context, username string) error {
 		map[string]any{"status": "disabled"}, nil)
 }
 
+// Enable is Disable undone: the surface accepts them again.
+func (a *Admin) Enable(ctx context.Context, username string) error {
+	return a.do(ctx, http.MethodPost,
+		"/api/admin/users/"+url.PathEscape(username)+"/status",
+		map[string]any{"status": "active"}, nil)
+}
+
+// Create names a new person. They exist from here on but cannot sign in
+// until an invite enrolls their passkey — creation grants existence, never
+// admission, which is the surface's own rule and stays there.
+func (a *Admin) Create(ctx context.Context, username, displayName string, groups []string) error {
+	return a.do(ctx, http.MethodPost, "/api/admin/users", map[string]any{
+		"username": username, "display_name": displayName, "groups": groups,
+	}, nil)
+}
+
+// SetGroups replaces somebody's group memberships — the names their next
+// token carries as roles. The surface's own rules apply, the last-admin
+// refusal among them.
+func (a *Admin) SetGroups(ctx context.Context, username string, groups []string) error {
+	return a.do(ctx, http.MethodPost,
+		"/api/admin/users/"+url.PathEscape(username)+"/groups",
+		map[string]any{"groups": groups}, nil)
+}
+
+// Groups is every group name the surface knows — what a screen offers
+// where a person types memberships.
+func (a *Admin) Groups(ctx context.Context) ([]string, error) {
+	var out []string
+	if err := a.do(ctx, http.MethodGet, "/api/admin/groups", nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// Client is one application that signs people in through this deployment's
+// sign-in service — the shape the surface publishes, consumed as JSON.
+type Client struct {
+	ClientID     string   `json:"client_id"`
+	Name         string   `json:"name"`
+	RedirectURIs []string `json:"redirect_uris"`
+}
+
+// Clients is every application registered to sign people in.
+func (a *Admin) Clients(ctx context.Context) ([]Client, error) {
+	var out []Client
+	if err := a.do(ctx, http.MethodGet, "/api/admin/clients", nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// CreateClient registers an application: an id, a name to show people,
+// and the exact redirect URIs it may return them to.
+func (a *Admin) CreateClient(ctx context.Context, id, name string, redirectURIs []string) error {
+	return a.do(ctx, http.MethodPost, "/api/admin/clients", map[string]any{
+		"client_id": id, "name": name, "redirect_uris": redirectURIs,
+	}, nil)
+}
+
+// DeleteClient unregisters an application. Sign-ins it already completed
+// are history and stay; new ones stop.
+func (a *Admin) DeleteClient(ctx context.Context, id string) error {
+	return a.do(ctx, http.MethodDelete, "/api/admin/clients/"+url.PathEscape(id), nil, nil)
+}
+
 // do carries one call as this person. A refusal comes back as a *Refusal
 // carrying what the surface said; anything else is the surface being
 // unreachable, which is a different thing and reads differently on screen.

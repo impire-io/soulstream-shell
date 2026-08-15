@@ -2,6 +2,10 @@ package soulstream
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
+	"slices"
+	"strings"
 	"sync"
 
 	"github.com/nats-io/nats.go"
@@ -60,6 +64,35 @@ func (sess *Session) Admin() *Admin {
 		return nil
 	}
 	return &Admin{base: sess.sp.cfg.AdminBase, bearer: sess.bearer, cl: sess.sp.adminCl}
+}
+
+// adminRole is the group name whose members administer sign-ins — part of
+// the sign-in surface's published contract (its tokens carry group names as
+// the roles claim, and its admin API admits exactly this one), consumed
+// here the way the rest of that contract is: as the wire spells it.
+const adminRole = "admin"
+
+// IsAdmin reports whether this person's own token carries the admin role.
+// It is read locally from the bearer's claims for exactly one purpose:
+// whether to draw the administration key on the spine. A display fact, not
+// an authority — every administrative act still carries the bearer to the
+// sign-in surface, whose verified refusal is the answer that counts.
+func (sess *Session) IsAdmin() bool {
+	parts := strings.Split(sess.bearer, ".")
+	if len(parts) != 3 {
+		return false
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return false
+	}
+	var claims struct {
+		Roles []string `json:"roles"`
+	}
+	if err := json.Unmarshal(raw, &claims); err != nil {
+		return false
+	}
+	return slices.Contains(claims.Roles, adminRole)
 }
 
 // ScreenName is what to call this person on screen: what the issuer said
