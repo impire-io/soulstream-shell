@@ -569,6 +569,50 @@ margin:var(--space-3) 0 0;font:var(--type-data);font-size:var(--text-xs);color:v
 .readout .cap{font:var(--type-label);letter-spacing:var(--tracking-label);text-transform:uppercase;
 color:var(--text-faint)}
 
+/* --- Set-up guidance on the credential card --------------------------
+   The shown-once card leads with the paste block — the product's promise
+   is one binary, one paste (design soulstream/0002 §4) — and folds the
+   hard paths under it. Folds are quiet cards: hairline edge, molded
+   summary row, a chevron drawn in ink that turns on open, content held
+   to the reading measure. */
+.setup{margin-top:var(--space-9)}
+.setup h3{margin:0 0 var(--space-3);font:var(--type-heading);font-size:var(--text-md)}
+.setup>p{margin:0 0 var(--space-6);max-width:var(--measure);color:var(--text-secondary)}
+.setup .steps{margin:0 0 var(--space-6);padding-left:var(--space-8);max-width:var(--measure);
+color:var(--text-secondary)}
+.setup .steps li{margin-bottom:var(--space-4)}
+.setup .steps li::marker{color:var(--text-muted);font-weight:var(--weight-bold)}
+.setup textarea{width:100%;font:var(--type-data)}
+.setup .act{margin:var(--space-5) 0 var(--space-8)}
+.setup details{background:var(--surface-card);border:var(--border-width) solid var(--border-hairline);
+border-radius:var(--radius-md);box-shadow:var(--shadow-key);margin-bottom:var(--space-4)}
+.setup summary{display:flex;align-items:center;gap:var(--space-5);
+padding:var(--space-5) var(--space-6);font:var(--type-ui);cursor:pointer;list-style:none;
+transition:var(--transition-control)}
+.setup summary::-webkit-details-marker{display:none}
+.setup summary::before{content:"";flex:none;width:7px;height:7px;
+border-right:var(--border-width-thick) solid var(--text-muted);
+border-bottom:var(--border-width-thick) solid var(--text-muted);
+transform:rotate(-45deg);transition:transform var(--dur-base) var(--ease-mech)}
+.setup details[open]>summary::before{transform:rotate(45deg)}
+.setup summary:hover{background:var(--surface-inset)}
+.setup details[open]>summary{border-bottom:var(--border-width) solid var(--border-hairline)}
+.setup .fold{padding:var(--space-6)}
+.setup .fold>p{margin:0 0 var(--space-5);max-width:var(--measure);color:var(--text-secondary)}
+.setup .fold>p:last-child{margin-bottom:0}
+
+/* The add-form's fields stand clear of the card's own lede. */
+.card form{margin-top:var(--space-6)}
+
+/* The roster reads at arm's length: a row of names and keys takes one
+   step more air than the shared layer's default (canon: dense, never
+   cramped). */
+tbody td{padding-block:var(--space-5)}
+
+/* A plane card's pointer line — the overview's quiet way onward. */
+.plane .hint{margin:var(--space-4) 0 0;font:var(--type-body);font-size:var(--text-sm);
+color:var(--text-muted)}
+
 /* --- The sign-in card ------------------------------------------------
    The one screen behind no session: a wordmark, one panel, one key. */
 

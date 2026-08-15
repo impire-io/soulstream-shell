@@ -129,6 +129,31 @@ func renderPlanes(v view) string {
 	return b.String()
 }
 
+// agentsCard is the way from the front door to an agent of your own — on
+// deployments that issue agent credentials at all, which is a declared fact
+// read through the support layer: this module knows nothing of the agents
+// screen it links to beyond the deployment's own word that it is there.
+// Empty roster, the pointer; standing roster, the counts; unreadable, the
+// honest word rather than a zero nobody measured.
+func agentsCard(v view) string {
+	if !v.AgentsOn {
+		return ""
+	}
+	var body string
+	switch {
+	case v.AgentsUnread:
+		body = `<div class="row"><span class="pill warn">unreadable right now</span></div>`
+	case v.AgentsNamed == 0:
+		body = `<div class="row"><span class="mono">none yet</span></div>` +
+			`<p class="hint"><a href="/agents">Set one up</a> — your assistant gets a name ` +
+			`of its own and answers mentions for you.</p>`
+	default:
+		body = fmt.Sprintf(`<div class="row"><span class="mono">%d named · %d can get in</span></div>`+
+			`<p class="hint"><a href="/agents">Manage them</a></p>`, v.AgentsNamed, v.AgentsIn)
+	}
+	return planeCard("radio", "Agents", body)
+}
+
 // renderOverview is the Home screen's body: what the house is doing, and
 // the way into every conversation from anywhere.
 func renderOverview(v view) string {
@@ -146,6 +171,7 @@ func renderOverview(v view) string {
 	b.WriteString(planeCard("messages-square", "Talking",
 		fmt.Sprintf(`<div class="row"><span class="mono">%d %s</span></div>`,
 			len(v.Board), rooms)))
+	b.WriteString(agentsCard(v))
 	b.WriteString(`</div>`)
 
 	b.WriteString(`<h2 class="section label">Conversations</h2>`)

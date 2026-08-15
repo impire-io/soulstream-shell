@@ -185,7 +185,16 @@ type view struct {
 	StreamBytes uint64
 	StreamRoof  int64
 	FoldOK      bool
-	Err         string
+	// AgentsOn says this deployment issues agent credentials — the same
+	// declared fact the agents screen exists by, read through the support
+	// layer so this module needs no knowledge of that one. Named counts how
+	// many agents the record holds; In, how many can still get in. Unread
+	// is true when the roster could not be read, so the card can say so
+	// instead of showing a zero it did not measure.
+	AgentsOn              bool
+	AgentsNamed, AgentsIn int
+	AgentsUnread          bool
+	Err                   string
 }
 
 // observe reads everything both screens show: the conversations, the open
@@ -229,6 +238,20 @@ func (m *Module) health(ctx context.Context, v *view) {
 		}
 	}
 	v.FoldOK = m.sp.SignInServing()
+	if ag := m.sp.Agents(); ag != nil {
+		v.AgentsOn = true
+		list, err := ag.List(ctx)
+		if err != nil {
+			v.AgentsUnread = true
+			return
+		}
+		v.AgentsNamed = len(list)
+		for _, a := range list {
+			if a.Admitted() {
+				v.AgentsIn++
+			}
+		}
+	}
 }
 
 // defaultTopic is the conversation an act falls back to when the screen

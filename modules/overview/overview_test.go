@@ -197,3 +197,29 @@ func TestNothingServedSaysTheRetiredWord(t *testing.T) {
 		}
 	}
 }
+
+// The overview points the way to an agent of your own — on deployments that
+// issue agent credentials at all. No agents yet is a pointer, a standing
+// roster is its counts, an unreadable roster says so, and a deployment that
+// issues nothing shows no card to a screen it does not have.
+func TestTheOverviewPointsAtTheAgentsScreen(t *testing.T) {
+	if got := agentsCard(view{}); got != "" {
+		t.Errorf("a deployment with no agents surface grew a card:\n%s", got)
+	}
+	empty := agentsCard(view{AgentsOn: true})
+	for _, want := range []string{`href="/agents"`, "Set one up", "none yet"} {
+		if !strings.Contains(empty, want) {
+			t.Errorf("the empty-roster card does not carry %q:\n%s", want, empty)
+		}
+	}
+	standing := agentsCard(view{AgentsOn: true, AgentsNamed: 2, AgentsIn: 1})
+	for _, want := range []string{"2 named", "1 can get in", `href="/agents"`} {
+		if !strings.Contains(standing, want) {
+			t.Errorf("the standing-roster card does not carry %q:\n%s", want, standing)
+		}
+	}
+	unread := agentsCard(view{AgentsOn: true, AgentsUnread: true})
+	if !strings.Contains(unread, "unreadable") || strings.Contains(unread, "none yet") {
+		t.Errorf("an unreadable roster is not reported honestly:\n%s", unread)
+	}
+}

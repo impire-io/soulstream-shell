@@ -135,8 +135,9 @@ func TestTheCredentialIsShownOnceAndSaysSo(t *testing.T) {
 	}
 }
 
-// The configuration is emitted in the shape the stdio server actually reads:
-// the exact variable names that program resolves its lane from, spelled its
+// The configuration is emitted in the shape an MCP client actually reads:
+// the one product binary as the door (command soulstream, argument mcp) and
+// the exact variable names the door resolves its lane from, spelled its
 // way. Getting one wrong is an agent that does not start.
 func TestTheConfigurationIsTheShapeTheAgentsOwnProgramReads(t *testing.T) {
 	got := mcpConfig(soulstream.Credential{
@@ -144,7 +145,8 @@ func TestTheConfigurationIsTheShapeTheAgentsOwnProgramReads(t *testing.T) {
 		Realm: "home", SentinelPath: "/state/sentinel.creds",
 	})
 	for _, want := range []string{
-		`"command": "soulstream-mcp"`,
+		`"command": "soulstream"`,
+		`"args": ["mcp"]`,
 		`"SOULSTREAM_URL": "nats://127.0.0.1:4222"`,
 		`"SOULSTREAM_CREDS": "/state/sentinel.creds"`,
 		`"SOULSTREAM_TOKEN": "sit_deadbeef"`,
@@ -157,36 +159,100 @@ func TestTheConfigurationIsTheShapeTheAgentsOwnProgramReads(t *testing.T) {
 	}
 }
 
-// The shown-once screen also says where the configuration goes, per
-// assistant: Claude Code takes the block as its own file, codex takes the
-// same values as TOML, and everything else that speaks MCP gets the shape in
-// plain words. The codex fold repeats the exact variable names — one spelled
-// wrong is an agent that does not start.
-func TestTheCredentialScreenSaysWhereItGoes(t *testing.T) {
+// The paste block is the primary path and holds the product's promise (one
+// binary, one paste — design soulstream/0002 §4): it writes the credentials
+// file itself so the same block works on any machine, and it stays portable
+// across POSIX shells and fish — no heredoc, no export.
+func TestThePasteBlockIsPortableAndWhole(t *testing.T) {
+	block := wrapBlock(soulstream.Credential{
+		Handle: "scribe", Secret: "sit_deadbeef", Dial: "nats://127.0.0.1:4222",
+		Realm: "home", SentinelPath: "/state/sentinel.creds",
+		Sentinel: "-----BEGIN NATS USER JWT-----",
+	})
+	for _, want := range []string{
+		`mkdir -p "$HOME/.soulstream"`,
+		`printf '%s' '-----BEGIN NATS USER JWT-----' > "$HOME/.soulstream/scribe.creds"`,
+		`env SOULSTREAM_URL='nats://127.0.0.1:4222'`,
+		`SOULSTREAM_CREDS="$HOME/.soulstream/scribe.creds"`,
+		`SOULSTREAM_TOKEN='sit_deadbeef'`,
+		`SOULSTREAM_REALM='home'`,
+		`SOULSTREAM_PERSONA='scribe'`,
+		"soulstream wrap --harness claude",
+	} {
+		if !strings.Contains(block, want) {
+			t.Errorf("the paste block does not carry %q:\n%s", want, block)
+		}
+	}
+	for _, banned := range []string{"<<", "export ", "go install"} {
+		if strings.Contains(block, banned) {
+			t.Errorf("the paste block carries %q, which not every shell runs:\n%s", banned, block)
+		}
+	}
+	// With no sentinel to inline, the block points at the deployment's own
+	// file instead of writing one — the honest local-machine fallback.
+	local := wrapBlock(soulstream.Credential{
+		Handle: "scribe", Secret: "sit_deadbeef", Dial: "nats://127.0.0.1:4222",
+		Realm: "home", SentinelPath: "/state/sentinel.creds",
+	})
+	if strings.Contains(local, "mkdir") || !strings.Contains(local, `SOULSTREAM_CREDS='/state/sentinel.creds'`) {
+		t.Errorf("the sentinel-less block does not fall back to the deployment's path:\n%s", local)
+	}
+}
+
+// The operator cell carries a person's name with the handle beside it — and
+// when the record offers no name beyond the handle, the handle stands alone
+// rather than beside a copy of itself.
+func TestTheOperatorCellDoesNotSayANameTwice(t *testing.T) {
+	body := renderTable(agentList(), nil, nil, "")
+	if strings.Contains(body, "u-daan <span") || strings.Contains(body, "u-daan @u-daan") {
+		t.Errorf("an unnamed operator is printed twice:\n%s", body)
+	}
+	if !strings.Contains(body, `<span class="mono">@u-daan</span>`) {
+		t.Errorf("the handle does not stand alone when it is all there is:\n%s", body)
+	}
+}
+
+// The shown-once screen leads with the paste block — running the agent is
+// the primary path, above every fold — and keeps the hard paths possible
+// under it: Claude Code takes the block as its own file, codex takes the
+// same values as TOML, and everything else that speaks MCP gets the shape
+// in plain words. Nothing on the card asks for a toolchain.
+func TestTheCredentialScreenLeadsWithTheWrap(t *testing.T) {
 	body := renderCredential(soulstream.Credential{
 		Handle: "scribe", ShownAs: "Scribe", Secret: "sit_deadbeef",
 		Dial: "nats://127.0.0.1:4222", Realm: "home",
-		SentinelPath: "/state/sentinel.creds",
+		SentinelPath: "/state/sentinel.creds", Sentinel: "-----BEGIN NATS USER JWT-----",
 	}, "is ready")
 	for _, want := range []string{
-		"Where this goes",
+		"Run your agent",
+		`data-setup="wrap"`, `data-wrap-command`,
+		"soulstream wrap --harness claude",
+		"https://github.com/impire-io/soulstream/releases",
+		"Copy the block",
+		"Other ways to connect it",
 		`data-setup="claude-code"`, ".mcp.json",
 		`data-setup="codex"`, "[mcp_servers.soulstream]",
 		`data-setup="other"`, "pi.dev",
-		`data-setup="wrap"`, "soulstream wrap --harness claude",
-		"go install github.com/impire-io/soulstream-core/cmd/soulstream-mcp@latest",
-		"go install github.com/impire-io/soulstream-workloads/cmd/soulstream-wrap@latest",
+		`data-setup="creds"`, "data-sentinel",
 	} {
 		if !strings.Contains(body, want) {
-			t.Errorf("the set-up guidance does not carry %q", want)
+			t.Errorf("the credential card does not carry %q", want)
 		}
+	}
+	if strings.Contains(body, "go install") {
+		t.Error("the credential card asks for a Go toolchain")
+	}
+	// The paste block comes before every fold: the easy path is first.
+	if strings.Index(body, "data-wrap-command") > strings.Index(body, "<details") {
+		t.Error("the paste block does not lead the card")
 	}
 	toml := codexConfig(soulstream.Credential{
 		Handle: "scribe", Secret: "sit_deadbeef", Dial: "nats://127.0.0.1:4222",
 		Realm: "home", SentinelPath: "/state/sentinel.creds",
 	})
 	for _, want := range []string{
-		`command = "soulstream-mcp"`,
+		`command = "soulstream"`,
+		`args = ["mcp"]`,
 		`SOULSTREAM_URL = "nats://127.0.0.1:4222"`,
 		`SOULSTREAM_CREDS = "/state/sentinel.creds"`,
 		`SOULSTREAM_TOKEN = "sit_deadbeef"`,
