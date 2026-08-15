@@ -173,7 +173,9 @@ func TestTheCredentialScreenSaysWhereItGoes(t *testing.T) {
 		`data-setup="claude-code"`, ".mcp.json",
 		`data-setup="codex"`, "[mcp_servers.soulstream]",
 		`data-setup="other"`, "pi.dev",
+		`data-setup="wrap"`, "soulstream wrap --harness claude",
 		"go install github.com/impire-io/soulstream-core/cmd/soulstream-mcp@latest",
+		"go install github.com/impire-io/soulstream-workloads/cmd/soulstream-wrap@latest",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the set-up guidance does not carry %q", want)

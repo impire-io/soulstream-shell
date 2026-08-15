@@ -207,6 +207,20 @@ func renderSetupGuides(c soulstream.Credential) string {
 		`configuration above, spelled exactly that way. No arguments, no URL endpoint — ` +
 		`it is a stdio server the assistant starts itself.</p></details>`)
 
+	b.WriteString(`<details data-setup="wrap"><summary>Make it answer mentions on its own</summary>` +
+		`<p>One command wraps the assistant on your machine — your sign-ins, your ` +
+		`configuration — so mentions of this agent become answers even when nobody is ` +
+		`sitting at it. Export the five values above in your shell ` +
+		`(<span class="mono">export SOULSTREAM_URL=… SOULSTREAM_CREDS=… SOULSTREAM_TOKEN=… ` +
+		`SOULSTREAM_REALM=… SOULSTREAM_PERSONA=…</span>), then run:</p>` +
+		`<p><span class="mono">soulstream wrap --harness claude</span> — or ` +
+		`<span class="mono">codex</span>, or <span class="mono">--template your-file.json</span> ` +
+		`for anything else with a machine-readable finish.</p>` +
+		`<p>It needs the wrapper beside the CLI ` +
+		`(<span class="mono">go install github.com/impire-io/soulstream-workloads/cmd/soulstream-wrap@latest</span>). ` +
+		`Mentions sent while it was off are answered when it starts; stop it any time — ` +
+		`nothing is lost, and taking the credential away above stops it for good.</p></details>`)
+
 	b.WriteString(`</div>`)
 	return b.String()
 }
