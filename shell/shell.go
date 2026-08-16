@@ -30,6 +30,14 @@ import (
 type Options struct {
 	// Listen is the loopback HTTP address for the surface.
 	Listen string
+	// PublicURL is the origin browsers actually reach this surface on
+	// when the deployment fronts the loopback listener (TLS
+	// termination, a tailnet serve, a reverse proxy) — the OAuth
+	// redirect the shell registers is built from it, because a callback
+	// aimed at the bound address dead-ends in the visitor's own
+	// machine. Empty means the bound address IS the reachable origin
+	// (the bundle's loopback browser), which stays the default.
+	PublicURL string
 	// Issuer is the OIDC authorization server people sign in through. The
 	// shell registers itself there via RFC 7591 DCR at startup — no
 	// pre-provisioned client.

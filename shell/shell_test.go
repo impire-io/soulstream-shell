@@ -482,3 +482,21 @@ func TestAScreenIsAModulesBodyInTheFrame(t *testing.T) {
 		t.Errorf("a still screen loads the streaming runtime:\n%s", quiet)
 	}
 }
+
+// TestRedirectBase: the OAuth callback is built from the origin a
+// browser can actually reach — the advertised PublicURL when the
+// deployment fronts the listener, the bound address otherwise. A
+// callback aimed at the bound address behind a front dead-ends in the
+// visitor's own machine (found live: the first fronted deployment's
+// sign-in bounced to the visitor's 127.0.0.1).
+func TestRedirectBase(t *testing.T) {
+	if got := redirectBase(Options{}, "127.0.0.1:8500"); got != "http://127.0.0.1:8500" {
+		t.Fatalf("bundle default: %q", got)
+	}
+	if got := redirectBase(Options{PublicURL: "https://shell.example:8443"}, "127.0.0.1:8500"); got != "https://shell.example:8443" {
+		t.Fatalf("fronted: %q", got)
+	}
+	if got := redirectBase(Options{PublicURL: "https://shell.example/"}, "127.0.0.1:8500"); got != "https://shell.example" {
+		t.Fatalf("trailing slash not trimmed: %q", got)
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -128,6 +129,16 @@ type oidcRP struct {
 	pending  map[string]string // oauth state -> PKCE verifier
 }
 
+// redirectBase is the origin the browser can actually reach this
+// surface on: the advertised PublicURL when the deployment fronts the
+// loopback listener, the bound address itself otherwise.
+func redirectBase(opts Options, boundAddr string) string {
+	if opts.PublicURL != "" {
+		return strings.TrimSuffix(opts.PublicURL, "/")
+	}
+	return "http://" + boundAddr
+}
+
 // newOIDCRP discovers the issuer and registers the shell through
 // RFC 7591 DCR — no pre-provisioned client.
 func newOIDCRP(ctx context.Context, opts Options, boundAddr string) (*oidcRP, error) {
@@ -153,7 +164,7 @@ func newOIDCRP(ctx context.Context, opts Options, boundAddr string) (*oidcRP, er
 	if err := provider.Claims(&meta); err != nil || meta.RegistrationEndpoint == "" {
 		return nil, fmt.Errorf("issuer publishes no registration_endpoint (%v)", err)
 	}
-	redirect := "http://" + boundAddr + "/callback"
+	redirect := redirectBase(opts, boundAddr) + "/callback"
 	reg, _ := json.Marshal(map[string]any{
 		"redirect_uris":              []string{redirect},
 		"client_name":                opts.ClientName,

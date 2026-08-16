@@ -25,6 +25,11 @@ import (
 type Options struct {
 	// Listen is the loopback HTTP address for the shell surface.
 	Listen string
+	// PublicURL is the origin browsers reach the surface on when the
+	// deployment fronts the loopback listener — the OAuth callback is
+	// built from it. Empty means the bound address is the reachable
+	// origin (the bundle's default).
+	PublicURL string
 	// NATSURL reaches the realm's server.
 	NATSURL string
 	// CredsPath and CredsUser are the shell's own read lane.
@@ -71,6 +76,7 @@ const sessionCookie = "helm_session"
 func Run(ctx context.Context, o Options) error {
 	sh, err := shell.New(shell.Options{
 		Listen:        o.Listen,
+		PublicURL:     o.PublicURL,
 		Issuer:        o.Issuer,
 		ClientName:    "soulstream-shell",
 		SessionCookie: sessionCookie,
