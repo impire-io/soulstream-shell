@@ -12,6 +12,7 @@ package conversations
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -95,14 +96,19 @@ func (m *Module) Nav(r *http.Request) []shell.NavEntry {
 	}}
 }
 
-// Mount claims the conversation screen, its live channel, the act a person
-// takes from it, and the composer's own two lanes.
+// Mount claims the conversation screen, its live channel, the acts a
+// person takes from it — posting, starting, closing, archiving — and the
+// composer's own two lanes.
 func (m *Module) Mount(rt shell.Router) {
 	rt.HandleFunc("GET /{$}", m.chat)
 	rt.HandleFunc("GET /live", m.live)
 	rt.HandleFunc("POST /act/post-turn", m.actPostTurn)
 	rt.HandleFunc("GET /composer/reply", m.composerReply)
 	rt.HandleFunc("GET /composer/suggest", m.composerSuggest)
+	rt.HandleFunc("POST /act/conversation-start", m.actStart)
+	rt.HandleFunc("POST /act/conversation-close", m.actClose)
+	rt.HandleFunc("POST /act/conversation-archive", m.actArchive)
+	rt.HandleFunc("GET /lifecycle/archive-ask", m.archiveAsk)
 }
 
 // topicQuery carries the open conversation across screens.
@@ -156,11 +162,20 @@ func (m *Module) chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	topicPath := r.URL.Query().Get("topic")
+	// Whether this conversation is archived is read once, at the page, so
+	// the composer is never offered where the record would refuse it. The
+	// default conversation needs no read: the default skips archived ones.
+	archived := false
+	if topicPath != "" {
+		if mt, err := topic.Open(m.sp.Reader(), topicPath).Materialise(r.Context()); err == nil {
+			archived = mt.Lifecycle == topic.Archived
+		}
+	}
 	m.sh.Render(w, r, shell.Page{
 		Section: section,
 		Live:    true,
 		Init:    fmt.Sprintf("@get('/live?topic=%s')", qesc(topicPath)),
-		Body:    chatBody(topicPath),
+		Body:    chatBody(topicPath, archived),
 		Tail:    "\n" + stickScript + "\n" + mentionScript + "\n",
 	})
 }
@@ -179,11 +194,24 @@ func (m *Module) chat(w http.ResponseWriter, r *http.Request) {
 // load, and a drawer that outlived one would be a drawer standing over the
 // very thing it was asked for. It survives every morph, which is also right:
 // the stream writes the list inside this markup, never this markup.
-func chatBody(topicPath string) string {
+//
+// The fold where a conversation begins sits between the head and the list —
+// served once, morphed never, so a half-written name survives every tick.
+// On an archived conversation the composer's place is a quiet note: the
+// record would refuse the write, so the surface does not offer it. And the
+// last element is the lifecycle acts' own answer dock, empty until an act
+// speaks — the one target beside the details panel that the stream never
+// writes.
+func chatBody(topicPath string, archived bool) string {
+	dock := renderComposer(topicPath)
+	if archived {
+		dock = archivedDock()
+	}
 	return fmt.Sprintf(`<aside class="rail" data-class:open="$panel">
 <div class="rail-head">%s<h2 class="label">Conversations</h2>
 <button type="button" class="rail-shut" title="Hide the conversations"
  aria-label="Hide the conversations" data-on:click="$panel = false">%s</button></div>
+%s
 <nav id="conversations" class="rail-list"><p class="rail-note">loading…</p></nav>
 </aside>
 <div class="rail-scrim" data-on:click="$panel = false"></div>
@@ -191,9 +219,10 @@ func chatBody(topicPath string) string {
 <div id="dash" class="thread-body"><p class="blank">loading…</p></div>
 %s
 </section>
-<aside id="details" class="details"><p class="det-note">loading…</p></aside>`,
+<aside id="details" class="details"><p class="det-note">loading…</p></aside>
+%s`,
 		shell.Icon("messages-square"), shell.Icon("chevrons-right"),
-		renderComposer(topicPath))
+		startFold(), dock, lifeNote(""))
 }
 
 // stickScript keeps the newest message in view.
@@ -284,8 +313,8 @@ func (m *Module) observe(ctx context.Context, topicPath string, sess *soulstream
 	}
 	v.Board = entries
 	v.Unread = sess.Standing(entries)
-	if v.TopicPath == "" && len(entries) > 0 {
-		v.TopicPath = entries[len(entries)-1].Path
+	if v.TopicPath == "" {
+		v.TopicPath = soulstream.LastLive(entries)
 	}
 	if v.TopicPath != "" {
 		th := topic.Open(m.sp.Reader(), v.TopicPath)
@@ -403,6 +432,13 @@ func (m *Module) actPostTurn(w http.ResponseWriter, r *http.Request) {
 		m.peopleIn(r.Context(), sess, topicPath))
 	id, err := say(r.Context(), sess, topicPath, body, r.PostFormValue("reply-to"), mentions)
 	if err != nil {
+		// A page served before somebody archived this conversation still
+		// carries a composer; the record's refusal is answered in the
+		// composer's own words, not as a raw error.
+		if errors.Is(err, topic.ErrTopicArchived) {
+			shell.Patch(w, composerNote("This conversation is archived — kept for reading, closed to writing."))
+			return
+		}
 		shell.Patch(w, composerNote("Not posted — "+err.Error()))
 		return
 	}

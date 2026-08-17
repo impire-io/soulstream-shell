@@ -35,6 +35,15 @@ func Patch(w http.ResponseWriter, frag string, opts ...string) {
 	WriteElements(w, frag, opts...)
 }
 
+// Script answers an act whose outcome is the browser doing something —
+// navigating, mostly — rather than an element changing. The bundle runs
+// a text/javascript response as a page script; nothing on screen is
+// patched, so an act that answers this way patches nothing else.
+func Script(w http.ResponseWriter, js string) {
+	w.Header().Set("Content-Type", "text/javascript")
+	fmt.Fprint(w, js)
+}
+
 // Stream turns a response into a patch channel and calls tick every
 // interval until the person navigates away. The module writes whatever
 // fragments its screen is made of; the shell flushes the tick and holds the

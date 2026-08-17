@@ -147,13 +147,40 @@ func TestOverviewOpensOntoTheConversations(t *testing.T) {
 		`<a class="row" href="/?topic=home%2Fkitchen">`,
 		`<a class="row" href="/?topic=home%2Fattic">`,
 		"2 conversations",
+		// Where a conversation begins on this screen: the same act the
+		// conversations screen offers, posted to by path.
+		"Start a conversation", `@post('/act/conversation-start'`,
+		`id="convo-start"`, `id="convo-start-note"`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the overview is missing %q:\n%s", want, got)
 		}
 	}
-	if got := renderOverview(view{}); !strings.Contains(got, "No conversations yet") {
-		t.Errorf("the empty overview says nothing:\n%s", got)
+	empty := renderOverview(view{})
+	if !strings.Contains(empty, "No conversations yet") || !strings.Contains(empty, "Start one") {
+		t.Errorf("the empty overview offers no way forward:\n%s", empty)
+	}
+}
+
+// The archived conversations rest under a fold here too — readable, out of
+// the way, and no fold at all when nothing is archived.
+func TestTheOverviewFoldsTheArchivedAway(t *testing.T) {
+	b := append(board(), topic.BoardEntry{Path: "home/cellar",
+		Announcement: topic.Announcement{Name: "cellar"}, Lifecycle: topic.Archived})
+	got := renderOverview(view{Board: b})
+	for _, want := range []string{
+		`<details class="archfold"><summary>Archived (1)</summary>`,
+		`<a class="row" href="/?topic=home%2Fcellar">`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the overview is missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Index(got, "home%2Fcellar") < strings.Index(got, "home%2Fkitchen") {
+		t.Errorf("an archived conversation stands among the live ones:\n%s", got)
+	}
+	if strings.Contains(renderOverview(view{Board: board()}), "archfold") {
+		t.Error("an empty fold is served")
 	}
 }
 

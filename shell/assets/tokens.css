@@ -359,6 +359,40 @@ box-shadow:var(--shadow-card)}
 .conv .tally.on{position:absolute;right:var(--space-5);top:50%;transform:translateY(-50%)}
 a.row .tally.on{align-self:center}
 
+/* --- Starting and ending a conversation ------------------------------
+   One fold vocabulary for the rail's two edges: the fold at its head
+   where a conversation begins, and the fold at its foot where the
+   archived ones rest — same chevron as the setup folds. The life dock
+   is where a lifecycle act answers: it sits over the details column,
+   exists only while it has something to say, and belongs to the act
+   alone — the stream never writes it. */
+.archfold summary{display:flex;align-items:center;gap:var(--space-4);
+padding:var(--space-4) var(--space-6);font:var(--type-label);
+letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--text-muted);
+cursor:pointer;list-style:none;transition:var(--transition-control)}
+.archfold summary::-webkit-details-marker{display:none}
+.archfold summary::before{content:"";flex:none;width:7px;height:7px;
+border-right:var(--border-width-thick) solid var(--text-muted);
+border-bottom:var(--border-width-thick) solid var(--text-muted);
+transform:rotate(-45deg);transition:transform var(--dur-base) var(--ease-mech)}
+.archfold[open]>summary::before{transform:rotate(45deg)}
+.archfold summary:hover{background:var(--surface-well);color:var(--text-body)}
+.archfold summary svg{width:14px;height:14px}
+.rail-start{flex:none;border-bottom:var(--border-width) solid var(--border-etch)}
+.rail-start form{display:flex;flex-direction:column;gap:var(--space-5);
+padding:var(--space-4) var(--space-6) var(--space-6)}
+.rail-start input{min-width:0}
+.conv.archived .name{color:var(--text-muted)}
+.life-note{position:absolute;right:0;bottom:0;z-index:2;width:var(--details-width);
+padding:var(--space-5) var(--space-6);background:var(--surface-raised);
+border-top:var(--border-width) solid var(--border-strong);
+border-left:var(--border-width) solid var(--border-etch);box-shadow:var(--shadow-panel);
+font:var(--type-body);font-size:var(--text-sm);color:var(--text-secondary)}
+.life-note:empty{display:none}
+.life-note p{margin:0}
+.life-note .acts{margin-top:var(--space-5)}
+.dock-quiet{margin:0;font:var(--type-body);font-size:var(--text-sm);color:var(--text-muted)}
+
 /* --- The conversation ------------------------------------------------
    Capped and centred in whatever room it is given: a message that runs the
    width of a large screen is not a conversation, it is a wall. Backgrounds
@@ -686,7 +720,7 @@ grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr))}
 .planes{grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr))}
 
 /* 1180 — the details step aside first. */
-@media (max-width:1180px){.details{display:none}}
+@media (max-width:1180px){.details{display:none}.life-note{display:none}}
 
 /* 1040 — the conversations list gives up its comfortable width before it
    gives up its place. Names ellipsize; they always did. */

@@ -53,32 +53,59 @@ func sigMark(s topic.SigStatus) string {
 }
 
 // renderRail is the left column: the conversations this person can reach,
-// most recently announced first, the open one marked.
+// most recently announced first, the open one marked. The archived ones
+// rest under a fold at the foot — still one click away, never gone. The
+// fold's toggle is the person's own: the morph is told to leave the open
+// attribute alone, so the stream re-writing this list once a second never
+// snaps the fold shut. The server serves it open in one case only —
+// when the conversation the person is looking at is itself archived.
 func renderRail(v view) string {
 	var b strings.Builder
 	b.WriteString(`<nav id="conversations" class="rail-list">`)
 	if len(v.Board) == 0 {
-		b.WriteString(`<p class="rail-note">No conversations yet.</p>`)
+		b.WriteString(`<p class="rail-note">No conversations yet. Start one above.</p>`)
 	}
+	var archived []int
 	for i := len(v.Board) - 1; i >= 0; i-- {
-		e := v.Board[i]
-		cls := "conv"
-		if e.Path == v.TopicPath {
-			cls = "conv on"
+		if v.Board[i].Lifecycle == topic.Archived {
+			archived = append(archived, i)
+			continue
 		}
-		if v.Unread[e.Path] > 0 {
-			cls += " unread"
+		b.WriteString(railRow(v, v.Board[i], "conv"))
+	}
+	if len(archived) > 0 {
+		open := ""
+		for _, i := range archived {
+			if v.Board[i].Path == v.TopicPath {
+				open = " open"
+			}
 		}
-		name := e.Announcement.Name
-		if name == "" {
-			name = e.Path
+		fmt.Fprintf(&b, `<details id="rail-archived" class="archfold" data-preserve-attr="open"%s>`+
+			`<summary>Archived (%d)</summary>`, open, len(archived))
+		for _, i := range archived {
+			b.WriteString(railRow(v, v.Board[i], "conv archived"))
 		}
-		fmt.Fprintf(&b, `<a class="%s" href="/?topic=%s"><span class="name">%s</span>`+
-			`<span class="state">%s</span>%s</a>`,
-			cls, qesc(e.Path), esc(name), esc(string(e.Lifecycle)), soulstream.UnreadMark(v.Unread[e.Path]))
+		b.WriteString(`</details>`)
 	}
 	b.WriteString(`</nav>`)
 	return b.String()
+}
+
+// railRow is one conversation in the rail.
+func railRow(v view, e topic.BoardEntry, cls string) string {
+	if e.Path == v.TopicPath {
+		cls += " on"
+	}
+	if v.Unread[e.Path] > 0 {
+		cls += " unread"
+	}
+	name := e.Announcement.Name
+	if name == "" {
+		name = e.Path
+	}
+	return fmt.Sprintf(`<a class="%s" href="/?topic=%s"><span class="name">%s</span>`+
+		`<span class="state">%s</span>%s</a>`,
+		cls, qesc(e.Path), esc(name), esc(string(e.Lifecycle)), soulstream.UnreadMark(v.Unread[e.Path]))
 }
 
 // threadNode is one message with the answers hanging off it.

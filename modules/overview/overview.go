@@ -210,8 +210,8 @@ func (m *Module) observe(ctx context.Context, topicPath string,
 	}
 	v.Board = entries
 	v.Unread = sess.Standing(entries)
-	if v.TopicPath == "" && len(entries) > 0 {
-		v.TopicPath = entries[len(entries)-1].Path
+	if v.TopicPath == "" {
+		v.TopicPath = soulstream.LastLive(entries)
 	}
 	if v.TopicPath != "" {
 		if mt, err := topic.Open(m.sp.Reader(), v.TopicPath).Materialise(ctx); err == nil {
@@ -258,8 +258,8 @@ func (m *Module) health(ctx context.Context, v *view) {
 // naming one has gone stale.
 func (m *Module) defaultTopic(ctx context.Context) string {
 	entries, err := topic.Board(ctx, m.sp.Reader())
-	if err != nil || len(entries) == 0 {
+	if err != nil {
 		return ""
 	}
-	return entries[len(entries)-1].Path
+	return soulstream.LastLive(entries)
 }

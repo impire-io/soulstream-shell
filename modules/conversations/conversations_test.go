@@ -45,7 +45,9 @@ func TestTheModuleClaimsItsOwnRoutes(t *testing.T) {
 	var rt routes
 	m.Mount(&rt)
 	want := []string{"GET /{$}", "GET /live", "POST /act/post-turn",
-		"GET /composer/reply", "GET /composer/suggest"}
+		"GET /composer/reply", "GET /composer/suggest",
+		"POST /act/conversation-start", "POST /act/conversation-close",
+		"POST /act/conversation-archive", "GET /lifecycle/archive-ask"}
 	if !reflect.DeepEqual(rt.patterns, want) {
 		t.Errorf("the module mounts %v, want %v", rt.patterns, want)
 	}
@@ -107,7 +109,7 @@ func TestTheConversationColumnIsCentred(t *testing.T) {
 // it stays reachable from the same key it always was, and that every control
 // that moves it is saying the same word.
 func TestTheConversationsListIsReachableWhereTheFrameCannotSeatIt(t *testing.T) {
-	body := chatBody("home/kitchen")
+	body := chatBody("home/kitchen", false)
 	for _, want := range []string{
 		// The list is the same list; only whether it is out is held anywhere.
 		`<aside class="rail" data-class:open="$panel">`,
@@ -333,10 +335,16 @@ func TestRailMarksTheOpenConversation(t *testing.T) {
 	}
 }
 
-// The rail says so when there is nothing to open, in plain words.
+// The rail says so when there is nothing to open, in plain words — and
+// points at the fold above it, so an empty house is a beginning rather
+// than a dead end.
 func TestRailSaysWhenThereIsNothing(t *testing.T) {
-	if got := renderRail(view{}); !strings.Contains(got, "No conversations yet") {
+	got := renderRail(view{})
+	if !strings.Contains(got, "No conversations yet") {
 		t.Errorf("empty rail says nothing:\n%s", got)
+	}
+	if !strings.Contains(got, "Start one") {
+		t.Errorf("empty rail offers no way forward:\n%s", got)
 	}
 	if got := renderThread(view{}); !strings.Contains(got, "Pick a conversation") {
 		t.Errorf("empty thread says nothing:\n%s", got)
@@ -654,12 +662,21 @@ func working() *topic.MaterializedTopic {
 func TestNothingServedSaysTheRetiredWord(t *testing.T) {
 	v := meView()
 	v.Topic, v.Unread = working(), map[string]int{"home/attic": 1}
+	v.Board = append(v.Board, topic.BoardEntry{Path: "home/cellar",
+		Announcement: topic.Announcement{Name: "cellar"}, Lifecycle: topic.Archived})
+	closed := meView()
+	closed.Topic.Lifecycle = topic.Closed
 	for what, served := range map[string]string{
-		"the rail":         renderRail(v),
-		"the conversation": renderThread(v),
-		"the details":      renderDetails(v),
-		"the composer":     renderComposer("home/kitchen"),
-		"the spine mark":   spineTally(1),
+		"the rail":          renderRail(v),
+		"the conversation":  renderThread(v),
+		"the details":       renderDetails(v),
+		"the closed status": renderDetails(closed),
+		"the composer":      renderComposer("home/kitchen"),
+		"the spine mark":    spineTally(1),
+		"the start fold":    startFold(),
+		"the archive ask":   archiveConfirm("home/kitchen"),
+		"the life dock":     lifeNote(closeWords("op-1", nil)),
+		"the archived dock": archivedDock(),
 	} {
 		if strings.Contains(strings.ToLower(served), "realm") {
 			t.Errorf("%s says the retired word:\n%s", what, served)
@@ -710,9 +727,14 @@ func TestDetailsPanelReadsTheConversation(t *testing.T) {
 	}
 	// Nothing in here pretends to be a way somewhere. This view resolved no
 	// links, which is what the panel is handed by a deployment running
-	// nothing else that knows about people — and then a name is text.
-	if strings.Contains(got, "<a ") || strings.Contains(got, "<button") {
-		t.Errorf("the details panel offers something that does not navigate:\n%s", got)
+	// nothing else that knows about people — and then a name is text. The
+	// one control the panel carries is the lifecycle act beside the status,
+	// which acts rather than navigates; anything else clickable is a lie.
+	if strings.Contains(got, "<a ") {
+		t.Errorf("the details panel offers a way that goes nowhere:\n%s", got)
+	}
+	if got := strings.Count(got, "<button"); got != strings.Count(renderDetails(v), `data-on:click="@`) {
+		t.Errorf("the details panel carries a button that is not an act:\n%d", got)
 	}
 }
 

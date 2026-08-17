@@ -179,22 +179,59 @@ func renderOverview(v view) string {
 		fmt.Fprintf(&b, `<p class="blank">%s</p>`, esc(v.Err))
 		return b.String()
 	}
+	b.WriteString(startCard())
 	if len(v.Board) == 0 {
-		b.WriteString(`<p class="blank">No conversations yet.</p>`)
+		b.WriteString(`<p class="blank">No conversations yet. Start one above.</p>`)
 		return b.String()
 	}
 	b.WriteString(`<div class="rows">`)
+	var archived []int
 	for i := len(v.Board) - 1; i >= 0; i-- {
-		e := v.Board[i]
-		name := e.Announcement.Name
-		if name == "" {
-			name = e.Path
+		if v.Board[i].Lifecycle == topic.Archived {
+			archived = append(archived, i)
+			continue
 		}
-		fmt.Fprintf(&b, `<a class="row" href="/?topic=%s"><span class="name">%s</span>`+
-			`<span class="what">%s</span>%s<span class="state">%s</span></a>`,
-			qesc(e.Path), esc(name), esc(e.Announcement.SubjectMatter),
-			soulstream.UnreadMark(v.Unread[e.Path]), esc(string(e.Lifecycle)))
+		b.WriteString(boardRow(v, v.Board[i]))
 	}
 	b.WriteString(`</div>`)
+	if len(archived) > 0 {
+		fmt.Fprintf(&b, `<details class="archfold"><summary>Archived (%d)</summary><div class="rows">`,
+			len(archived))
+		for _, i := range archived {
+			b.WriteString(boardRow(v, v.Board[i]))
+		}
+		b.WriteString(`</div></details>`)
+	}
 	return b.String()
+}
+
+// boardRow is one conversation on the Home list.
+func boardRow(v view, e topic.BoardEntry) string {
+	name := e.Announcement.Name
+	if name == "" {
+		name = e.Path
+	}
+	return fmt.Sprintf(`<a class="row" href="/?topic=%s"><span class="name">%s</span>`+
+		`<span class="what">%s</span>%s<span class="state">%s</span></a>`,
+		qesc(e.Path), esc(name), esc(e.Announcement.SubjectMatter),
+		soulstream.UnreadMark(v.Unread[e.Path]), esc(string(e.Lifecycle)))
+}
+
+// startCard is where a conversation begins on Home — the same act the
+// conversations screen offers, in the card shape this screen already
+// speaks. Two surfaces, one act: the record does not care which door a
+// conversation came in by.
+func startCard() string {
+	return `<div class="card"><h2>Start a conversation</h2>` +
+		`<p class="lede">It opens the moment you name it; the first message brings it to life.</p>` +
+		`<form id="convo-start" data-on:submit="@post('/act/conversation-start', {contentType:'form'})">` +
+		`<div class="fields">` +
+		`<label class="field">Name` +
+		`<input name="name" autocomplete="off" placeholder="what to call it"></label>` +
+		`<label class="field">What it’s about` +
+		`<input name="about" autocomplete="off" placeholder="one line — optional"></label>` +
+		`</div>` +
+		`<button class="btn" type="submit">Start</button>` +
+		`<div id="convo-start-note" class="note"></div>` +
+		`</form></div>`
 }

@@ -200,7 +200,7 @@ func renderDetails(v view) string {
 	b.WriteString(detSection("users", "People", people.String()))
 
 	b.WriteString(detSection("activity", "Status",
-		`<p class="plain">`+lifecycleWords(v.Topic.Lifecycle)+`</p>`))
+		`<p class="plain">`+lifecycleWords(v.Topic.Lifecycle)+`</p>`+lifecycleActs(v)))
 
 	var work strings.Builder
 	work.WriteString(`<ul class="work">`)

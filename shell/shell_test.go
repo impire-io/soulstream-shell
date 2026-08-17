@@ -76,6 +76,20 @@ func TestWriteElementsFramesEveryLine(t *testing.T) {
 	}
 }
 
+// An act whose outcome is the browser going somewhere answers as a page
+// script: the bundle runs a text/javascript response, and nothing on the
+// screen is patched.
+func TestScriptAnswersAsJavascript(t *testing.T) {
+	rec := httptest.NewRecorder()
+	Script(rec, `location.assign("/?topic=home.kitchen")`)
+	if ct := rec.Header().Get("Content-Type"); ct != "text/javascript" {
+		t.Errorf("a script answer is served as %q", ct)
+	}
+	if rec.Body.String() != `location.assign("/?topic=home.kitchen")` {
+		t.Errorf("the script does not arrive as written: %q", rec.Body.String())
+	}
+}
+
 // The icons ride those frames once a second; each is kept to one line.
 func TestIconsAreOneLine(t *testing.T) {
 	if len(icons) == 0 {

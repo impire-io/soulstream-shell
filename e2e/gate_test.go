@@ -108,6 +108,8 @@ func signIn(t *testing.T, r *rig.Rig, auth *authtest.Authenticator) *http.Client
 		`id="conversations"`, `id="dash"`, `class="thread-body"`, `id="mentions"`,
 		`id="details"`, `id="composer"`, `class="dock centred"`, `id="composer-box"`,
 		"Write a message…", `href="/status`, "System status",
+		// Where a conversation begins, and where a lifecycle act answers.
+		`id="convo-start"`, "Start a conversation", `id="convo-life"`,
 		// And the shape holds at any width: the browser is told how wide it
 		// is, and the column that gives way when there is no room for four —
 		// the list of conversations — is still reachable from its own key on
@@ -1145,6 +1147,129 @@ func TestShellGate(t *testing.T) {
 	}
 	if !strings.Contains(table, "/act/enable?who="+ceremony.FoundingPersona) {
 		t.Fatalf("somebody shut out is offered no way back in:\n%s", table)
+	}
+
+	// The whole lifecycle, walked as the signed-in person: a conversation
+	// started from the shell, closed from the shell, archived from the
+	// shell — with the record checked at every rung.
+	lctx, lcancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer lcancel()
+
+	// Starting answers with navigation: the new conversation is the
+	// outcome, so the act hands the browser the way in.
+	started := postForm(t, cl, r.ShellURL+"/act/conversation-start",
+		url.Values{"name": {"pantry"}, "about": {"a room started from the shell"}})
+	sm := regexp.MustCompile(`location\.assign\("/\?topic=([^"]+)"\)`).FindStringSubmatch(started)
+	if sm == nil {
+		t.Fatalf("starting a conversation did not answer with a way in: %s", started)
+	}
+	pantryPath, err := url.QueryUnescape(sm[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The record carries the announce: named, described, born proposed.
+	entries, err = topic.Board(lctx, rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pantry *topic.BoardEntry
+	for i := range entries {
+		if entries[i].Path == pantryPath {
+			pantry = &entries[i]
+		}
+	}
+	if pantry == nil {
+		t.Fatalf("the started conversation is not on the board: %s", pantryPath)
+	}
+	if pantry.Announcement.Name != "pantry" ||
+		pantry.Announcement.SubjectMatter != "a room started from the shell" {
+		t.Fatalf("the announce does not carry what was typed: %+v", pantry.Announcement)
+	}
+	if pantry.Lifecycle != topic.Proposed {
+		t.Fatalf("a conversation nobody spoke in is %q, want proposed", pantry.Lifecycle)
+	}
+	// The rail names it, and the first message brings it to life — written
+	// by the session's own principal, like every act.
+	railNow := frameWith(t, readSSE(t, cl,
+		r.ShellURL+"/live?topic="+url.QueryEscape(pantryPath), 3*time.Second), `id="conversations"`)
+	if !strings.Contains(railNow, "pantry") {
+		t.Fatalf("the rail does not name the started conversation:\n%s", railNow)
+	}
+	if got, err := r.Post(cl, pantryPath, url.Values{"body": {"first light in the pantry"}}); err != nil ||
+		!strings.Contains(got, "Posted as") {
+		t.Fatalf("could not write into the started conversation: %v %s", err, got)
+	}
+	pmt := verified(lctx, t, rc, rnc, r.State.RealmPub, pantryPath)
+	if pmt.Lifecycle != topic.Active {
+		t.Fatalf("the first message did not wake the conversation: %q", pmt.Lifecycle)
+	}
+	if first := find(pmt, "first light in the pantry"); first == nil ||
+		first.Author != posted.Author || first.Sig != topic.SigVerified {
+		t.Fatalf("the first message is not the session principal's own: %+v", first)
+	}
+
+	// Closing: the act answers in its own dock, the record says closed —
+	// and closing is social, so a further message still lands.
+	closedResp := post(t, cl, r.ShellURL+"/act/conversation-close?topic="+url.QueryEscape(pantryPath))
+	life := frameWith(t, closedResp, `id="convo-life"`)
+	if !strings.Contains(life, "Closed") || strings.Contains(life, "Could not") {
+		t.Fatalf("closing did not answer honestly:\n%s", life)
+	}
+	if pmt, err = topic.Open(rc, pantryPath).Materialise(lctx); err != nil ||
+		pmt.Lifecycle != topic.Closed {
+		t.Fatalf("the record does not say closed: %v %q", err, pmt.Lifecycle)
+	}
+	if got, err := r.Post(cl, pantryPath, url.Values{"body": {"a last word after closing"}}); err != nil ||
+		!strings.Contains(got, "Posted as") {
+		t.Fatalf("closing blocked a message the record accepts by convention: %v %s", err, got)
+	}
+
+	// Archiving stands behind its ask, and the ask says what it means.
+	ask := get(t, cl, r.ShellURL+"/lifecycle/archive-ask?topic="+url.QueryEscape(pantryPath))
+	if !strings.Contains(ask, "no way back") || !strings.Contains(ask, "Yes, archive it") ||
+		!strings.Contains(ask, "Keep it as it is") {
+		t.Fatalf("the archive ask does not say what archive means:\n%s", ask)
+	}
+	if bare := get(t, cl, r.ShellURL+"/lifecycle/archive-ask"); strings.Contains(bare, "no way back") {
+		t.Fatalf("keeping it as it is did not clear the ask:\n%s", bare)
+	}
+
+	// The terminal act: archived on the record, writes refused in the
+	// composer's words, the composer itself yielded, the rail folding it
+	// away, and the default landing skipping it.
+	archResp := post(t, cl, r.ShellURL+"/act/conversation-archive?topic="+url.QueryEscape(pantryPath))
+	life = frameWith(t, archResp, `id="convo-life"`)
+	if !strings.Contains(life, "Archived") || strings.Contains(life, "Could not") {
+		t.Fatalf("archiving did not answer honestly:\n%s", life)
+	}
+	if pmt, err = topic.Open(rc, pantryPath).Materialise(lctx); err != nil ||
+		pmt.Lifecycle != topic.Archived {
+		t.Fatalf("the record does not say archived: %v %q", err, pmt.Lifecycle)
+	}
+	if refusal, err := r.Post(cl, pantryPath, url.Values{"body": {"too late"}}); err != nil ||
+		!strings.Contains(refusal, "kept for reading") {
+		t.Fatalf("a write into the archive was not refused in plain words: %v %s", err, refusal)
+	}
+	gonePage := get(t, cl, r.ShellURL+"/?topic="+url.QueryEscape(pantryPath))
+	if strings.Contains(gonePage, `id="composer-box"`) ||
+		!strings.Contains(gonePage, "kept for reading") {
+		t.Fatalf("an archived conversation still offers the composer:\n%s", gonePage)
+	}
+	foldedRead := readSSE(t, cl, r.ShellURL+"/live", 3*time.Second)
+	foldedRail := frameWith(t, foldedRead, `id="conversations"`)
+	fold := strings.Index(foldedRail, `id="rail-archived"`)
+	if fold < 0 || strings.Index(foldedRail, "pantry") < fold {
+		t.Fatalf("the archived conversation is not folded away:\n%s", foldedRail)
+	}
+	if defaultThread := frameWith(t, foldedRead, `id="dash"`); strings.Contains(defaultThread,
+		"first light in the pantry") {
+		t.Fatalf("the default landing opened an archived conversation:\n%s", defaultThread)
+	}
+	// Archiving again is already done — an answer, never an error.
+	again := post(t, cl, r.ShellURL+"/act/conversation-archive?topic="+url.QueryEscape(pantryPath))
+	if life = frameWith(t, again, `id="convo-life"`); !strings.Contains(life, "Already archived") ||
+		strings.Contains(life, "Could not") {
+		t.Fatalf("archiving twice did not answer already:\n%s", life)
 	}
 
 	// Sign out closes the session.
