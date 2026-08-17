@@ -156,9 +156,25 @@ func (sp *Support) Session(r *http.Request) *Session {
 // bearer the issuer gave them, through the callout lane, and a client that
 // signs as their persona. Delegated authority, never borrowed identity —
 // the surface signs as no one.
+//
+// The bearer rides a handler rather than a copy: the server bumps this
+// connection whenever the callout-minted credential expires, and each
+// reconnect must present the token the shell holds NOW — the one from
+// sign-in dies within the hour, and re-presenting it is how a session
+// used to rot live. A shell that cannot produce one hands up the empty
+// string, which the callout refuses: fail closed, and the session's own
+// eviction does the rest.
 func (sp *Support) SignedIn(ctx context.Context, sh *shell.Session) (any, error) {
+	bearerNow := func() string {
+		b, err := sh.Bearer()
+		if err != nil {
+			return ""
+		}
+		return b
+	}
 	nc, err := nats.Connect(sp.cfg.NATSURL,
-		nats.UserCredentials(sp.cfg.SentinelPath), nats.Token(sh.Bearer))
+		nats.UserCredentials(sp.cfg.SentinelPath), nats.TokenHandler(bearerNow),
+		nats.MaxReconnects(-1), nats.ReconnectWait(300*time.Millisecond))
 	if err != nil {
 		return nil, fmt.Errorf("admission (oidc lane): %w", err)
 	}

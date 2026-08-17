@@ -27,11 +27,11 @@ type Session struct {
 	sp *Support
 	nc *nats.Conn
 	rc *realm.Client
-	// bearer is the token the issuer handed this person at sign-in — the
-	// shell's own custody, copied here so a module can act as them against
-	// a surface that speaks HTTP rather than NATS. It lives as long as the
-	// session and no longer.
-	bearer string
+	// bearer produces the issuer's token of the moment, straight from the
+	// shell's custody — asked per use, never copied, so a session that has
+	// outlived its first access token still acts with a living one. The
+	// error is the shell saying the session is over.
+	bearer func() (string, error)
 
 	// stop ends the inbox follower this session runs on its own connection.
 	stop context.CancelFunc
@@ -78,7 +78,11 @@ const adminRole = "admin"
 // an authority — every administrative act still carries the bearer to the
 // sign-in surface, whose verified refusal is the answer that counts.
 func (sess *Session) IsAdmin() bool {
-	parts := strings.Split(sess.bearer, ".")
+	bearer, err := sess.bearer()
+	if err != nil {
+		return false
+	}
+	parts := strings.Split(bearer, ".")
 	if len(parts) != 3 {
 		return false
 	}

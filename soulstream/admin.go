@@ -85,10 +85,12 @@ func (e *Refusal) Denied() bool {
 func (e *Refusal) Rule() bool { return e.Status == http.StatusConflict }
 
 // Admin is one signed-in person's own reach into the administration
-// surface: their bearer, their standing, nothing borrowed.
+// surface: their bearer, their standing, nothing borrowed. The bearer is
+// fetched per call from the shell's custody, so a session that has
+// outlived its first access token still acts with a living one.
 type Admin struct {
 	base   string
-	bearer string
+	bearer func() (string, error)
 	cl     *http.Client
 }
 
@@ -201,7 +203,11 @@ func (a *Admin) do(ctx context.Context, method, path string, body, out any) erro
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+a.bearer)
+	bearer, err := a.bearer()
+	if err != nil {
+		return fmt.Errorf("this session's credential is spent: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+bearer)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

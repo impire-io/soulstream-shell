@@ -7,9 +7,11 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -19,11 +21,12 @@ import (
 // Sessions: one signed-in human, held in memory and nowhere else.
 //
 // The shell custodies exactly two things about a person — the id the issuer
-// admitted them under and the bearer it issued — and neither touches disk or
-// the browser. Everything richer is somebody else's: a support layer hangs
-// what it needs off the session through a SessionHook, the shell hands it
-// back on request and closes it when the session ends, and never looks
-// inside it.
+// admitted them under and the grant it issued: the access token of the
+// moment and, when the issuer gave one, the refresh token that renews it.
+// None of it touches disk or the browser. Everything richer is somebody
+// else's: a support layer hangs what it needs off the session through a
+// SessionHook, the shell hands it back on request and closes it when the
+// session ends, and never looks inside it.
 
 // Session is one signed-in human.
 type Session struct {
@@ -32,11 +35,37 @@ type Session struct {
 	Subject string
 	// Name is what the issuer said to call them, "" when it said nothing.
 	Name string
-	// Bearer is the issuer's access token. It lives here for as long as the
-	// session does — never in the browser, never on disk.
-	Bearer string
+
+	// mu guards the grant. tok is the issuer's access token of the moment;
+	// renew replaces it when it is spent, for as long as the issuer honours
+	// the refresh grant — nil when it issued none, and such a session ends
+	// with its one token.
+	mu    sync.Mutex
+	tok   *oauth2.Token
+	renew oauth2.TokenSource
 
 	attached map[any]any
+}
+
+// Bearer is the issuer's current access token for this person — never in
+// the browser, never on disk, renewed from here when it can be. An error
+// means no living credential can be produced: the session is over, and the
+// next request through Shell.Session ends it properly.
+func (sess *Session) Bearer() (string, error) {
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+	if sess.tok.Valid() {
+		return sess.tok.AccessToken, nil
+	}
+	if sess.renew == nil {
+		return "", errors.New("session: the access token is spent and the issuer issued nothing to renew it with")
+	}
+	tok, err := sess.renew.Token()
+	if err != nil {
+		return "", fmt.Errorf("session: renew: %w", err)
+	}
+	sess.tok = tok
+	return tok.AccessToken, nil
 }
 
 // Attached is what the hook registered under key opened for this session,
@@ -76,15 +105,34 @@ func (s *Shell) Attach(key any, h SessionHook) {
 	s.hooks = append(s.hooks, hook{key: key, h: h})
 }
 
-// Session is the session this request carries, nil when it carries none.
+// Session is the session this request carries, nil when it carries none —
+// and a session that can no longer produce a credential carries none: it is
+// closed and dropped on the spot, so the person reads the sign-in card
+// rather than a screen whose every act errors.
 func (s *Shell) Session(r *http.Request) *Session {
 	c, err := r.Cookie(s.opts.SessionCookie)
 	if err != nil {
 		return nil
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.sessions[c.Value]
+	sess := s.sessions[c.Value]
+	s.mu.Unlock()
+	if sess == nil {
+		return nil
+	}
+	if _, err := sess.Bearer(); err != nil {
+		s.mu.Lock()
+		still := s.sessions[c.Value] == sess
+		if still {
+			delete(s.sessions, c.Value)
+		}
+		s.mu.Unlock()
+		if still {
+			s.closeSession(sess)
+		}
+		return nil
+	}
+	return sess
 }
 
 // screenName is what to call the signed-in person: what the issuer said,
@@ -168,7 +216,7 @@ func newOIDCRP(ctx context.Context, opts Options, boundAddr string) (*oidcRP, er
 	reg, _ := json.Marshal(map[string]any{
 		"redirect_uris":              []string{redirect},
 		"client_name":                opts.ClientName,
-		"grant_types":                []string{"authorization_code"},
+		"grant_types":                []string{"authorization_code", "refresh_token"},
 		"response_types":             []string{"code"},
 		"token_endpoint_auth_method": "none",
 	})
@@ -190,7 +238,10 @@ func newOIDCRP(ctx context.Context, opts Options, boundAddr string) (*oidcRP, er
 			ClientID: client.ClientID, ClientSecret: client.ClientSecret,
 			Endpoint:    provider.Endpoint(),
 			RedirectURL: redirect,
-			Scopes:      []string{oidc.ScopeOpenID, "profile"},
+			// offline_access asks for the refresh grant, so a session can
+			// outlive its first access token. An issuer that grants none
+			// simply leaves the session to end with that token.
+			Scopes: []string{oidc.ScopeOpenID, "profile", oidc.ScopeOfflineAccess},
 		},
 		pending: map[string]string{},
 	}, nil
@@ -250,8 +301,13 @@ func (s *Shell) callback(w http.ResponseWriter, r *http.Request) {
 		subject = idt.Subject
 	}
 
-	sess := &Session{Subject: subject, Name: claims.Name, Bearer: tok.AccessToken,
+	sess := &Session{Subject: subject, Name: claims.Name, tok: tok,
 		attached: map[any]any{}}
+	if tok.RefreshToken != "" {
+		// Renewals outlive the sign-in request they started on, so the
+		// source is bound to no request's context.
+		sess.renew = s.oidc.cfg.TokenSource(context.Background(), tok)
+	}
 	// Whatever else this person needs to be admitted as themselves, opened
 	// once and closed with the session. The shell does not know what any of
 	// it is; it knows only that a failure here is a sign-in that failed.

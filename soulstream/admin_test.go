@@ -42,6 +42,13 @@ func (s *stubSurface) serve(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(s.answer))
 }
 
+// held stands in for the shell's custody: a bearer that answers with the
+// same token every time, the way a live session answers with its current
+// one.
+func held(bearer string) func() (string, error) {
+	return func() (string, error) { return bearer, nil }
+}
+
 // sessionOn builds a session whose reach points at the stand-in, the way a
 // signed-in person's would.
 func sessionOn(t *testing.T, s *stubSurface, bearer string) (*Session, *httptest.Server) {
@@ -50,7 +57,7 @@ func sessionOn(t *testing.T, s *stubSurface, bearer string) (*Session, *httptest
 	t.Cleanup(srv.Close)
 	sp := &Support{cfg: Config{AdminBase: srv.URL}, adminCl: srv.Client()}
 	sp.adminCl.Timeout = 5 * time.Second
-	return &Session{Persona: "owner", sp: sp, bearer: bearer}, srv
+	return &Session{Persona: "owner", sp: sp, bearer: held(bearer)}, srv
 }
 
 // The list: the person's own bearer carries it, and the surface's shapes
@@ -199,7 +206,7 @@ func TestNoDeclarationMeansNoSurface(t *testing.T) {
 	if sp.AdminSurface() != "" {
 		t.Errorf("an undeclared surface reads as %q", sp.AdminSurface())
 	}
-	sess := &Session{Persona: "owner", sp: sp, bearer: "tok-abc"}
+	sess := &Session{Persona: "owner", sp: sp, bearer: held("tok-abc")}
 	if sess.Admin() != nil {
 		t.Error("a session reaches an administration surface the deployment does not run")
 	}
@@ -311,7 +318,7 @@ func TestIsAdminReadsTheTokensOwnRoles(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			sess := &Session{bearer: tc.bearer}
+			sess := &Session{bearer: held(tc.bearer)}
 			if got := sess.IsAdmin(); got != tc.want {
 				t.Errorf("IsAdmin(%s) = %v, want %v", tc.name, got, tc.want)
 			}
