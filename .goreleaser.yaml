@@ -28,3 +28,8 @@ release:
   github:
     owner: impire-io
     name: soulstream-shell
+  draft: false
+  # A tag carrying a hyphen is a candidate, not a release — the same rule
+  # the product and the sign-in surface already publish under, so an rc
+  # here reads as an rc everywhere it is listed.
+  prerelease: auto
