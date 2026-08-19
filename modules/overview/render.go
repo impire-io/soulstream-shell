@@ -90,7 +90,22 @@ func storageCard(v view) string {
 	}
 	readout := fmt.Sprintf(`<p class="readout"><span class="cap">%s</span>`+
 		`<span class="mono">%s</span></p>`, esc(scale), esc(pct))
-	return row + vuMeter(level, label) + readout
+	return row + vuMeter(level, label) + readout + storeWay(v)
+}
+
+// storeWay is the way from the number into the messages behind it, on a
+// build that runs somewhere to go. A meter answers "how much"; the moment
+// somebody stops believing it, the question is "which ones" — and this is
+// the sentence that takes them there.
+//
+// Nothing is invented when there is nowhere to point: the readout is a
+// readout, exactly as it was before anything could answer.
+func storeWay(v view) string {
+	if v.Store.Href == "" {
+		return ""
+	}
+	return fmt.Sprintf(`<p class="hint"><a href="%s">Look inside</a> — every message `+
+		`the store is keeping, exactly as it was written.</p>`, v.Store.Href)
 }
 
 // signInRow is the other readout both screens carry.

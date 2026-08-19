@@ -693,6 +693,11 @@ img,svg,input,textarea,select{max-width:100%}
 /* An id has no word breaks of its own, so it is given leave to wrap before
    the table is made to scroll for it. */
 td.mono,.details .said,.sug .handle{overflow-wrap:anywhere}
+/* Except where the whole token is what the column is for. A subject broken
+   across six lines to save the table's width is one nobody can read or
+   compare against the row above it; the wrapper scrolls instead, which is
+   what a wrapper is for. */
+td.mono.whole{overflow-wrap:normal;white-space:nowrap}
 /* The keys in a row's last column stack rather than widen the row. */
 .acts{display:flex;flex-wrap:wrap;gap:var(--space-3)}
 /* A form's fields sit beside each other where there is room for both and

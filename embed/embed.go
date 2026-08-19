@@ -16,6 +16,7 @@ import (
 	"github.com/impire-io/soulstream-shell/modules/agents"
 	"github.com/impire-io/soulstream-shell/modules/conversations"
 	"github.com/impire-io/soulstream-shell/modules/overview"
+	"github.com/impire-io/soulstream-shell/modules/storage"
 	"github.com/impire-io/soulstream-shell/shell"
 	"github.com/impire-io/soulstream-shell/soulstream"
 )
@@ -115,10 +116,11 @@ func Run(ctx context.Context, o Options) error {
 
 	// The order is the order of the rail: the house first, then the room,
 	// then the people who may come into it, then the machines they answer
-	// for. Every one of them is registered the same way and on the same
-	// terms — which of them this deployment actually runs is each module's
-	// own answer, asked once at Run.
+	// for — and last, at the foot beside the readouts, the store itself.
+	// Every one of them is registered the same way and on the same terms —
+	// which of them this deployment actually runs is each module's own
+	// answer, asked once at Run.
 	sh.Register(overview.New(sh, sp), conversations.New(sh, sp),
-		admin.New(sh, sp), agents.New(sh, sp))
+		admin.New(sh, sp), agents.New(sh, sp), storage.New(sh, sp))
 	return sh.Run(ctx)
 }

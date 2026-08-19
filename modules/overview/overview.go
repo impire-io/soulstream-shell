@@ -37,6 +37,17 @@ const (
 // store of record answers to it; nothing here founds it.
 const storeName = "SOULSTREAM"
 
+// Where a person goes when the readout is the thing they have stopped
+// believing: the module that shows the store's own messages, and the kind of
+// screen wanted from it. Two words handed to the frame — no import, and no
+// way for this package to learn whether such a module exists. A build
+// without one comes back with nothing, and the readout is a readout, which
+// is what it always was.
+const (
+	storageModule = "storage"
+	routeStore    = "store"
+)
+
 // Module is the house-watching surface.
 type Module struct {
 	sh *shell.Shell
@@ -184,7 +195,12 @@ type view struct {
 	StreamMsg   uint64
 	StreamBytes uint64
 	StreamRoof  int64
-	FoldOK      bool
+	// Store is the way from the readout into the store's own messages, when
+	// this build runs a module that shows them. Resolved through the frame,
+	// so this module never learns which one answered — and never learns that
+	// none did beyond the answer being empty.
+	Store  shell.Link
+	FoldOK bool
 	// AgentsOn says this deployment issues agent credentials — the same
 	// declared fact the agents screen exists by, read through the support
 	// layer so this module needs no knowledge of that one. Named counts how
@@ -237,6 +253,10 @@ func (m *Module) health(ctx context.Context, v *view) {
 			}
 		}
 	}
+	// Where the readout leads, asked once per render. Everything about the
+	// answer belongs to whoever answers; this module supplies nothing and
+	// renders whatever href it is handed, or the readout alone.
+	v.Store, _ = m.sh.Link(storageModule, routeStore, nil)
 	v.FoldOK = m.sp.SignInServing()
 	if ag := m.sp.Agents(); ag != nil {
 		v.AgentsOn = true

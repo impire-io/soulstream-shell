@@ -230,25 +230,33 @@ func (sp *Support) SignInServing() bool {
 // every voice in it, resolved against the identity plane's open directory
 // and cached. A verdict is earned, not defaulted.
 func (sp *Support) Keyring(mt *topic.MaterializedTopic) *identity.Keyring {
-	kr := &identity.Keyring{Keys: map[string][]string{}}
 	if mt == nil {
-		return kr
+		return &identity.Keyring{Keys: map[string][]string{}}
 	}
-	seen := map[string]bool{}
-	add := func(p string) {
-		if p == "" || seen[p] {
-			return
+	var authors []string
+	for _, c := range mt.Contributions {
+		authors = append(authors, c.Author)
+	}
+	for _, w := range mt.WorkItems {
+		authors = append(authors, w.Author)
+	}
+	return sp.KeyringFor(authors...)
+}
+
+// KeyringFor is the same earned keyring for a set of personas named
+// directly — for a reader holding ops rather than a materialised
+// conversation. Duplicates and empty names cost nothing; a persona the
+// directory cannot answer for is simply absent, which reads downstream as
+// unknown-key rather than as a failure.
+func (sp *Support) KeyringFor(personas ...string) *identity.Keyring {
+	kr := &identity.Keyring{Keys: map[string][]string{}}
+	for _, p := range personas {
+		if p == "" || kr.Keys[p] != nil {
+			continue
 		}
-		seen[p] = true
 		if k, ok := sp.personaKey(p); ok {
 			kr.Keys[p] = []string{k}
 		}
-	}
-	for _, c := range mt.Contributions {
-		add(c.Author)
-	}
-	for _, w := range mt.WorkItems {
-		add(w.Author)
 	}
 	return kr
 }

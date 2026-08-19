@@ -30,6 +30,7 @@ import (
 
 	"github.com/impire-io/soulstream-core/identity"
 	"github.com/impire-io/soulstream-core/realm"
+	"github.com/impire-io/soulstream-core/record"
 	"github.com/impire-io/soulstream-core/registry"
 	"github.com/impire-io/soulstream-core/topic"
 	siclient "github.com/impire-io/soulstream-identity/client"
@@ -208,6 +209,11 @@ func markedRow(screen string) string {
 	}
 	return screen[i : i+j]
 }
+
+// opSeqRe pulls the first message the storage screen offers to open, by the
+// sequence its own key carries — so the gate opens a message that screen
+// actually listed rather than a number the gate guessed.
+var opSeqRe = regexp.MustCompile(`/storage/op\?[^"']*seq=(\d+)`)
 
 // inviteRe pulls the shown-once invite out of the fragment that shows it.
 // The prefix is the sign-in surface's own, so a screen inventing a token
@@ -517,6 +523,80 @@ func TestShellGate(t *testing.T) {
 	author := mt.WorkItems[0].Author
 	if author == "" || author == ceremony.FoundingPersona {
 		t.Fatalf("work item author = %q — not the fold principal", author)
+	}
+
+	// The store, read from the surface that reports on it. Everything the
+	// house readout counts is here as the messages it counted, on the
+	// signed-in person's own admission — and the work item just written is
+	// among them, which is what makes this a reading of the real store
+	// rather than of anything the screen kept.
+	store := get(t, cl, r.ShellURL+"/storage")
+	for _, want := range []string{
+		`class="ir on" href="/storage`, "What to look at",
+		realm.StreamName, realm.NotifyStreamName,
+		topic.OpsSubjectPrefix + path, topic.TypeWorkOpen,
+		`<span class="verdict`,
+		// The sentence the screen must never get wrong.
+		"your own sign-in", "not only the parts about you",
+	} {
+		if !strings.Contains(store, want) {
+			t.Fatalf("the storage screen is missing %q: %s", want, store)
+		}
+	}
+	// It reads and nothing else — no act anywhere on it, and no search box
+	// standing in for the query layer the protocol declines.
+	if strings.Contains(store, "@post(") || strings.Contains(store, "Delete") {
+		t.Fatalf("the storage screen offers an act: %s", store)
+	}
+	if !strings.Contains(store, "There is no text search") {
+		t.Fatalf("the storage screen does not say why there is no search: %s", store)
+	}
+	// A subject pattern narrows it, and narrows it truthfully: the topic
+	// board and nothing from the conversation's own log.
+	folder := get(t, cl, r.ShellURL+"/storage?filter="+url.QueryEscape(topic.InfoSubjectWildcard))
+	if !strings.Contains(folder, topic.InfoSubjectPrefix+path) {
+		t.Fatalf("the filtered screen lost the topic board: %s", folder)
+	}
+	if strings.Contains(folder, `>`+topic.OpsSubjectPrefix+path+`</td>`) {
+		t.Fatalf("the filter let a conversation's own log through: %s", folder)
+	}
+	// And a pattern that is not one is refused where it was typed rather
+	// than answered with an empty list.
+	if bad := get(t, cl, r.ShellURL+"/storage?filter=SOULSTREAM..OPS"); !strings.Contains(bad,
+		"is not a subject pattern") {
+		t.Fatalf("a subject that is not one was not refused: %s", bad)
+	}
+
+	// One message, whole. The headers as the wire spells them, the payload
+	// as it is, and the canonical form beside it — which is the distinction
+	// this screen exists to make visible.
+	seq := opSeqRe.FindStringSubmatch(store)
+	if seq == nil {
+		t.Fatalf("no message on the storage screen to open: %s", store)
+	}
+	whole := frameWith(t, get(t, cl, r.ShellURL+"/storage/op?store=conversations&seq="+seq[1]),
+		`id="storage-op"`)
+	for _, want := range []string{
+		"sequence " + seq[1], record.HeaderAuthor, record.HeaderActing, record.HeaderTs,
+		"Payload", "Signed bytes", "Signature", "bound to " + path,
+	} {
+		if !strings.Contains(whole, want) {
+			t.Fatalf("the opened message is missing %q:\n%s", want, whole)
+		}
+	}
+
+	// The way in from the readout that raised the question: the overview's
+	// storage card points here, asked for through the frame by a module that
+	// imports none of this one.
+	if !strings.Contains(get(t, cl, r.ShellURL+"/home"), `<a href="/storage">Look inside</a>`) {
+		t.Fatal("the storage readout offers no way into the store it measures")
+	}
+
+	// And the surface stays closed: the live tail refuses an unauthenticated
+	// caller exactly as the conversation stream does.
+	if resp, _ := http.Get(r.ShellURL + "/storage/tail"); resp == nil ||
+		resp.StatusCode != http.StatusUnauthorized {
+		t.Fatal("unauthenticated /storage/tail must refuse")
 	}
 
 	// The composer: the signed-in person writes into the conversation.
@@ -905,6 +985,7 @@ func TestShellGate(t *testing.T) {
 		{"the conversation", named},
 		{"the overview", get(t, cl, r.ShellURL+"/home")},
 		{"the system-status screen", get(t, cl, r.ShellURL+"/status")},
+		{"the storage screen", get(t, cl, r.ShellURL+"/storage")},
 		{"the live stream", readSSE(t, cl, r.ShellURL+"/live", 1200*time.Millisecond)},
 		{"the token source", string(tokenSrc)},
 	} {
