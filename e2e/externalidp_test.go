@@ -40,10 +40,10 @@ func TestExternalIdPGate(t *testing.T) {
 	if r.AdminBase != "" {
 		t.Fatalf("the deployment declared an administration surface at %q", r.AdminBase)
 	}
-	if r.State.FoldEnabled {
+	if r.State.SignInEnabled {
 		t.Fatal("the arm is not external: the deployment runs a sign-in plane of its own")
 	}
-	if r.Issuer == r.State.FoldIssuer {
+	if r.Issuer == r.State.SignInIssuer {
 		t.Fatalf("the arm is not external: sessions sign in against %q", r.Issuer)
 	}
 

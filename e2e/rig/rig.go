@@ -130,7 +130,7 @@ func start(dir string, external bool) (*Rig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("rig: ceremony: %w", err)
 	}
-	st.DoorListen = "127.0.0.1:0"
+	st.MCPListen = "127.0.0.1:0"
 	// The node composes a shell plane of its own on the ceremony's default
 	// port. This rig drives the shell through its public embed seam instead,
 	// so the plane it composes must not fight a shell already on this
@@ -139,7 +139,7 @@ func start(dir string, external bool) (*Rig, error) {
 	// Session admissions ride the identity plane's OIDC lane, which the node
 	// switches on with public-door mode (the shell plane's soulnode wiring
 	// does this by default — the finding is recorded).
-	st.DoorPublicURL = "http://127.0.0.1:8666"
+	st.MCPPublicURL = "http://127.0.0.1:8666"
 
 	ctx, cancel := context.WithCancel(context.Background())
 	var invite string
@@ -147,21 +147,21 @@ func start(dir string, external bool) (*Rig, error) {
 		// The authorization server this deployment does not run. It starts
 		// first: the identity plane's callout validator discovers the issuer
 		// at startup, and so does the shell.
-		st.FoldEnabled = false
-		st.DoorAuthIssuer = "http://localhost:" + asPort
-		st.DoorAuthAudience = "soulstream-external"
+		st.SignInEnabled = false
+		st.MCPAuthIssuer = "http://localhost:" + asPort
+		st.MCPAuthAudience = "soulstream-external"
 		invite, err = startExternalAS(ctx, filepath.Join(dir, "external-as"),
-			st.DoorAuthIssuer, "127.0.0.1:"+asPort, st.DoorAuthAudience,
+			st.MCPAuthIssuer, "127.0.0.1:"+asPort, st.MCPAuthAudience,
 			ceremony.FoundingPersona, []string{"admin", "realm"})
 		if err != nil {
 			cancel()
 			return nil, err
 		}
 	} else {
-		st.FoldListen = "127.0.0.1:" + asPort
-		st.FoldIssuer = "http://localhost:" + asPort
-		st.DoorAuthIssuer = st.FoldIssuer
-		st.DoorAuthAudience = st.FoldAudience
+		st.SignInListen = "127.0.0.1:" + asPort
+		st.SignInIssuer = "http://localhost:" + asPort
+		st.MCPAuthIssuer = st.SignInIssuer
+		st.MCPAuthAudience = st.SignInAudience
 	}
 	if err := st.Save(dir); err != nil {
 		cancel()
@@ -198,6 +198,12 @@ func start(dir string, external bool) (*Rig, error) {
 	if external {
 		agentsDial = ""
 	}
+	// Whether the identity plane behind this deployment runs the guardrail
+	// — soulnode enables it since v0.13.0-rc.9, so the bundled arm declares
+	// true. The external arm hands the shell less on the same terms as
+	// agentsDial: answering approvals delivers on the node-standing lane,
+	// and a shell without that standing declares none.
+	guardrailOn := !external
 	ready := make(chan string, 1)
 	errCh := make(chan error, 1)
 	go func() {
@@ -213,9 +219,10 @@ func start(dir string, external bool) (*Rig, error) {
 			// The deployment's own declaration, not the rig's: whichever arm
 			// this is, the fact reaching the shell is the one the product
 			// computes for a real soulnode.
-			AdminBase:  st.AdminSurface(),
-			AgentsDial: agentsDial,
-			Ready:      func(addr string) { ready <- addr },
+			AdminBase:   st.AdminSurface(),
+			AgentsDial:  agentsDial,
+			GuardrailOn: guardrailOn,
+			Ready:       func(addr string) { ready <- addr },
 		})
 	}()
 	var addr string

@@ -7,11 +7,13 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/nats-io/nats.go"
 
 	"github.com/impire-io/soulstream-core/realm"
 	"github.com/impire-io/soulstream-core/registry"
+	siclient "github.com/impire-io/soulstream-identity/client"
 )
 
 // Session is one signed-in human's Soulstream side: their own admission,
@@ -53,6 +55,48 @@ type Session struct {
 // persona, their signature. Every act rides it — the surface's own read
 // lane never writes.
 func (sess *Session) Client() *realm.Client { return sess.rc }
+
+// identity is this person's own identity-plane client, built on their own
+// admission: linking, revoking, and approval-minting are each the
+// person's own act on their own prefix, never the surface's.
+func (sess *Session) identity() *siclient.Client {
+	return siclient.New(sess.nc, sess.sp.cfg.Account, sess.Persona)
+}
+
+// Connections is this person's own linked services.
+func (sess *Session) Connections() ([]siclient.GrantInfo, error) {
+	return sess.identity().Grants()
+}
+
+// ConnectStart begins linking one service as this person: the URL their
+// own browser opens, and the ceremony id that rides back as OAuth state.
+func (sess *Session) ConnectStart(resource string) (siclient.GrantLink, error) {
+	return sess.identity().GrantLinkStart(resource)
+}
+
+// ConnectComplete redeems the ceremony the callback carried. The plane
+// holds the ceremony under this persona's own prefix, so a callback
+// landing on any other session completes nothing.
+func (sess *Session) ConnectComplete(linkID, code string) error {
+	return sess.identity().GrantLinkComplete(linkID, code)
+}
+
+// Disconnect revokes this person's own grant for one service.
+func (sess *Session) Disconnect(resource string) error {
+	return sess.identity().GrantRevoke(resource)
+}
+
+// approvalTTL bounds a minted answer: minutes — the retry's window, the
+// plane's own scale for it.
+const approvalTTL = 5 * time.Minute
+
+// MintApproval signs this person's answer to one deferred invocation, as
+// their own persona key: exactly a delegation naming the invocation, for
+// the originator to be named its actor. Minting is the person's; the
+// support layer's Deliver carries it.
+func (sess *Session) MintApproval(invocationID, actor string) (siclient.Delegation, error) {
+	return sess.identity().MintApproval(invocationID, actor, approvalTTL)
+}
 
 // Admin is this person's own reach into the deployment's people-and-sign-in
 // administration surface, carrying their bearer and no standing of the

@@ -66,6 +66,11 @@ type Config struct {
 	// reaches the server on is its own business, and is not always one it
 	// could honestly print in somebody else's configuration file.
 	AgentsDial string
+	// GuardrailOn says this deployment's identity plane runs the guardrail
+	// — the declared fact the approvals module activates by (design 0006
+	// §4). Optional, on the same terms as the two above: no probe, no
+	// shell-side configuration, just the deployment's own word.
+	GuardrailOn bool
 }
 
 // Support is the layer itself: one read lane for the surface, and a session

@@ -14,9 +14,11 @@ import (
 
 	"github.com/impire-io/soulstream-shell/modules/admin"
 	"github.com/impire-io/soulstream-shell/modules/agents"
+	"github.com/impire-io/soulstream-shell/modules/approvals"
 	"github.com/impire-io/soulstream-shell/modules/conversations"
 	"github.com/impire-io/soulstream-shell/modules/overview"
 	"github.com/impire-io/soulstream-shell/modules/storage"
+	"github.com/impire-io/soulstream-shell/modules/tools"
 	"github.com/impire-io/soulstream-shell/shell"
 	"github.com/impire-io/soulstream-shell/soulstream"
 )
@@ -63,6 +65,11 @@ type Options struct {
 	// could use; what goes into somebody else's configuration file has to be
 	// something the deployment is willing to stand behind.
 	AgentsDial string
+	// GuardrailOn says this deployment's identity plane runs the guardrail
+	// — the whole of how the approvals surface knows it is part of this
+	// build. Left false, that module is nowhere: no key, no route, 404
+	// like any path nobody claimed.
+	GuardrailOn bool
 	// Ready, when set, receives the bound listen address.
 	Ready func(addr string)
 }
@@ -108,6 +115,7 @@ func Run(ctx context.Context, o Options) error {
 		Issuer:       o.Issuer,
 		AdminBase:    o.AdminBase,
 		AgentsDial:   o.AgentsDial,
+		GuardrailOn:  o.GuardrailOn,
 	})
 	if err != nil {
 		return err
@@ -121,6 +129,7 @@ func Run(ctx context.Context, o Options) error {
 	// which of them this deployment actually runs is each module's own
 	// answer, asked once at Run.
 	sh.Register(overview.New(sh, sp), conversations.New(sh, sp),
+		tools.New(sh, sp), approvals.New(sh, sp),
 		admin.New(sh, sp), agents.New(sh, sp), storage.New(sh, sp))
 	return sh.Run(ctx)
 }
