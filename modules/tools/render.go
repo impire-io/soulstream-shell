@@ -41,8 +41,8 @@ func renderTools(v view) string {
 	var b strings.Builder
 	b.WriteString(`<h1>Tools</h1>`)
 	b.WriteString(`<p class="lede">What this soulstream can reach — services elsewhere you ` +
-		`connect your own account to, and tools running here. Agents use them through ` +
-		`their own door, always as the person they act for.</p>`)
+		`connect your own account to, and tools running here. Agents can use them too, ` +
+		`always as the person they act for.</p>`)
 	if v.Msg != "" {
 		fmt.Fprintf(&b, `<p class="note">%s</p>`, esc(v.Msg))
 	}
@@ -140,18 +140,21 @@ func toolRow(t soulstream.Tool, v view) string {
 }
 
 // addPanel is the administrator's one form, both kinds — the slide-over's
-// whole body. The client secret goes to the identity plane and nowhere
-// else — the form says so, and no page ever serves it back.
+// whole body. The client secret is kept by the sign-in service and served
+// back by no page, said in the register this screen keeps throughout:
+// plain words for people who are smart and not technical, the machine
+// room's own names only where the person will meet them elsewhere (the
+// provider's console says "scopes", so this form does too).
 //
-// The form shows the fields the chosen kind actually reads and no others:
-// the Kind select drives a page-local signal, and each branch stands
-// behind it. Half a screen of dead fields for whichever kind was picked
-// was the old shape, and it overwhelmed for nothing. The provider's
-// sign-in details fold further still — the everyday face is four fields.
+// The form is sections: what every tool takes first, then one section for
+// the chosen kind and none for the other — the Kind select drives a
+// page-local signal, each section stands behind it, and each section's
+// Address input is disabled while hidden so only the living one submits.
 func addPanel() string {
-	return `<p class="lede">A connected service takes its provider's sign-in details — the ` +
-		`secret goes to the identity plane and is never shown again. A tool running here ` +
-		`takes its name and address.</p>` +
+	return `<p class="lede">Every tool takes a name; the rest depends on its kind. A ` +
+		`connected service is somewhere else and takes its provider's sign-in details — ` +
+		`the secret is kept by the sign-in service and never shown again. A tool running ` +
+		`here takes the address it serves on.</p>` +
 		`<form id="tool-add" data-signals="{kind:'remote'}" ` +
 		`data-on:submit="@post('/act/tool-add', {contentType:'form'})">` +
 		`<div class="fields">` +
@@ -160,19 +163,20 @@ func addPanel() string {
 		`<label class="field">Kind<select name="kind" data-bind:kind>` +
 		`<option value="remote">connected service</option>` +
 		`<option value="workload">runs here</option></select></label>` +
-		`<label class="field">Address<input name="endpoint" autocomplete="off" spellcheck="false" ` +
-		`placeholder="where its MCP server answers"></label>` +
 		`<label class="field">Description<input name="description" autocomplete="off" ` +
-		`placeholder="one line for screens and agents — optional"></label>` +
-		`</div>` +
-		`<div class="fields" data-show="$kind == 'workload'">` +
-		`<label class="field">Runs as<input name="persona" autocomplete="off" ` +
-		`spellcheck="false" placeholder="the name it takes part under"></label>` +
+		`placeholder="what it does, in one line — optional"></label>` +
 		`</div>` +
 		`<div data-show="$kind == 'remote'">` +
-		`<details class="stow"><summary>Provider sign-in</summary>` +
-		`<p class="note">From the service's own developer settings. Without these the tool ` +
-		`is listed, but nobody can connect an account to it yet.</p>` +
+		`<h3 class="label">Connected service</h3>` +
+		`<div class="fields">` +
+		`<label class="field">Address<input name="endpoint" data-attr:disabled="$kind != 'remote'" ` +
+		`autocomplete="off" spellcheck="false" ` +
+		`placeholder="https:// — from the service&#39;s documentation"></label>` +
+		`</div>` +
+		`<h3 class="label">Provider sign-in</h3>` +
+		`<p class="note">Copied from the service&#39;s own developer settings — these let ` +
+		`people connect their accounts. Without them the tool is listed, but nobody can ` +
+		`connect yet.</p>` +
 		`<div class="fields">` +
 		`<label class="field">Authorize URL<input name="auth_url" autocomplete="off" spellcheck="false"></label>` +
 		`<label class="field">Token URL<input name="token_url" autocomplete="off" spellcheck="false"></label>` +
@@ -181,10 +185,19 @@ func addPanel() string {
 		`<label class="field">Client secret<input name="client_secret" type="password" ` +
 		`autocomplete="off"></label>` +
 		`<label class="field">Scopes<input name="scopes" autocomplete="off" spellcheck="false" ` +
-		`placeholder="space-separated"></label>` +
+		`placeholder="space-separated — from the same settings"></label>` +
 		`<label class="field">Return address<input name="redirect_uri" autocomplete="off" ` +
-		`spellcheck="false" placeholder="this shell's /tools/callback"></label>` +
-		`</div></details></div>` +
+		`spellcheck="false" placeholder="this screen&#39;s address, ending in /tools/callback"></label>` +
+		`</div></div>` +
+		`<div data-show="$kind == 'workload'">` +
+		`<h3 class="label">Runs here</h3>` +
+		`<div class="fields">` +
+		`<label class="field">Address<input name="endpoint" data-attr:disabled="$kind != 'workload'" ` +
+		`autocomplete="off" spellcheck="false" ` +
+		`placeholder="where it serves on this machine"></label>` +
+		`<label class="field">Runs as<input name="persona" autocomplete="off" ` +
+		`spellcheck="false" placeholder="the name it takes part under"></label>` +
+		`</div></div>` +
 		`<button class="btn" type="submit">Add tool</button>` +
 		addNote("") + `</form>`
 }

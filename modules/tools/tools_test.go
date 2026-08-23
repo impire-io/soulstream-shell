@@ -148,16 +148,30 @@ func TestTheFormAndTheRegister(t *testing.T) {
 	if !strings.Contains(form, `name="client_secret" type="password"`) {
 		t.Errorf("the secret field is not a password input:\n%s", form)
 	}
-	// The form shows the fields the chosen kind reads and no others: the
-	// Kind select drives the signal, each branch stands behind it, and the
-	// provider's sign-in details fold further still.
+	// The form is sections: what every tool takes, then one section per
+	// kind — the Kind select drives the signal, each section stands behind
+	// it, and each section's Address is disabled while hidden so only the
+	// living one submits.
 	for _, want := range []string{
 		`data-bind:kind`, `data-signals="{kind:'remote'}"`,
 		`data-show="$kind == 'workload'"`, `data-show="$kind == 'remote'"`,
-		`<details class="stow"><summary>Provider sign-in</summary>`,
+		`<h3 class="label">Connected service</h3>`,
+		`<h3 class="label">Provider sign-in</h3>`,
+		`<h3 class="label">Runs here</h3>`,
+		`data-attr:disabled="$kind != 'remote'"`,
+		`data-attr:disabled="$kind != 'workload'"`,
 	} {
 		if !strings.Contains(form, want) {
 			t.Errorf("the form does not branch on kind (%q missing):\n%s", want, form)
+		}
+	}
+	if n := strings.Count(form, `name="endpoint"`); n != 2 {
+		t.Errorf("each kind section carries its own Address, want 2 endpoint inputs, got %d", n)
+	}
+	// The register stays plain: no machine-room vocabulary at a person.
+	for _, banned := range []string{"identity plane", "MCP server", "stdio"} {
+		if strings.Contains(form, banned) {
+			t.Errorf("the form says %q at a person:\n%s", banned, form)
 		}
 	}
 	// No input ever echoes a value — the select's own option values are

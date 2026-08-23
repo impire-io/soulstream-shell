@@ -630,6 +630,10 @@ color:var(--text-muted);cursor:pointer;transition:var(--transition-control)}
 .so-shut svg{display:block}
 .so-body{flex:1;min-height:0;overflow-y:auto;padding:var(--space-6) var(--space-7) var(--space-8)}
 .so-body>.lede{margin-top:0}
+/* A form in the panel reads as sections: a label strip names each one,
+   with a quiet note where a section needs a sentence. */
+.so-body h3.label{margin:var(--space-7) 0 var(--space-5)}
+.so-body p.note{margin:0 0 var(--space-5);max-width:var(--measure)}
 .slideover-scrim{display:none}
 .slideover.open+.slideover-scrim{display:block;position:absolute;inset:0;z-index:4;
 background:var(--surface-overlay);border:0;cursor:pointer}
