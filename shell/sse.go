@@ -35,6 +35,17 @@ func Patch(w http.ResponseWriter, frag string, opts ...string) {
 	WriteElements(w, frag, opts...)
 }
 
+// PatchSignals writes one datastar-patch-signals frame — for an act whose
+// answer includes the page putting something away, a slide-over mostly. It
+// rides the same response as the element patches beside it; the first
+// write settles the content type.
+func PatchSignals(w http.ResponseWriter, signals string) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	fmt.Fprint(w, "event: datastar-patch-signals\n")
+	fmt.Fprintf(w, "data: signals %s\n", signals)
+	fmt.Fprint(w, "\n")
+}
+
 // Script answers an act whose outcome is the browser doing something —
 // navigating, mostly — rather than an element changing. The bundle runs
 // a text/javascript response as a page script; nothing on screen is

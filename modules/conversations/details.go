@@ -172,10 +172,17 @@ func detSection(icon, heading, body string) string {
 		`<h2 class="label">%s</h2></div>%s</section>`, shell.Icon(icon), esc(heading), body)
 }
 
-// renderDetails is the whole panel — the live stream's third target.
+// renderDetails is the whole panel — the live stream's third target. It
+// carries the info signal's class binding on every render, because a morph
+// replaces attributes too: lose it once and the narrow-room drawer never
+// opens again. The shut key is drawn with the panel and shown only at the
+// widths where the panel is a drawer.
 func renderDetails(v view) string {
 	var b strings.Builder
-	b.WriteString(`<aside id="details" class="details">`)
+	b.WriteString(`<aside id="details" class="details" data-class:open="$info">`)
+	b.WriteString(`<button type="button" class="det-shut" title="Put the details away"` +
+		` aria-label="Put the details away" data-on:click="$info = false">` +
+		string(shell.Icon("chevrons-right")) + `</button>`)
 	if v.Topic == nil {
 		b.WriteString(`<p class="det-note">Open a conversation to see who is in it.</p></aside>`)
 		return b.String()

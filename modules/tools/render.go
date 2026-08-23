@@ -6,6 +6,7 @@ import (
 
 	"github.com/impire-io/soulstream-core/toolcatalog"
 
+	"github.com/impire-io/soulstream-shell/shell"
 	"github.com/impire-io/soulstream-shell/soulstream"
 )
 
@@ -14,10 +15,12 @@ import (
 // read about tools and connected accounts; "grant", "resource" and "link"
 // stay in the machine room.
 
-// The screen's patch targets.
+// The screen's patch targets. The add-form's result line is its own,
+// inside the slide-over holding the form.
 const (
-	resultID = "tools-result"
-	listID   = "tools-list"
+	resultID  = "tools-result"
+	listID    = "tools-list"
+	addNoteID = "tools-add-note"
 )
 
 // view is one read of everything the screen shows.
@@ -31,7 +34,9 @@ type view struct {
 	Err string
 }
 
-// renderTools is the whole screen's body.
+// renderTools is the whole screen's body. The catalog leads; the admin's
+// add-form waits in the slide-over behind its own key, because most visits
+// are about the tools there are.
 func renderTools(v view) string {
 	var b strings.Builder
 	b.WriteString(`<h1>Tools</h1>`)
@@ -41,11 +46,16 @@ func renderTools(v view) string {
 	if v.Msg != "" {
 		fmt.Fprintf(&b, `<p class="note">%s</p>`, esc(v.Msg))
 	}
-	b.WriteString(`<div class="section">` + renderList(v) + `</div>`)
+	key := ""
 	if v.Admin {
-		b.WriteString(`<div class="section">` + renderAddForm() + `</div>`)
+		key = `<p class="act"><button type="button" class="btn" data-on:click="$panel = true">` +
+			`Add tool</button></p>`
 	}
+	b.WriteString(`<div class="section">` + key + renderList(v) + `</div>`)
 	b.WriteString(resultNote(""))
+	if v.Admin {
+		b.WriteString(shell.SlideOver("Add a tool", addPanel()))
+	}
 	return b.String()
 }
 
@@ -117,8 +127,10 @@ func toolRow(t soulstream.Tool, v view) string {
 		if t.Declared {
 			acts = append(acts, `<span class="note">declared in configuration</span>`)
 		} else {
+			// Removing stands behind its own question (askRemove): one stray
+			// tap takes nothing away from everyone.
 			acts = append(acts, fmt.Sprintf(
-				`<button class="btn ghost" data-on:click="@post('/act/tool-remove?name=%s')">`+
+				`<button class="btn ghost" data-on:click="@get('/tools/remove-ask?name=%s')">`+
 					`Remove</button>`, qesc(t.Name)))
 		}
 	}
@@ -127,26 +139,41 @@ func toolRow(t soulstream.Tool, v view) string {
 		esc(t.Name), what, where, you, strings.Join(acts, ""))
 }
 
-// renderAddForm is the administrator's one form, both kinds. The client
-// secret goes to the identity plane and nowhere else — the form says so,
-// and no page ever serves it back.
-func renderAddForm() string {
-	return `<div class="card"><h2>Add a tool</h2>` +
-		`<p class="lede">A connected service takes its provider's sign-in details — the ` +
+// addPanel is the administrator's one form, both kinds — the slide-over's
+// whole body. The client secret goes to the identity plane and nowhere
+// else — the form says so, and no page ever serves it back.
+//
+// The form shows the fields the chosen kind actually reads and no others:
+// the Kind select drives a page-local signal, and each branch stands
+// behind it. Half a screen of dead fields for whichever kind was picked
+// was the old shape, and it overwhelmed for nothing. The provider's
+// sign-in details fold further still — the everyday face is four fields.
+func addPanel() string {
+	return `<p class="lede">A connected service takes its provider's sign-in details — the ` +
 		`secret goes to the identity plane and is never shown again. A tool running here ` +
 		`takes its name and address.</p>` +
-		`<form id="tool-add" data-on:submit="@post('/act/tool-add', {contentType:'form'})">` +
+		`<form id="tool-add" data-signals="{kind:'remote'}" ` +
+		`data-on:submit="@post('/act/tool-add', {contentType:'form'})">` +
 		`<div class="fields">` +
-		`<label class="field">Name<input name="name" autocomplete="off" spellcheck="false" ` +
+		`<label class="field">Name<input name="name" required autocomplete="off" spellcheck="false" ` +
 		`placeholder="lowercase, no spaces"></label>` +
-		`<label class="field">Kind<select name="kind">` +
+		`<label class="field">Kind<select name="kind" data-bind:kind>` +
 		`<option value="remote">connected service</option>` +
 		`<option value="workload">runs here</option></select></label>` +
 		`<label class="field">Address<input name="endpoint" autocomplete="off" spellcheck="false" ` +
 		`placeholder="where its MCP server answers"></label>` +
-		`<label class="field">Description<input name="description" autocomplete="off"></label>` +
-		`<label class="field">Runs as (runs-here only)<input name="persona" autocomplete="off" ` +
-		`spellcheck="false"></label>` +
+		`<label class="field">Description<input name="description" autocomplete="off" ` +
+		`placeholder="one line for screens and agents — optional"></label>` +
+		`</div>` +
+		`<div class="fields" data-show="$kind == 'workload'">` +
+		`<label class="field">Runs as<input name="persona" autocomplete="off" ` +
+		`spellcheck="false" placeholder="the name it takes part under"></label>` +
+		`</div>` +
+		`<div data-show="$kind == 'remote'">` +
+		`<details class="stow"><summary>Provider sign-in</summary>` +
+		`<p class="note">From the service's own developer settings. Without these the tool ` +
+		`is listed, but nobody can connect an account to it yet.</p>` +
+		`<div class="fields">` +
 		`<label class="field">Authorize URL<input name="auth_url" autocomplete="off" spellcheck="false"></label>` +
 		`<label class="field">Token URL<input name="token_url" autocomplete="off" spellcheck="false"></label>` +
 		`<label class="field">Revoke URL<input name="revoke_url" autocomplete="off" spellcheck="false"></label>` +
@@ -157,9 +184,26 @@ func renderAddForm() string {
 		`placeholder="space-separated"></label>` +
 		`<label class="field">Return address<input name="redirect_uri" autocomplete="off" ` +
 		`spellcheck="false" placeholder="this shell's /tools/callback"></label>` +
-		`</div>` +
+		`</div></details></div>` +
 		`<button class="btn" type="submit">Add tool</button>` +
-		`</form></div>`
+		addNote("") + `</form>`
+}
+
+// addNote is the slide-over form's own result line.
+func addNote(msg string) string {
+	return fmt.Sprintf(`<div id="%s" class="note">%s</div>`, addNoteID, esc(msg))
+}
+
+// removeConfirm is the question removing stands behind: what goes, what
+// keeps its custody, and the two ways out.
+func removeConfirm(name string) string {
+	return fmt.Sprintf(`<div id="%s" class="note">`+
+		`<p class="confirm">Remove %s for everyone? Anyone&#39;s own connections to it `+
+		`keep their custody until they disconnect.</p>`+
+		`<div class="acts">`+
+		`<button class="btn" data-on:click="@post('/act/tool-remove?name=%s')">Yes, remove it</button>`+
+		`<button class="btn ghost" data-on:click="@get('/tools/remove-ask')">Keep it</button>`+
+		`</div></div>`, resultID, esc(name), qesc(name))
 }
 
 // resultNote is the screen's result line — the patch target every act

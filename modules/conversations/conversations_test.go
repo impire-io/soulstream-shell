@@ -160,7 +160,8 @@ func TestTheFrameCollapsesInHonestSteps(t *testing.T) {
 		what string
 		rule string
 	}{
-		{"@media (max-width:1180px)", "the details step aside", ".details{display:none}"},
+		{"@media (max-width:1180px)", "the details step aside into a drawer",
+			".details{position:absolute"},
 		{"@media (max-width:1040px)", "the conversations list narrows", "--rail-width:208px"},
 		{"@media (max-width:900px)", "and then tucks in behind the spine",
 			".rail{position:absolute"},
@@ -728,13 +729,16 @@ func TestDetailsPanelReadsTheConversation(t *testing.T) {
 	// Nothing in here pretends to be a way somewhere. This view resolved no
 	// links, which is what the panel is handed by a deployment running
 	// nothing else that knows about people — and then a name is text. The
-	// one control the panel carries is the lifecycle act beside the status,
-	// which acts rather than navigates; anything else clickable is a lie.
+	// controls the panel carries are the lifecycle act beside the status,
+	// which acts rather than navigates, and the shut key that puts the
+	// narrow-room drawer away; anything else clickable is a lie.
 	if strings.Contains(got, "<a ") {
 		t.Errorf("the details panel offers a way that goes nowhere:\n%s", got)
 	}
-	if got := strings.Count(got, "<button"); got != strings.Count(renderDetails(v), `data-on:click="@`) {
-		t.Errorf("the details panel carries a button that is not an act:\n%d", got)
+	acts := strings.Count(got, `data-on:click="@`)
+	shuts := strings.Count(got, `class="det-shut"`)
+	if n := strings.Count(got, "<button"); n != acts+shuts {
+		t.Errorf("the details panel carries a button that is not an act:\n%d", n)
 	}
 }
 
@@ -796,9 +800,15 @@ func TestDetailsPanelIsOneWholeTarget(t *testing.T) {
 	v := meView()
 	v.Topic = working()
 	got := renderDetails(v)
-	if !strings.HasPrefix(got, `<aside id="details" class="details">`) ||
+	// The panel carries the info signal's class binding on every render — a
+	// morph replaces attributes, so losing it once would leave the
+	// narrow-room drawer unopenable from the first tick on.
+	if !strings.HasPrefix(got, `<aside id="details" class="details" data-class:open="$info">`) ||
 		!strings.HasSuffix(got, "</aside>") {
 		t.Errorf("the details panel is not a whole element:\n%s", got)
+	}
+	if !strings.Contains(got, `class="det-shut"`) {
+		t.Errorf("the drawer has no way shut:\n%s", got)
 	}
 	if strings.Contains(got, `id="dash"`) || strings.Contains(got, `id="conversations"`) ||
 		strings.Contains(got, `id="composer`) {

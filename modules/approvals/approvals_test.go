@@ -53,11 +53,25 @@ func TestTheRowsAndTheirHonesty(t *testing.T) {
 		"/act/approval-approve?invocation=abcdef0123456789abcdef0123456789",
 		"principal=ACCT%2Fscribe-daan",
 		"/act/approval-deny?",
-		"left", // the window in words
+		"left",                     // the window in words
+		`title="ACCT/scribe-daan"`, // the principal in the hover, like every raw id
+		`title="until `,            // the exact deadline behind the computed window
 	} {
 		if !strings.Contains(acting, want) {
 			t.Errorf("the list is missing %q:\n%s", want, acting)
 		}
+	}
+	// With a name resolved, the principal string stays out of the cell: the
+	// hover is its place. It stands in the cell only when it is all there is.
+	if strings.Contains(acting, `>ACCT/scribe-daan</span>`) {
+		t.Errorf("the principal stands beside the name it is the hover for:\n%s", acting)
+	}
+	unnamed := renderList(view{MayAct: true, Tickets: []ticket{{
+		InvocationID: tk.InvocationID, Principal: tk.Principal,
+		Action: tk.Action, Rule: tk.Rule, ExpiresAt: tk.ExpiresAt,
+	}}})
+	if !strings.Contains(unnamed, `<span class="mono">ACCT/scribe-daan</span>`) {
+		t.Errorf("with no name resolved the principal does not stand in:\n%s", unnamed)
 	}
 	watching := renderList(view{MayAct: false, Tickets: []ticket{tk}})
 	if strings.Contains(watching, "approval-approve") {
@@ -76,6 +90,9 @@ func TestTheScreenSaysItsTerms(t *testing.T) {
 		"named by its fingerprint, never its contents",
 		"signed with your own key",
 		"exactly one request",
+		// The how-it-works prose rests under a fold: first-visit reading,
+		// out of the way of every visit after.
+		`<details class="stow"><summary>How this works</summary>`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the screen is missing %q:\n%s", want, got)

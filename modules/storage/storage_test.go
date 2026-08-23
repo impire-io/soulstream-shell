@@ -302,6 +302,11 @@ func TestOneMessageIsShownWhole(t *testing.T) {
 		"bound to kitchen-x7m2",                    // and what it was measured against
 		"not the payload",                          // said out loud, because people get this wrong
 		"Unknown key is not a failure",             // and this
+		// The wire forms are all still here, resting under folds; the
+		// payload and the verdict lead the panel, open.
+		`<details class="stow"><summary>Headers</summary>`,
+		`<details class="stow"><summary>Signed bytes</summary>`,
+		`<h3 class="label">Payload</h3>`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the message is missing %q:\n%s", want, got)

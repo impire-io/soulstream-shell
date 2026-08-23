@@ -52,9 +52,10 @@ func renderApprovals(v view) string {
 	b.WriteString(`<p class="lede">Acts the guardrail held for a human. Your yes or no is ` +
 		`signed with your own key and answers exactly one request — nothing else, ` +
 		`nothing later.</p>`)
-	b.WriteString(`<p class="note">A request is named by its fingerprint, never its ` +
+	b.WriteString(`<details class="stow"><summary>How this works</summary>` +
+		`<p class="note">A request is named by its fingerprint, never its ` +
 		`contents — the rule is your context. Saying yes lets the asker retry that one ` +
-		`act within a few minutes.</p>`)
+		`act within a few minutes.</p></details>`)
 	b.WriteString(`<div class="section">` + renderList(v) + `</div>`)
 	b.WriteString(resultNote(""))
 	return b.String()
@@ -86,20 +87,23 @@ func renderList(v view) string {
 // ticketRow is one decision: who, what, under which rule, how long the
 // window has left, the fingerprint, and the two taps.
 func ticketRow(t ticket, mayAct bool) string {
-	who := esc(t.Who)
-	if who == "" {
-		who = esc(t.Principal)
-	} else {
-		who = fmt.Sprintf(`%s <span class="mono">%s</span>`, who, esc(t.Principal))
+	// The name a person knows, with the machine's principal string in the
+	// hover — the same place every other screen keeps its raw ids. Only
+	// when no name resolves does the principal itself stand in the cell.
+	who := fmt.Sprintf(`<span title="%s">%s</span>`, esc(t.Principal), esc(t.Who))
+	if t.Who == "" {
+		who = fmt.Sprintf(`<span class="mono">%s</span>`, esc(t.Principal))
 	}
 	window := esc(t.ExpiresAt)
 	if exp, err := time.Parse(time.RFC3339, t.ExpiresAt); err == nil {
 		left := time.Until(exp).Round(time.Second)
+		word := "expiring"
 		if left > 0 {
-			window = left.String() + " left"
-		} else {
-			window = "expiring"
+			word = left.String() + " left"
 		}
+		// Computed at render and honest about it: the exact deadline rides
+		// the hover, so a screen left standing can still be read right.
+		window = fmt.Sprintf(`<span title="until %s">%s</span>`, esc(t.ExpiresAt), word)
 	}
 	acts := `<span class="note">not yours to answer</span>`
 	if mayAct {

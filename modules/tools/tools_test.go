@@ -33,6 +33,7 @@ func TestTheModuleClaimsItsOwnRoutes(t *testing.T) {
 	var rt routes
 	m.Mount(&rt)
 	want := []string{"GET /tools", "GET /tools/connect", "GET /tools/callback",
+		"GET /tools/remove-ask",
 		"POST /act/tool-disconnect", "POST /act/tool-add", "POST /act/tool-remove"}
 	if !reflect.DeepEqual(rt.patterns, want) {
 		t.Errorf("the module mounts %v, want %v", rt.patterns, want)
@@ -68,17 +69,22 @@ func TestTheRowsSayTheirHonestStates(t *testing.T) {
 	})
 	for _, want := range []string{
 		">connected</span>", "/act/tool-disconnect?name=github",
-		"isn't serving",                // the half tool, by name
-		"/tools/connect?name=dex",      // declared still connects
-		"declared in configuration",    // but never removes
-		"/act/tool-remove?name=github", // the runtime one removes
+		"isn't serving",                 // the half tool, by name
+		"/tools/connect?name=dex",       // declared still connects
+		"declared in configuration",     // but never removes
+		"/tools/remove-ask?name=github", // the runtime one removes, behind its question
 		"runs here", `<span class="mono">@notes-tool</span>`,
 	} {
 		if !strings.Contains(connected, want) {
 			t.Errorf("the list is missing %q:\n%s", want, connected)
 		}
 	}
-	if strings.Contains(connected, "/act/tool-remove?name=dex") {
+	// Removing stands behind a question: the row offers the question, never
+	// the act itself.
+	if strings.Contains(connected, "/act/tool-remove") {
+		t.Error("the list offers the remove act without its question")
+	}
+	if strings.Contains(connected, "/tools/remove-ask?name=dex") {
 		t.Error("a declared tool is offered removal")
 	}
 	if strings.Contains(connected, "/tools/connect?name=notes") {
@@ -89,20 +95,70 @@ func TestTheRowsSayTheirHonestStates(t *testing.T) {
 	}
 
 	plain := renderList(view{Tools: []soulstream.Tool{remote}, Connected: map[string]bool{}})
-	if strings.Contains(plain, "tool-remove") || strings.Contains(plain, "Add a tool") {
+	if strings.Contains(plain, "remove-ask") || strings.Contains(plain, "Add a tool") {
 		t.Errorf("a plain session sees the admin's acts:\n%s", plain)
 	}
 	if !strings.Contains(plain, "/tools/connect?name=github") {
 		t.Errorf("a plain session is not offered connecting:\n%s", plain)
+	}
+	// And a plain session gets no slide-over: the whole screen has neither
+	// the panel nor its key.
+	whole := renderTools(view{Tools: []soulstream.Tool{remote}, Connected: map[string]bool{}})
+	if strings.Contains(whole, "slideover") || strings.Contains(whole, "Add tool") {
+		t.Errorf("a plain session is offered the admin's panel:\n%s", whole)
+	}
+}
+
+// Removing stands behind a question that says what goes and what keeps its
+// custody, with both ways out — and the admin's screen leads with the
+// catalog, the add-form waiting in the slide-over behind its own key.
+func TestRemovalAsksFirstAndTheFormWaitsInTheSlideOver(t *testing.T) {
+	q := removeConfirm("github")
+	for _, want := range []string{
+		"Remove github for everyone?", "keep their custody",
+		`@post('/act/tool-remove?name=github')`, "Yes, remove it",
+		`@get('/tools/remove-ask')`, "Keep it",
+	} {
+		if !strings.Contains(q, want) {
+			t.Errorf("the remove question is missing %q:\n%s", want, q)
+		}
+	}
+	body := renderTools(view{Admin: true, Tools: []soulstream.Tool{
+		{Name: "github", Kind: toolcatalog.KindRemote, OnPlane: true, Endpoint: "https://x"},
+	}, Connected: map[string]bool{}})
+	list := strings.Index(body, `id="tools-list"`)
+	panel := strings.Index(body, `class="slideover"`)
+	if list < 0 || panel < 0 || panel < list {
+		t.Fatalf("the catalog does not lead the screen (list at %d, panel at %d)", list, panel)
+	}
+	for _, want := range []string{
+		`data-on:click="$panel = true"`, "Add tool",
+		`id="tool-add"`, `id="tools-add-note"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the admin screen is missing %q", want)
+		}
 	}
 }
 
 // The admin form never echoes a secret and the screen never says the
 // retired word or the machine-room vocabulary.
 func TestTheFormAndTheRegister(t *testing.T) {
-	form := renderAddForm()
+	form := addPanel()
 	if !strings.Contains(form, `name="client_secret" type="password"`) {
 		t.Errorf("the secret field is not a password input:\n%s", form)
+	}
+	// The form shows the fields the chosen kind reads and no others: the
+	// Kind select drives the signal, each branch stands behind it, and the
+	// provider's sign-in details fold further still.
+	for _, want := range []string{
+		`data-bind:kind`, `data-signals="{kind:'remote'}"`,
+		`data-show="$kind == 'workload'"`, `data-show="$kind == 'remote'"`,
+		`<details class="stow"><summary>Provider sign-in</summary>`,
+	} {
+		if !strings.Contains(form, want) {
+			t.Errorf("the form does not branch on kind (%q missing):\n%s", want, form)
+		}
 	}
 	// No input ever echoes a value — the select's own option values are
 	// the one legitimate carrier.

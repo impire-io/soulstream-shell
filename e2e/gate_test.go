@@ -439,7 +439,9 @@ func TestShellGate(t *testing.T) {
 	// conversation, the centre carries what was said in it.
 	live := readSSE(t, cl, r.ShellURL+"/live", 3*time.Second)
 	rail := elementsIn(frameFor(t, patchFrames(t, live), `id="conversations"`))
-	for _, want := range []string{`class="conv on"`, "helm-gate", "active"} {
+	// The state is the person's word for the record's fact — a conversation
+	// people talk in reads "going on", never the vocabulary's own "active".
+	for _, want := range []string{`class="conv on"`, "helm-gate", "going on"} {
 		if !strings.Contains(rail, want) {
 			t.Fatalf("the rail of conversations is missing %q:\n%s", want, rail)
 		}
@@ -495,7 +497,7 @@ func TestShellGate(t *testing.T) {
 	}
 	act, _ := io.ReadAll(actResp.Body)
 	actResp.Body.Close()
-	if !strings.Contains(string(act), "work.open ok") {
+	if !strings.Contains(string(act), "Work item opened by") {
 		t.Fatalf("work.open failed: %s", act)
 	}
 
@@ -1026,7 +1028,7 @@ func TestShellGate(t *testing.T) {
 	// the deployment with nobody to administer it — which the sign-in
 	// surface refuses. The screen does not offer a key that only ever
 	// earns a refusal; it says the thing the refusal would have said.
-	if strings.Contains(screen, `/act/disable?who=`+ceremony.FoundingPersona) {
+	if strings.Contains(screen, `/people/disable-ask?who=`+ceremony.FoundingPersona) {
 		t.Fatalf("the screen offers to lock the deployment out of itself:\n%s", screen)
 	}
 	if !strings.Contains(screen, "the last administrator stays") {
@@ -1211,7 +1213,7 @@ func TestShellGate(t *testing.T) {
 	// The list that comes back is the sign-in surface's own answer to a
 	// fresh question.
 	back := get(t, cl, r.ShellURL+"/people")
-	if !strings.Contains(back, `/act/disable?who=`+ceremony.FoundingPersona) {
+	if !strings.Contains(back, `/people/disable-ask?who=`+ceremony.FoundingPersona) {
 		t.Fatalf("with two administrators the key never came back:\n%s", back)
 	}
 	off := post(t, cl, r.ShellURL+"/act/disable?who="+ceremony.FoundingPersona)

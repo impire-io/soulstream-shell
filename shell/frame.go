@@ -134,11 +134,12 @@ type Page struct {
 // body.
 //
 // The frame carries two page-local signals and no more. rail is the spine's
-// own: whether it shows its labels. panel is the one a narrow frame needs —
-// whether a module's side column is pulled out over the content, because
-// below about 900px there is no room to seat it beside. The frame declares
-// them and styles what they do; which module has a side column, and what is
-// in it, stays the module's own business.
+// own: whether it shows its labels. panel is whether a module's side panel
+// is pulled out over the content — the conversations list where a narrow
+// frame has no room to seat it beside, and a sheet page's own slide-over at
+// every width. The frame declares them and styles what they do; which
+// module has a side panel, and what is in it, stays the module's own
+// business.
 func (s *Shell) Render(w http.ResponseWriter, r *http.Request, p Page) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	init := ""
@@ -164,6 +165,22 @@ func (s *Shell) Sheet(body string) string {
 	return fmt.Sprintf(`<main class="sheet"><div class="sheet-in">%s
 <p class="foot">%s · %s · %s</p>
 </div></main>`, body, Esc(b.Wordmark), Esc(b.Strip), Esc(b.Promise))
+}
+
+// SlideOver is the sheet's own side panel: what a list page keeps off
+// itself until asked for — an add-form, mostly. It rides the frame's panel
+// signal, the same word the conversations drawer says, because no screen
+// has both; the button that pulls it out is the module's own. It is served
+// with the page and never morphed, so a half-written form survives
+// whatever an act patches around it.
+func SlideOver(title, body string) string {
+	return fmt.Sprintf(`<aside class="slideover" data-class:open="$panel" aria-label="%s">`+
+		`<div class="so-head">%s<h2 class="label">%s</h2>`+
+		`<button type="button" class="so-shut" title="Put it away" aria-label="Put it away"`+
+		` data-on:click="$panel = false">%s</button></div>`+
+		`<div class="so-body">%s</div></aside>`+
+		`<div class="slideover-scrim" data-on:click="$panel = false"></div>`,
+		Esc(title), Icon("plus"), Esc(title), Icon("chevrons-right"), body)
 }
 
 // SignIn is what somebody who is not signed in is shown. It is the shell's

@@ -202,6 +202,12 @@ func (m *Module) chat(w http.ResponseWriter, r *http.Request) {
 // last element is the lifecycle acts' own answer dock, empty until an act
 // speaks — the one target beside the details panel that the stream never
 // writes.
+//
+// The details column holds a signal of its own, info, declared on the
+// thread (served once, morphed never): where the frame is too narrow to
+// seat the column beside the conversation, it is a drawer over it, out
+// from the Details key in the conversation's own head — everything the
+// panel says stays one tap away at every width.
 func chatBody(topicPath string, archived bool) string {
 	dock := renderComposer(topicPath)
 	if archived {
@@ -215,11 +221,11 @@ func chatBody(topicPath string, archived bool) string {
 <nav id="conversations" class="rail-list"><p class="rail-note">loading…</p></nav>
 </aside>
 <div class="rail-scrim" data-on:click="$panel = false"></div>
-<section class="thread">
+<section class="thread" data-signals="{info:false}">
 <div id="dash" class="thread-body"><p class="blank">loading…</p></div>
 %s
 </section>
-<aside id="details" class="details"><p class="det-note">loading…</p></aside>
+<aside id="details" class="details" data-class:open="$info"><p class="det-note">loading…</p></aside>
 %s`,
 		shell.Icon("messages-square"), shell.Icon("chevrons-right"),
 		startFold(), dock, lifeNote(""))

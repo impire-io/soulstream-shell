@@ -64,11 +64,13 @@ func (m *Module) Nav(r *http.Request) []shell.NavEntry {
 	}}
 }
 
-// Mount claims the screen, the linking ceremony's two legs, and the acts.
+// Mount claims the screen, the linking ceremony's two legs, the question
+// removing stands behind, and the acts.
 func (m *Module) Mount(rt shell.Router) {
 	rt.HandleFunc("GET /tools", m.tools)
 	rt.HandleFunc("GET /tools/connect", m.connect)
 	rt.HandleFunc("GET /tools/callback", m.callback)
+	rt.HandleFunc("GET /tools/remove-ask", m.askRemove)
 	rt.HandleFunc("POST /act/tool-disconnect", m.actDisconnect)
 	rt.HandleFunc("POST /act/tool-add", m.actAdd)
 	rt.HandleFunc("POST /act/tool-remove", m.actRemove)
@@ -186,16 +188,16 @@ func (m *Module) actDisconnect(w http.ResponseWriter, r *http.Request) {
 func (m *Module) actAdd(w http.ResponseWriter, r *http.Request) {
 	sess := m.sp.Session(r)
 	if sess == nil || !sess.IsAdmin() {
-		shell.Patch(w, resultNote("adding tools needs an account that administers this deployment"))
+		shell.Patch(w, addNote("adding tools needs an account that administers this deployment"))
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		shell.Patch(w, resultNote("That form did not arrive whole: "+err.Error()))
+		shell.Patch(w, addNote("That form did not arrive whole: "+err.Error()))
 		return
 	}
 	name := r.PostFormValue("name")
 	if name == "" {
-		shell.Patch(w, resultNote("A tool needs a name."))
+		shell.Patch(w, addNote("A tool needs a name."))
 		return
 	}
 	var err error
@@ -215,11 +217,30 @@ func (m *Module) actAdd(w http.ResponseWriter, r *http.Request) {
 		}, r.PostFormValue("endpoint"), r.PostFormValue("description"))
 	}
 	if err != nil {
-		shell.Patch(w, resultNote("Adding "+name+" failed: "+err.Error()))
+		shell.Patch(w, addNote("Adding "+name+" failed: "+err.Error()))
 		return
 	}
+	// The panel goes away so the list holding the new row is in front of
+	// the person, with the answer under it.
+	shell.PatchSignals(w, `{panel: false}`)
+	shell.Patch(w, addNote(""))
 	shell.Patch(w, resultNote(name+" is available now."))
 	m.patchList(w, r, sess)
+}
+
+// askRemove patches the question removing stands behind — or, asked about
+// nothing, clears it, which is what "Keep it" does.
+func (m *Module) askRemove(w http.ResponseWriter, r *http.Request) {
+	if m.sp.Session(r) == nil {
+		http.Error(w, "sign in first", http.StatusUnauthorized)
+		return
+	}
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		shell.Patch(w, resultNote(""))
+		return
+	}
+	shell.Patch(w, removeConfirm(name))
 }
 
 // actRemove reverses both halves. Standing connections keep their custody

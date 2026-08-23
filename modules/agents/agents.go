@@ -92,9 +92,11 @@ func (m *Module) Link(route string, params map[string]string) (shell.Link, bool)
 	return shell.Link{Href: href}, true
 }
 
-// Mount claims the screen and the three acts offered from it.
+// Mount claims the screen, the question revoking stands behind, and the
+// three acts offered from it.
 func (m *Module) Mount(rt shell.Router) {
 	rt.HandleFunc("GET /agents", m.agents)
+	rt.HandleFunc("GET /agents/revoke-ask", m.askRevoke)
 	rt.HandleFunc("POST /act/agent-add", m.actAdd)
 	rt.HandleFunc("POST /act/agent-credential", m.actCredential)
 	rt.HandleFunc("POST /act/agent-revoke", m.actRevoke)
@@ -163,25 +165,44 @@ func (m *Module) names(ctx context.Context, list []soulstream.Agent) map[string]
 func (m *Module) actAdd(w http.ResponseWriter, r *http.Request) {
 	ag, err := m.reach(r)
 	if err != nil {
-		shell.Patch(w, resultNote(err.Error()))
+		shell.Patch(w, addNote(err.Error()))
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		shell.Patch(w, resultNote("That form did not arrive whole: "+err.Error()))
+		shell.Patch(w, addNote("That form did not arrive whole: "+err.Error()))
 		return
 	}
 	handle, shownAs := r.PostFormValue("handle"), r.PostFormValue("shown")
 	if handle == "" {
-		shell.Patch(w, resultNote("An agent needs a handle."))
+		shell.Patch(w, addNote("An agent needs a handle."))
 		return
 	}
 	cred, err := ag.Create(r.Context(), m.sp.Session(r), handle, shownAs)
 	if err != nil {
-		shell.Patch(w, resultNote("Adding "+handle+" failed: "+err.Error()))
+		shell.Patch(w, addNote("Adding "+handle+" failed: "+err.Error()))
 		return
 	}
+	// The panel goes away so the shown-once card is in front of the person,
+	// not behind the form they just finished with.
+	shell.PatchSignals(w, `{panel: false}`)
+	shell.Patch(w, addNote(""))
 	shell.Patch(w, renderCredential(cred, "is ready"))
 	m.patchList(w, r, ag, handle)
+}
+
+// askRevoke patches the question revoking stands behind — or, asked about
+// nobody, clears it, which is what "Keep it" does.
+func (m *Module) askRevoke(w http.ResponseWriter, r *http.Request) {
+	if m.sp.Session(r) == nil {
+		http.Error(w, "sign in first", http.StatusUnauthorized)
+		return
+	}
+	who := r.URL.Query().Get("who")
+	if who == "" {
+		shell.Patch(w, resultNote(""))
+		return
+	}
+	shell.Patch(w, revokeConfirm(who))
 }
 
 // actCredential hands a standing agent a new credential. The new one is

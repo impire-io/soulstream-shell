@@ -229,7 +229,28 @@ func boardRow(v view, e topic.BoardEntry) string {
 	return fmt.Sprintf(`<a class="row" href="/?topic=%s"><span class="name">%s</span>`+
 		`<span class="what">%s</span>%s<span class="state">%s</span></a>`,
 		qesc(e.Path), esc(name), esc(e.Announcement.SubjectMatter),
-		soulstream.UnreadMark(v.Unread[e.Path]), esc(string(e.Lifecycle)))
+		soulstream.UnreadMark(v.Unread[e.Path]), stateWords(e.Lifecycle))
+}
+
+// stateWords is a conversation's standing in a person's own word — the
+// record's vocabulary stays on the record. The details panel says the same
+// things in sentences; these are the one-word row forms of the same facts.
+// An unknown word arrives as itself: newer records outrank this list.
+func stateWords(l topic.Lifecycle) string {
+	switch l {
+	case topic.Proposed:
+		return "new"
+	case topic.Active:
+		return "going on"
+	case topic.Dormant:
+		return "quiet"
+	case topic.Closed:
+		return "closed"
+	case topic.Archived:
+		return "archived"
+	default:
+		return esc(string(l))
+	}
 }
 
 // startCard is where a conversation begins on Home — the same act the
@@ -242,7 +263,7 @@ func startCard() string {
 		`<form id="convo-start" data-on:submit="@post('/act/conversation-start', {contentType:'form'})">` +
 		`<div class="fields">` +
 		`<label class="field">Name` +
-		`<input name="name" autocomplete="off" placeholder="what to call it"></label>` +
+		`<input name="name" required autocomplete="off" placeholder="what to call it"></label>` +
 		`<label class="field">What it’s about` +
 		`<input name="about" autocomplete="off" placeholder="one line — optional"></label>` +
 		`</div>` +

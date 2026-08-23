@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/impire-io/soulstream-shell/shell"
 	"github.com/impire-io/soulstream-shell/soulstream"
 )
 
@@ -14,11 +15,14 @@ import (
 // people and sign-ins, never about the components that hold them.
 
 // The screen's patch targets. An act answers with a fragment for one or
-// more; nothing else on the page moves.
+// more; nothing else on the page moves. The add-form's result line is its
+// own: an act's answer lands where the person acted, and the slide-over
+// holding the form may be the only thing they are looking at.
 const (
 	resultID  = "people-result"
 	tableID   = "people-table"
 	clientsID = "people-clients"
+	addNoteID = "people-add-note"
 )
 
 // view is one read of everything the screen shows.
@@ -33,46 +37,59 @@ type view struct {
 	Who string
 }
 
-// renderPeople is the whole screen's body, in the canon's rhythm: header,
-// the form that names a new person, the roster, the applications — each a
-// section of its own.
+// renderPeople is the whole screen's body: header, the roster the screen
+// is for, the applications folded under it, and the add-form off to the
+// side in the slide-over — the screen leads with who is here, and naming
+// somebody new is a deliberate act with a surface of its own.
 func renderPeople(v view) string {
 	var b strings.Builder
 	b.WriteString(`<h1>People &amp; sign-in</h1>`)
 	b.WriteString(`<p class="lede">Everyone who can sign in here, read live from the ` +
 		`sign-in service — the shell keeps none of it.</p>`)
 	b.WriteString(lookedUpNote(v.People, v.Err, v.Who))
-	b.WriteString(`<div class="section">` + renderAddForm(v.Groups) + `</div>`)
-	b.WriteString(`<div class="section">` + renderTable(v.People, v.Err, v.Who) + `</div>`)
+	b.WriteString(`<div class="section">` + addKey() + renderTable(v.People, v.Err, v.Who) + `</div>`)
 	b.WriteString(`<div class="section">` + renderClientsSection(v.Clients, v.ClientsErr) + `</div>`)
 	b.WriteString(resultNote(""))
+	b.WriteString(shell.SlideOver("Add a person", addPanel(v.Groups)))
 	return b.String()
 }
 
-// renderAddForm names a new person. Creation grants existence, never
-// admission — the form says what happens next (an invite), so nobody is
-// left wondering why the person they added cannot sign in yet.
-func renderAddForm(groups []string) string {
-	hint := "space-separated"
+// addKey pulls the slide-over out.
+func addKey() string {
+	return `<p class="act"><button type="button" class="btn" data-on:click="$panel = true">` +
+		`Add person</button></p>`
+}
+
+// addPanel names a new person — the slide-over's whole body. Creation
+// grants existence, never admission — the panel says what happens next (an
+// invite), so nobody is left wondering why the person they added cannot
+// sign in yet.
+func addPanel(groups []string) string {
+	hint := "space-separated — optional"
 	if len(groups) > 0 {
 		hint = "space-separated — here: " + strings.Join(groups, " ")
 	}
-	return `<div class="card"><h2>Add a person</h2>` +
-		`<p class="lede">They exist from here on; they sign in only after you create ` +
+	return `<p class="lede">They exist from here on; they sign in only after you create ` +
 		`an invite for them and they enroll a passkey with it.</p>` +
 		`<form id="person-add" data-on:submit="@post('/act/person-add', {contentType:'form'})">` +
 		`<div class="fields">` +
 		`<label class="field">Sign-in name` +
-		`<input name="username" autocomplete="off" spellcheck="false" ` +
+		`<input name="username" required autocomplete="off" spellcheck="false" ` +
 		`placeholder="lowercase, no spaces"></label>` +
 		`<label class="field">Shown as` +
-		`<input name="shown" autocomplete="off" placeholder="what to call them on screen"></label>` +
+		`<input name="shown" autocomplete="off" ` +
+		`placeholder="what to call them on screen — optional"></label>` +
 		`<label class="field">Groups` +
 		`<input name="groups" autocomplete="off" spellcheck="false" ` +
 		`placeholder="` + esc(hint) + `"></label>` +
 		`</div>` +
 		`<button class="btn" type="submit">Add person</button>` +
-		`</form></div>`
+		addNote("") + `</form>`
+}
+
+// addNote is the slide-over form's own result line.
+func addNote(msg string) string {
+	return fmt.Sprintf(`<div id="%s" class="note">%s</div>`, addNoteID, esc(msg))
 }
 
 // lookedUpNote answers the question somebody arrived with. A name this list
@@ -142,10 +159,12 @@ func personRow(p soulstream.Person, lookedUp bool) string {
 		// screen does not offer a key that only ever earns a refusal — it
 		// says the thing the refusal would have said. Creating an invite is
 		// still offered: another passkey for the person holding the place
-		// open is the opposite of a way to lose it.
+		// open is the opposite of a way to lose it. Disabling stands behind
+		// its own question (askDisable), so one stray tap shuts nobody out.
 		away := fmt.Sprintf(
-			`<button class="btn ghost" data-on:click="@post('/act/disable?who=%s')">`+
-				`Take sign-in away</button>`, qesc(p.Username))
+			`<button class="btn ghost" title="Take their sign-in away" `+
+				`data-on:click="@get('/people/disable-ask?who=%s')">`+
+				`Disable</button>`, qesc(p.Username))
 		if p.LastAdmin {
 			away = `<span class="note">the last administrator stays</span>`
 		}
@@ -157,8 +176,9 @@ func personRow(p soulstream.Person, lookedUp bool) string {
 	} else {
 		acts = fmt.Sprintf(
 			`<div class="acts">`+
-				`<button class="btn ghost" data-on:click="@post('/act/enable?who=%s')">`+
-				`Let them sign in again</button></div>`, qesc(p.Username))
+				`<button class="btn ghost" title="Let them sign in again" `+
+				`data-on:click="@post('/act/enable?who=%s')">`+
+				`Enable</button></div>`, qesc(p.Username))
 	}
 	row := "<tr>"
 	if lookedUp {
@@ -187,12 +207,13 @@ func groupsCell(p soulstream.Person) string {
 }
 
 // renderClientsSection is the applications that sign people in: the
-// registered ones, and the form that registers another. It is its own
-// heading because it is its own kind of thing — apps, not people — and its
-// own patch target so the acts on it move nothing else.
+// registered ones, and the form that registers another. It is its own kind
+// of thing — apps, not people, and a day-one task rather than a daily one —
+// so the whole of it rests under a fold: one click away, never in the way
+// of the roster the screen is for.
 func renderClientsSection(clients []soulstream.Client, err error) string {
 	var b strings.Builder
-	b.WriteString(`<h2>Apps that sign people in</h2>`)
+	b.WriteString(`<details class="stow"><summary>Apps that sign people in</summary>`)
 	b.WriteString(`<p class="lede">Applications registered to sign people in here — the shell ` +
 		`itself is one of them. Each may only return people to the exact addresses listed.</p>`)
 	b.WriteString(renderClients(clients, err))
@@ -200,15 +221,18 @@ func renderClientsSection(clients []soulstream.Client, err error) string {
 		`<form id="client-add" data-on:submit="@post('/act/client-add', {contentType:'form'})">` +
 		`<div class="fields">` +
 		`<label class="field">App id` +
-		`<input name="id" autocomplete="off" spellcheck="false" placeholder="lowercase, no spaces"></label>` +
+		`<input name="id" required autocomplete="off" spellcheck="false" ` +
+		`placeholder="lowercase, no spaces"></label>` +
 		`<label class="field">Shown as` +
-		`<input name="name" autocomplete="off" placeholder="what to call it on screen"></label>` +
+		`<input name="name" autocomplete="off" ` +
+		`placeholder="what to call it on screen — optional"></label>` +
 		`<label class="field">Return addresses` +
-		`<input name="uris" autocomplete="off" spellcheck="false" ` +
+		`<input name="uris" required autocomplete="off" spellcheck="false" ` +
 		`placeholder="space-separated, exact"></label>` +
 		`</div>` +
 		`<button class="btn" type="submit">Register app</button>` +
 		`</form></div>`)
+	b.WriteString(`</details>`)
 	return b.String()
 }
 
@@ -234,7 +258,7 @@ func renderClients(clients []soulstream.Client, err error) string {
 			}
 			fmt.Fprintf(&b, `<tr><td>%s</td><td class="mono" title="%s">%s</td>`+
 				`<td class="mono">%s</td><td><div class="acts">`+
-				`<button class="btn ghost" data-on:click="@post('/act/client-delete?id=%s')">`+
+				`<button class="btn ghost" data-on:click="@get('/people/client-remove-ask?id=%s')">`+
 				`Remove</button></div></td></tr>`,
 				esc(name), esc(c.ClientID), esc(c.ClientID),
 				esc(strings.Join(c.RedirectURIs, " ")), qesc(c.ClientID))
@@ -267,4 +291,28 @@ func renderInvite(who string, inv soulstream.Invite) string {
 // replaces a shown-once invite the moment anything else happens.
 func resultNote(msg string) string {
 	return fmt.Sprintf(`<div id="%s" class="note">%s</div>`, resultID, esc(msg))
+}
+
+// disableConfirm is the question disabling stands behind: what it does and
+// does not change, and the two ways out. Deciding takes two taps on
+// purpose — the act shuts a colleague out, and one stray click must not.
+func disableConfirm(who string) string {
+	return fmt.Sprintf(`<div id="%s" class="note">`+
+		`<p class="confirm">Disable sign-in for %s? They stay on every record and every `+
+		`screen; they just cannot sign in here until you enable them again.</p>`+
+		`<div class="acts">`+
+		`<button class="btn" data-on:click="@post('/act/disable?who=%s')">Yes, disable</button>`+
+		`<button class="btn ghost" data-on:click="@get('/people/disable-ask')">Keep it</button>`+
+		`</div></div>`, resultID, esc(who), qesc(who))
+}
+
+// clientRemoveConfirm is the same question for an app.
+func clientRemoveConfirm(id string) string {
+	return fmt.Sprintf(`<div id="%s" class="note">`+
+		`<p class="confirm">Remove %s? Sign-ins it completed are history and stay; `+
+		`new ones stop the moment it goes.</p>`+
+		`<div class="acts">`+
+		`<button class="btn" data-on:click="@post('/act/client-delete?id=%s')">Yes, remove it</button>`+
+		`<button class="btn ghost" data-on:click="@get('/people/client-remove-ask')">Keep it</button>`+
+		`</div></div>`, resultID, esc(id), qesc(id))
 }

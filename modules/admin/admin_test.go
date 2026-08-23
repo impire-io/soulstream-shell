@@ -41,6 +41,8 @@ func TestTheModuleClaimsItsOwnRoutes(t *testing.T) {
 	m.Mount(&rt)
 	want := []string{
 		"GET /people",
+		"GET /people/disable-ask",
+		"GET /people/client-remove-ask",
 		"POST /act/person-add",
 		"POST /act/invite",
 		"POST /act/disable",
@@ -79,14 +81,19 @@ func TestTheScreenOffersActsOnlyWhereTheyMeanSomething(t *testing.T) {
 	for _, want := range []string{
 		"People &amp; sign-in", "Sign-in name", "Passkeys",
 		"Daan", "avery", `class="pill ok"`, `class="pill warn"`,
-		`@post('/act/invite?who=owner')`, `@post('/act/disable?who=owner')`,
+		`@post('/act/invite?who=owner')`, `@get('/people/disable-ask?who=owner')`,
 		`id="people-table"`, `id="people-result"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the screen is missing %q", want)
 		}
 	}
-	if strings.Contains(body, "/act/disable?who=avery") {
+	// Disabling stands behind a question: the row offers the question, never
+	// the act itself.
+	if strings.Contains(body, "/act/disable") {
+		t.Error("the screen offers the disable act without its question")
+	}
+	if strings.Contains(body, "/people/disable-ask?who=avery") {
 		t.Error("the screen offers to take a sign-in away from somebody who has none")
 	}
 	if !strings.Contains(body, "/act/enable?who=avery") {
@@ -145,7 +152,7 @@ func TestTheLastAdministratorIsNotOfferedTheLethalKey(t *testing.T) {
 	list := people()
 	list[0].LastAdmin = true
 	body := renderPeople(view{People: list})
-	if strings.Contains(body, "/act/disable?who=owner") {
+	if strings.Contains(body, "/people/disable-ask?who=owner") {
 		t.Errorf("the screen offers to lock the deployment out of itself:\n%s", body)
 	}
 	if !strings.Contains(body, `<span class="note">the last administrator stays</span>`) {
@@ -161,8 +168,53 @@ func TestTheLastAdministratorIsNotOfferedTheLethalKey(t *testing.T) {
 	// And with a second administrator standing, the surface says so and the
 	// key comes back: the rule is about the last one, never a particular one.
 	if again := renderPeople(view{People: people()}); !strings.Contains(again,
-		"/act/disable?who=owner") {
+		"/people/disable-ask?who=owner") {
 		t.Errorf("the key never comes back:\n%s", again)
+	}
+}
+
+// A destructive act stands behind a question that says what it changes and
+// offers both ways out; answering "keep it" clears the question the same
+// way it came in. The add-form lives in the slide-over so the roster leads
+// the screen, and its own result line rides inside the panel.
+func TestDestructiveActsStandBehindAQuestion(t *testing.T) {
+	q := disableConfirm("avery")
+	for _, want := range []string{
+		"Disable sign-in for avery?", "until you enable them again",
+		`@post('/act/disable?who=avery')`, "Yes, disable",
+		`@get('/people/disable-ask')`, "Keep it",
+	} {
+		if !strings.Contains(q, want) {
+			t.Errorf("the disable question is missing %q:\n%s", want, q)
+		}
+	}
+	c := clientRemoveConfirm("shell")
+	for _, want := range []string{
+		"Remove shell?", `@post('/act/client-delete?id=shell')`,
+		`@get('/people/client-remove-ask')`,
+	} {
+		if !strings.Contains(c, want) {
+			t.Errorf("the remove question is missing %q:\n%s", want, c)
+		}
+	}
+}
+
+// The screen leads with the roster; the add-form waits in the slide-over
+// behind its own key, with a result line of its own beside the fields.
+func TestTheAddFormWaitsInTheSlideOver(t *testing.T) {
+	body := renderPeople(view{People: people()})
+	table := strings.Index(body, `id="people-table"`)
+	panel := strings.Index(body, `class="slideover"`)
+	if table < 0 || panel < 0 || panel < table {
+		t.Fatalf("the roster does not lead the screen (table at %d, panel at %d)", table, panel)
+	}
+	for _, want := range []string{
+		`data-on:click="$panel = true"`, "Add person",
+		`id="person-add"`, `id="people-add-note"`, "Add a person",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the screen is missing %q", want)
+		}
 	}
 }
 

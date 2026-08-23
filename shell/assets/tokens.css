@@ -366,18 +366,25 @@ a.row .tally.on{align-self:center}
    is where a lifecycle act answers: it sits over the details column,
    exists only while it has something to say, and belongs to the act
    alone — the stream never writes it. */
-.archfold summary{display:flex;align-items:center;gap:var(--space-4);
+/* .stow is the same fold under a name a sheet may say: the banned-word
+   gates keep component bynames off the product's screens, class names
+   included, so the sheets' tucked-away sections carry this one. */
+.archfold summary,.stow summary{display:flex;align-items:center;gap:var(--space-4);
 padding:var(--space-4) var(--space-6);font:var(--type-label);
 letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--text-muted);
 cursor:pointer;list-style:none;transition:var(--transition-control)}
-.archfold summary::-webkit-details-marker{display:none}
-.archfold summary::before{content:"";flex:none;width:7px;height:7px;
+.archfold summary::-webkit-details-marker,.stow summary::-webkit-details-marker{display:none}
+.archfold summary::before,.stow summary::before{content:"";flex:none;width:7px;height:7px;
 border-right:var(--border-width-thick) solid var(--text-muted);
 border-bottom:var(--border-width-thick) solid var(--text-muted);
 transform:rotate(-45deg);transition:transform var(--dur-base) var(--ease-mech)}
-.archfold[open]>summary::before{transform:rotate(45deg)}
-.archfold summary:hover{background:var(--surface-well);color:var(--text-body)}
-.archfold summary svg{width:14px;height:14px}
+.archfold[open]>summary::before,.stow[open]>summary::before{transform:rotate(45deg)}
+.archfold summary:hover,.stow summary:hover{background:var(--surface-well);color:var(--text-body)}
+.archfold summary svg,.stow summary svg{width:14px;height:14px}
+/* On a sheet the fold's summary is a section heading become a control, so
+   it hangs at the section's own left edge rather than at a rail inset. */
+.sheet .stow>summary{padding-inline:0}
+.sheet .stow>summary:hover{background:none;color:var(--text-body)}
 .rail-start{flex:none;border-bottom:var(--border-width) solid var(--border-etch)}
 .rail-start form{display:flex;flex-direction:column;gap:var(--space-5);
 padding:var(--space-4) var(--space-6) var(--space-6)}
@@ -553,6 +560,25 @@ padding-left:var(--space-5);border-left:var(--border-width-thick) solid var(--bo
 .details .quiet{margin:var(--space-5) 0 0;font:var(--type-label);
 letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--text-faint)}
 .det-note{margin:0;font:var(--type-data);font-size:var(--text-xs);color:var(--text-faint)}
+/* The two controls of the narrow-room details drawer. They exist for one
+   range of widths alone — where the details have no column of their own —
+   and are nowhere at all when the panel stands beside the conversation.
+   Same chevrons as every other way of tucking something away. */
+.det-open{display:none;align-items:center;gap:var(--space-3);margin-left:auto;
+padding:var(--space-2) var(--space-3);background:none;
+border:var(--border-width) solid transparent;border-radius:var(--radius-xs);
+font:var(--type-label);letter-spacing:var(--tracking-label);text-transform:uppercase;
+color:var(--text-muted);cursor:pointer;transition:var(--transition-control)}
+.det-open:hover{background:var(--surface-well);color:var(--text-body)}
+.det-open:active{transform:translateY(2px)}
+.det-open svg{width:14px;height:14px}
+.det-shut{display:none;align-items:center;align-self:flex-end;
+padding:var(--space-2) var(--space-3);background:none;
+border:var(--border-width) solid transparent;border-radius:var(--radius-xs);
+color:var(--text-muted);cursor:pointer;transition:var(--transition-control)}
+.det-shut:hover{background:var(--surface-well);color:var(--text-body)}
+.det-shut:active{transform:translateY(2px)}
+.det-shut svg{display:block}
 
 /* --- The sheets ------------------------------------------------------
    Every screen that is not the conversation: one scrolling sheet beside the
@@ -575,6 +601,50 @@ a.row:hover{background:var(--surface-inset);color:var(--text-body)}
 overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .row .state{font:var(--type-label);letter-spacing:var(--tracking-label);text-transform:uppercase;
 color:var(--text-faint)}
+
+/* --- The slide-over --------------------------------------------------
+   Where a sheet page's own side panel lives: the add-form a list screen
+   offers, out of the way until asked for. Same mechanics as the rail
+   drawer — the frame's panel signal, transform plus delayed visibility so
+   a closed panel leaves the tab order — but from the right, and at every
+   width: the table leads the page, and creation is a deliberate act with
+   a surface of its own. The scrim is the modal scrim, the one piece of
+   transparency the canon allows, and the only one on a sheet. */
+.slideover{position:absolute;z-index:5;inset-block:0;right:0;
+width:min(560px,92vw);display:flex;flex-direction:column;
+background:var(--surface-raised);border-left:var(--border-width-thick) solid var(--border-strong);
+box-shadow:var(--shadow-panel);transform:translateX(102%);visibility:hidden;
+transition:transform var(--dur-base) var(--ease-mech),
+visibility 0s var(--ease-linear) var(--dur-base)}
+.slideover.open{transform:none;visibility:visible;transition-delay:0s}
+.so-head{display:flex;align-items:center;gap:var(--space-4);flex:none;
+padding:var(--space-5) var(--space-6);background-image:var(--texture-rib);
+border-bottom:var(--border-width) solid var(--border-etch)}
+.so-head svg{width:16px;height:16px;color:var(--text-muted)}
+.so-shut{display:inline-flex;align-items:center;margin-left:auto;
+padding:var(--space-2) var(--space-3);background:none;
+border:var(--border-width) solid transparent;border-radius:var(--radius-xs);
+color:var(--text-muted);cursor:pointer;transition:var(--transition-control)}
+.so-shut:hover{background:var(--surface-well);color:var(--text-body)}
+.so-shut:active{transform:translateY(2px)}
+.so-shut svg{display:block}
+.so-body{flex:1;min-height:0;overflow-y:auto;padding:var(--space-6) var(--space-7) var(--space-8)}
+.so-body>.lede{margin-top:0}
+.slideover-scrim{display:none}
+.slideover.open+.slideover-scrim{display:block;position:absolute;inset:0;z-index:4;
+background:var(--surface-overlay);border:0;cursor:pointer}
+
+/* A question a result line asks before a destructive act: the prose reads
+   at body size rather than at the note's own instrument register, and the
+   two ways out stand under it. */
+.note .confirm{margin:0 0 var(--space-3);font:var(--type-body);font-size:var(--text-sm);
+color:var(--text-secondary);max-width:var(--measure)}
+.note .acts{margin-top:var(--space-4)}
+
+/* The one editable cell: a person's groups, saved in place. The input
+   takes the room the cell has; the key sits beside it. */
+.rowform{display:flex;align-items:center;gap:var(--space-3)}
+.rowform input{flex:1;min-width:10ch}
 
 /* A card's top edge is ribbed, the way the canon ribs header bars and card
    top edges. Nothing else about the panel changes. */
@@ -724,8 +794,25 @@ grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr))}
 /* A card that has to hold 240px will not hold it in a 200px column. */
 .planes{grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr))}
 
-/* 1180 — the details step aside first. */
-@media (max-width:1180px){.details{display:none}.life-note{display:none}}
+/* 1180 — the details step aside first. Aside, not away: the column becomes
+   a drawer over the conversation, out on its own signal from the key in the
+   conversation's own header — everything it says is still one tap from the
+   thing it says it about, and the lifecycle acts it carries stay reachable
+   at every width. No scrim: the conversation stays readable beside it, and
+   one surface keeps one scrim. The lifecycle dock rides over the drawer so
+   an act's answer is never under the panel that offered it. */
+@media (max-width:1180px){
+.details{position:absolute;z-index:5;inset-block:0;right:0;
+width:min(var(--details-width),86vw);
+border-left:var(--border-width-thick) solid var(--border-strong);
+box-shadow:var(--shadow-panel);transform:translateX(102%);visibility:hidden;
+transition:transform var(--dur-base) var(--ease-mech),
+visibility 0s var(--ease-linear) var(--dur-base)}
+.details.open{transform:none;visibility:visible;transition-delay:0s}
+.det-open{display:inline-flex}
+.det-shut{display:inline-flex}
+.life-note{z-index:6;width:min(var(--details-width),86vw)}
+}
 
 /* 1040 — the conversations list gives up its comfortable width before it
    gives up its place. Names ellipsize; they always did. */

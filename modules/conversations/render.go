@@ -8,6 +8,7 @@ import (
 
 	"github.com/impire-io/soulstream-core/topic"
 
+	"github.com/impire-io/soulstream-shell/shell"
 	"github.com/impire-io/soulstream-shell/soulstream"
 )
 
@@ -105,7 +106,28 @@ func railRow(v view, e topic.BoardEntry, cls string) string {
 	}
 	return fmt.Sprintf(`<a class="%s" href="/?topic=%s"><span class="name">%s</span>`+
 		`<span class="state">%s</span>%s</a>`,
-		cls, qesc(e.Path), esc(name), esc(string(e.Lifecycle)), soulstream.UnreadMark(v.Unread[e.Path]))
+		cls, qesc(e.Path), esc(name), stateWords(e.Lifecycle), soulstream.UnreadMark(v.Unread[e.Path]))
+}
+
+// stateWords is a conversation's standing in a person's own word — the
+// record's vocabulary stays on the record. The details panel says the same
+// things in sentences (lifecycleWords); these are the one-word row forms.
+// An unknown word arrives as itself: newer records outrank this list.
+func stateWords(l topic.Lifecycle) string {
+	switch l {
+	case topic.Proposed:
+		return "new"
+	case topic.Active:
+		return "going on"
+	case topic.Dormant:
+		return "quiet"
+	case topic.Closed:
+		return "closed"
+	case topic.Archived:
+		return "archived"
+	default:
+		return esc(string(l))
+	}
 }
 
 // threadNode is one message with the answers hanging off it.
@@ -175,6 +197,28 @@ func timeline(mt *topic.MaterializedTopic) []threadItem {
 	return items
 }
 
+// workLine is one work mark on the timeline: the status stamped, the event
+// in a sentence that matches it.
+func workLine(v view, w *topic.WorkItem) string {
+	title := w.Title
+	if title == "" {
+		title = "an unnamed piece of work"
+	}
+	what := fmt.Sprintf("%s opened work “%s”", esc(nameOf(v, w.Author)), esc(title))
+	switch w.Status {
+	case topic.WorkClaimed:
+		who := "Someone"
+		if w.Owner != "" {
+			who = nameOf(v, w.Owner)
+		}
+		what = fmt.Sprintf("%s took up “%s”", esc(who), esc(title))
+	case topic.WorkDone:
+		what = fmt.Sprintf("“%s” is finished", esc(title))
+	}
+	return fmt.Sprintf(`<div class="sysline"><span class="strip shell">%s</span>`+
+		`<span class="what">%s</span></div>`, esc(string(w.Status)), what)
+}
+
 // renderMsg is one bubble, with the answers to it (already rendered)
 // hanging underneath.
 //
@@ -200,12 +244,14 @@ func renderMsg(v view, c *topic.Contribution, reply bool, answers string) string
 	if mentionsMe(v, c) {
 		cls += " mentions"
 	}
-	byline := fmt.Sprintf(`<div class="byline">%s<span class="name">%s</span>`+
-		`<span class="at">%s</span></div>`,
-		channelPip(v, c.Author), esc(nameOf(v, c.Author)), c.Timestamp.Format("15:04"))
+	// The clock shows the time of day; the day itself rides the hover, for
+	// a conversation read back across more days than one.
+	at := fmt.Sprintf(`<span class="at" title="%s">%s</span>`,
+		c.Timestamp.Format("2006-01-02 15:04"), c.Timestamp.Format("15:04"))
+	byline := fmt.Sprintf(`<div class="byline">%s<span class="name">%s</span>%s</div>`,
+		channelPip(v, c.Author), esc(nameOf(v, c.Author)), at)
 	if mine(v, c.Author) {
-		byline = fmt.Sprintf(`<div class="byline">%s<span class="at">%s</span></div>`,
-			channelPip(v, c.Author), c.Timestamp.Format("15:04"))
+		byline = fmt.Sprintf(`<div class="byline">%s%s</div>`, channelPip(v, c.Author), at)
 	}
 	return fmt.Sprintf(`<div class="%s" data-op="%s"><div class="bubble">%s`+
 		`<p class="body">%s</p><div class="under">%s%s</div></div>%s</div>`,
@@ -303,8 +349,15 @@ func renderThread(v view) string {
 	} else if v.TopicPath != "" {
 		title, where = v.TopicPath, v.TopicPath
 	}
+	// The Details key exists for the widths where the details column has no
+	// place of its own — the CSS keeps it off every other screen. It rides
+	// the head the stream morphs, which is fine: it is the same markup every
+	// tick, and the signal it flips lives outside the stream's targets.
 	fmt.Fprintf(&b, `<div class="thread-head centred"><h1>%s</h1>`+
-		`<span class="where">%s</span></div>`, esc(title), esc(where))
+		`<span class="where">%s</span>`+
+		`<button type="button" class="det-open" title="Who is here and where this stands"`+
+		` data-on:click="$info = !$info">%s<span>Details</span></button></div>`,
+		esc(title), esc(where), shell.Icon("users"))
 
 	b.WriteString(`<div class="msgs centred">`)
 	items := timeline(v.Topic)
@@ -320,10 +373,11 @@ func renderThread(v view) string {
 		if it.Work != nil {
 			// A stamped strip for the state, plain words for the event: the
 			// strip is the thing that shouts, and a work title in capitals is a
-			// title nobody wrote.
-			fmt.Fprintf(&b, `<div class="sysline"><span class="strip shell">%s</span>`+
-				`<span class="what">%s opened work “%s”</span></div>`,
-				esc(string(it.Work.Status)), esc(nameOf(v, it.Work.Author)), esc(it.Work.Title))
+			// title nobody wrote. The sentence agrees with the strip — a
+			// claimed item is in somebody's hands, a done one is finished, and
+			// saying "opened" over either would be the strip calling the
+			// sentence a liar.
+			b.WriteString(workLine(v, it.Work))
 			continue
 		}
 		answers := ""

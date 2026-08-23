@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/impire-io/soulstream-shell/shell"
 	"github.com/impire-io/soulstream-shell/soulstream"
 )
 
@@ -12,17 +13,19 @@ import (
 // every row carries the machine channel's lamp — the same teal the
 // conversation screen puts beside the same voice, read from the same fact.
 
-// The screen's two patch targets. An act answers with a fragment for one or
-// both; nothing else on the page moves.
+// The screen's patch targets. An act answers with a fragment for one or
+// more; nothing else on the page moves. The add-form's result line is its
+// own, inside the slide-over holding the form.
 const (
-	resultID = "agents-result"
-	tableID  = "agents-table"
+	resultID  = "agents-result"
+	tableID   = "agents-table"
+	addNoteID = "agents-add-note"
 )
 
 // renderAgents is the whole screen's body. who is the voice somebody came
-// here looking for — empty when they simply opened the screen. The form and
-// the roster each sit in a section of their own: the screen is read top to
-// bottom, and the canon's rhythm (dense, never cramped) is the section gap.
+// here looking for — empty when they simply opened the screen. The roster
+// leads; the add-form waits in the slide-over behind its own key, because
+// most visits are about the agents there are.
 func renderAgents(list []soulstream.Agent, err error, names map[string]string, who string) string {
 	var b strings.Builder
 	b.WriteString(`<h1>Agents</h1>`)
@@ -30,10 +33,16 @@ func renderAgents(list []soulstream.Agent, err error, names map[string]string, w
 		`own names. Each gets in with a credential of its own, so what it says ` +
 		`carries its name — and each can be stopped without touching anything else.</p>`)
 	b.WriteString(lookedUpNote(list, err, who))
-	b.WriteString(`<div class="section">` + renderAddForm() + `</div>`)
-	b.WriteString(`<div class="section">` + renderTable(list, err, names, who) + `</div>`)
+	b.WriteString(`<div class="section">` + addKey() + renderTable(list, err, names, who) + `</div>`)
 	b.WriteString(resultNote(""))
+	b.WriteString(shell.SlideOver("Add an agent", addPanel()))
 	return b.String()
+}
+
+// addKey pulls the slide-over out.
+func addKey() string {
+	return `<p class="act"><button type="button" class="btn" data-on:click="$panel = true">` +
+		`Add agent</button></p>`
 }
 
 // lookedUpNote answers the question somebody arrived with. Most voices on
@@ -53,25 +62,30 @@ func lookedUpNote(list []soulstream.Agent, err error, who string) string {
 		`<span class="mono">%s</span> — every one that does is below.</p>`, esc(who))
 }
 
-// renderAddForm is how an agent comes into being. Two words from a person:
-// what it is called on the record, and what to call it on a screen. Adding
-// it is also vouching for it, which the form says out loud — the claim is
-// signed with the key of whoever is reading this, and their name is what
-// ends up beside the agent's for good.
-func renderAddForm() string {
-	return `<div class="card"><h2>Add an agent</h2>` +
-		`<p class="lede">You vouch for what you add: your name goes on it, signed ` +
+// addPanel is how an agent comes into being — the slide-over's whole body.
+// Two words from a person: what it is called on the record, and what to
+// call it on a screen. Adding it is also vouching for it, which the panel
+// says out loud — the claim is signed with the key of whoever is reading
+// this, and their name is what ends up beside the agent's for good.
+func addPanel() string {
+	return `<p class="lede">You vouch for what you add: your name goes on it, signed ` +
 		`with your own key, and stays there.</p>` +
 		`<form id="agent-add" data-on:submit="@post('/act/agent-add', {contentType:'form'})">` +
 		`<div class="fields">` +
 		`<label class="field">Handle` +
-		`<input name="handle" autocomplete="off" spellcheck="false" ` +
+		`<input name="handle" required autocomplete="off" spellcheck="false" ` +
 		`placeholder="lowercase, no spaces"></label>` +
 		`<label class="field">Shown as` +
-		`<input name="shown" autocomplete="off" placeholder="what to call it on screen"></label>` +
+		`<input name="shown" autocomplete="off" ` +
+		`placeholder="what to call it on screen — optional"></label>` +
 		`</div>` +
 		`<button class="btn" type="submit">Add agent</button>` +
-		`</form></div>`
+		addNote("") + `</form>`
+}
+
+// addNote is the slide-over form's own result line.
+func addNote(msg string) string {
+	return fmt.Sprintf(`<div id="%s" class="note">%s</div>`, addNoteID, esc(msg))
 }
 
 // renderTable is the roster itself, and a patch target of its own so an act
@@ -121,9 +135,12 @@ func agentRow(a soulstream.Agent, names map[string]string, lookedUp bool) string
 	if a.Admitted() {
 		state = `<span class="pill ok"><span class="led ok"></span>yes</span>`
 	}
+	// The day on screen, the moment in the hover.
 	added := "—"
+	addedFull := ""
 	if !a.Added.IsZero() {
 		added = a.Added.Format("2006-01-02")
+		addedFull = a.Added.UTC().Format("2006-01-02 15:04Z")
 	}
 	// The keys stack when the row has no width to spare for them, which is
 	// the last column's own business rather than the table's.
@@ -132,8 +149,11 @@ func agentRow(a soulstream.Agent, names map[string]string, lookedUp bool) string
 	fmt.Fprintf(&acts, `<button class="btn ghost" data-on:click="@post('/act/agent-credential?who=%s')">`+
 		`New credential</button>`, qesc(a.Handle))
 	if a.Admitted() {
-		fmt.Fprintf(&acts, `<button class="btn ghost" data-on:click="@post('/act/agent-revoke?who=%s')">`+
-			`Take the credential away</button>`, qesc(a.Handle))
+		// Revoking stands behind its own question (askRevoke): one stray tap
+		// stops nobody's agent.
+		fmt.Fprintf(&acts, `<button class="btn ghost" title="Take the credential away" `+
+			`data-on:click="@get('/agents/revoke-ask?who=%s')">`+
+			`Revoke</button>`, qesc(a.Handle))
 	}
 	acts.WriteString(`</div>`)
 	row := "<tr>"
@@ -145,9 +165,9 @@ func agentRow(a soulstream.Agent, names map[string]string, lookedUp bool) string
 	// lines, it is still one name.
 	return fmt.Sprintf(`%s<td><span class="led machine" title="operated by %s"></span> %s</td>`+
 		`<td class="mono" title="%s">%s</td><td>%s</td>`+
-		`<td>%s</td><td class="mono">%s</td><td>%s</td></tr>`,
+		`<td>%s</td><td class="mono" title="%s">%s</td><td>%s</td></tr>`,
 		row, esc(operator), esc(name), esc(a.Handle), esc(a.Handle),
-		opCell, state, esc(added), acts.String())
+		opCell, state, esc(addedFull), esc(added), acts.String())
 }
 
 // renderCredential is the one answer on this screen carrying a secret. The
@@ -315,4 +335,17 @@ func mcpConfig(c soulstream.Credential) string {
 // replaces a shown-once credential the moment anything else happens.
 func resultNote(msg string) string {
 	return fmt.Sprintf(`<div id="%s" class="note">%s</div>`, resultID, esc(msg))
+}
+
+// revokeConfirm is the question revoking stands behind: what stops, what
+// stays, and the two ways out.
+func revokeConfirm(who string) string {
+	return fmt.Sprintf(`<div id="%s" class="note">`+
+		`<p class="confirm">Take %s&#39;s credential away? It cannot get in again from the `+
+		`moment you do; everything it said stays, with its name still on it. A new `+
+		`credential brings it back.</p>`+
+		`<div class="acts">`+
+		`<button class="btn" data-on:click="@post('/act/agent-revoke?who=%s')">Yes, revoke it</button>`+
+		`<button class="btn ghost" data-on:click="@get('/agents/revoke-ask')">Keep it</button>`+
+		`</div></div>`, resultID, esc(who), qesc(who))
 }

@@ -34,7 +34,7 @@ func startFold() string {
 func startForm() string {
 	return `<form data-on:submit="@post('/act/conversation-start', {contentType:'form'})">` +
 		`<label class="field">Name` +
-		`<input name="name" autocomplete="off" placeholder="what to call it"></label>` +
+		`<input name="name" required autocomplete="off" placeholder="what to call it"></label>` +
 		`<label class="field">What it’s about` +
 		`<input name="about" autocomplete="off" placeholder="one line — optional"></label>` +
 		`<button class="btn" type="submit">Start</button>` +

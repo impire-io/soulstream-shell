@@ -44,6 +44,7 @@ func TestTheModuleClaimsItsOwnRoutes(t *testing.T) {
 	m.Mount(&rt)
 	want := []string{
 		"GET /agents",
+		"GET /agents/revoke-ask",
 		"POST /act/agent-add",
 		"POST /act/agent-credential",
 		"POST /act/agent-revoke",
@@ -77,11 +78,54 @@ func TestAVoiceStaysOnTheScreenAfterItsCredentialIsTakenAway(t *testing.T) {
 	if !strings.Contains(body, "nightly") {
 		t.Fatal("the agent with no credential is missing from the roster")
 	}
-	if got := strings.Count(body, "Take the credential away"); got != 1 {
-		t.Errorf("take-away offered %d times, want only for the one that can get in", got)
+	if got := strings.Count(body, "/agents/revoke-ask?who="); got != 1 {
+		t.Errorf("revoking offered %d times, want only for the one that can get in", got)
+	}
+	// The row offers the question, never the act itself — and the key says
+	// one short word, with the whole sentence in the hover.
+	if strings.Contains(body, "/act/agent-revoke") {
+		t.Error("the roster offers the revoke act without its question")
+	}
+	if !strings.Contains(body, `title="Take the credential away"`) ||
+		!strings.Contains(body, ">Revoke</button>") {
+		t.Errorf("the revoke key does not read as one word with the sentence in hover:\n%s", body)
 	}
 	if got := strings.Count(body, "New credential"); got != 2 {
 		t.Errorf("new-credential offered %d times, want on every row", got)
+	}
+}
+
+// Revoking stands behind a question that says what stops and what stays,
+// with both ways out.
+func TestRevokingStandsBehindAQuestion(t *testing.T) {
+	q := revokeConfirm("scribe")
+	for _, want := range []string{
+		"credential away?", "everything it said stays",
+		`@post('/act/agent-revoke?who=scribe')`, "Yes, revoke it",
+		`@get('/agents/revoke-ask')`, "Keep it",
+	} {
+		if !strings.Contains(q, want) {
+			t.Errorf("the revoke question is missing %q:\n%s", want, q)
+		}
+	}
+}
+
+// The screen leads with the roster; the add-form waits in the slide-over
+// behind its own key, with a result line of its own beside the fields.
+func TestTheAddFormWaitsInTheSlideOver(t *testing.T) {
+	body := renderAgents(agentList(), nil, names(), "")
+	table := strings.Index(body, `id="agents-table"`)
+	panel := strings.Index(body, `class="slideover"`)
+	if table < 0 || panel < 0 || panel < table {
+		t.Fatalf("the roster does not lead the screen (table at %d, panel at %d)", table, panel)
+	}
+	for _, want := range []string{
+		`data-on:click="$panel = true"`, "Add agent",
+		`id="agent-add"`, `id="agents-add-note"`, "Add an agent",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the screen is missing %q", want)
+		}
 	}
 }
 
@@ -105,9 +149,9 @@ func TestTheTableScrollsInsideItsOwnBox(t *testing.T) {
 	if !strings.Contains(body, `<td class="mono" title="scribe">scribe</td>`) {
 		t.Errorf("a handle that wraps cannot be read whole:\n%s", body)
 	}
-	// And the form above the table lays its fields out in whatever room there
+	// And the form in the slide-over lays its fields out in whatever room there
 	// is, rather than running every one of them the width of the screen.
-	if !strings.Contains(renderAddForm(), `<div class="fields">`) {
+	if !strings.Contains(addPanel(), `<div class="fields">`) {
 		t.Error("the form's fields do not lay themselves out")
 	}
 }
@@ -292,7 +336,7 @@ func TestTheScreenAnswersAboutTheVoiceSomebodyCameFor(t *testing.T) {
 // clicks: the claim is signed with the reader's own key and their name stays
 // on it.
 func TestTheFormSaysWhatAddingAnAgentCommitsYouTo(t *testing.T) {
-	form := renderAddForm()
+	form := addPanel()
 	if !strings.Contains(form, "You vouch for what you add") {
 		t.Error("the form does not say that adding is vouching")
 	}

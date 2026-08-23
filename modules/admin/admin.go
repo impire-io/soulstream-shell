@@ -118,9 +118,12 @@ func (m *Module) Link(route string, params map[string]string) (shell.Link, bool)
 	return shell.Link{Href: href}, true
 }
 
-// Mount claims the screen and the acts offered from it.
+// Mount claims the screen, the two questions its destructive acts stand
+// behind, and the acts offered from it.
 func (m *Module) Mount(rt shell.Router) {
 	rt.HandleFunc("GET /people", m.people)
+	rt.HandleFunc("GET /people/disable-ask", m.askDisable)
+	rt.HandleFunc("GET /people/client-remove-ask", m.askClientRemove)
 	rt.HandleFunc("POST /act/person-add", m.actAdd)
 	rt.HandleFunc("POST /act/invite", m.actInvite)
 	rt.HandleFunc("POST /act/disable", m.actDisable)
@@ -188,28 +191,64 @@ func (m *Module) people(w http.ResponseWriter, r *http.Request) {
 // actAdd names a new person. They exist from there on but cannot sign in
 // until an invite enrolls their passkey — creation grants existence, never
 // admission, which is the sign-in surface's own rule.
+//
+// The form lives in the slide-over, so what goes wrong answers into the
+// panel's own note, beside the fields it is about. What goes right puts
+// the panel away and answers on the screen it slid over, with the new row
+// marked in the re-read list.
 func (m *Module) actAdd(w http.ResponseWriter, r *http.Request) {
 	a, err := m.reach(r)
 	if err != nil {
-		shell.Patch(w, resultNote(err.Error()))
+		shell.Patch(w, addNote(err.Error()))
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		shell.Patch(w, resultNote("That form did not arrive whole: "+err.Error()))
+		shell.Patch(w, addNote("That form did not arrive whole: "+err.Error()))
 		return
 	}
 	username := r.PostFormValue("username")
 	if username == "" {
-		shell.Patch(w, resultNote("A person needs a sign-in name."))
+		shell.Patch(w, addNote("A person needs a sign-in name."))
 		return
 	}
 	if err := a.Create(r.Context(), username, r.PostFormValue("shown"),
 		splitGroups(r.PostFormValue("groups"))); err != nil {
-		shell.Patch(w, resultNote(refusalWords("Adding "+username, err)))
+		shell.Patch(w, addNote(refusalWords("Adding "+username, err)))
 		return
 	}
-	shell.Patch(w, resultNote(username+" exists now — create an invite below so they can enroll a passkey."))
+	shell.PatchSignals(w, `{panel: false}`)
+	shell.Patch(w, addNote(""))
+	shell.Patch(w, resultNote(username+" exists now — create an invite from their row so they can enroll a passkey."))
 	m.patchList(w, r, a, username)
+}
+
+// askDisable patches the question disabling stands behind — or, asked
+// about nobody, clears it, which is what "Keep it" does.
+func (m *Module) askDisable(w http.ResponseWriter, r *http.Request) {
+	if m.sp.Session(r) == nil {
+		http.Error(w, "sign in first", http.StatusUnauthorized)
+		return
+	}
+	who := r.URL.Query().Get("who")
+	if who == "" {
+		shell.Patch(w, resultNote(""))
+		return
+	}
+	shell.Patch(w, disableConfirm(who))
+}
+
+// askClientRemove is the same exchange for removing an app.
+func (m *Module) askClientRemove(w http.ResponseWriter, r *http.Request) {
+	if m.sp.Session(r) == nil {
+		http.Error(w, "sign in first", http.StatusUnauthorized)
+		return
+	}
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		shell.Patch(w, resultNote(""))
+		return
+	}
+	shell.Patch(w, clientRemoveConfirm(id))
 }
 
 // actEnable is actDisable undone: the surface accepts them again.

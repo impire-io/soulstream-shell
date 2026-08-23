@@ -163,19 +163,35 @@ func (m *Module) actWorkOpen(w http.ResponseWriter, r *http.Request) {
 		topicPath = m.defaultTopic(r.Context())
 	}
 	if topicPath == "" {
-		shell.Patch(w, `<div id="result" class="note">no topic to open work on</div>`)
+		shell.Patch(w, `<div id="result" class="note">There is no conversation to open a work item in.</div>`)
 		return
 	}
 	who := sess.ScreenName(r.Context())
 	id, err := topic.Open(sess.Client(), topicPath).
 		OpenWork(r.Context(), "opened by "+who, "opened from the shell")
 	if err != nil {
-		shell.Patch(w, fmt.Sprintf(`<div id="result" class="note">work.open as %s refused: %s</div>`,
+		shell.Patch(w, fmt.Sprintf(`<div id="result" class="note">Opening a work item as %s was refused: %s</div>`,
 			esc(who), esc(err.Error())))
 		return
 	}
-	shell.Patch(w, fmt.Sprintf(`<div id="result" class="note">work.open ok · %s · by %s (signed=%v)</div>`,
-		esc(id), esc(who), sess.Signed))
+	// A plain sentence for the person, honest about the signature either
+	// way; the op id rides in mono with the whole of it in the hover — the
+	// once a year somebody needs it.
+	sig := "signed and on the record"
+	if !sess.Signed {
+		sig = "attributed, not signed"
+	}
+	shell.Patch(w, fmt.Sprintf(`<div id="result" class="note">Work item opened by %s — %s. `+
+		`<span class="mono" title="%s">%s</span></div>`,
+		esc(who), sig, esc(id), esc(shortID(id))))
+}
+
+// shortID is an op id a result line can hold; the whole rides the hover.
+func shortID(id string) string {
+	if len(id) > 12 {
+		return id[:12] + "…"
+	}
+	return id
 }
 
 // view is one read of the house.

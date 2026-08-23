@@ -267,6 +267,11 @@ func sigMark(o op) string {
 // prettied payload is different bytes. The canonical form beside it, because
 // that — not the payload — is what a signature is over, and the difference
 // between the two is the thing people get wrong about this record.
+//
+// The payload and the verdict lead, open; the headers and the signed bytes
+// rest under folds. They are all still here — this is the screen they are
+// for — but a person opens a message to read what it says, and the wire
+// form is one click away rather than half the panel.
 func renderOp(v opView) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, `<div id="%s">`, opID)
@@ -320,7 +325,8 @@ func renderHeaders(o op) string {
 		rows = append(rows, struct{ k, v string }{k, v})
 	}
 	var b strings.Builder
-	b.WriteString(`<h3 class="label">Headers</h3><div class="tablewrap"><table><tbody>`)
+	b.WriteString(`<details class="stow"><summary>Headers</summary>` +
+		`<div class="tablewrap"><table><tbody>`)
 	for _, row := range rows {
 		val := esc(row.v)
 		if row.v == "" {
@@ -329,7 +335,7 @@ func renderHeaders(o op) string {
 		fmt.Fprintf(&b, `<tr><td class="mono">%s</td><td class="mono">%s</td></tr>`,
 			esc(row.k), val)
 	}
-	b.WriteString(`</tbody></table></div>`)
+	b.WriteString(`</tbody></table></div></details>`)
 	return b.String()
 }
 
@@ -358,23 +364,31 @@ func renderCanonical(o op) string {
 	if o.Bad != "" {
 		return ""
 	}
+	body := ""
 	if o.CanonErr != "" {
-		return fmt.Sprintf(`<h3 class="label">Signed bytes</h3><p class="note">%s</p>`,
-			esc(o.CanonErr))
+		body = fmt.Sprintf(`<p class="note">%s</p>`, esc(o.CanonErr))
+	} else {
+		body = blockBody(o.Canonical,
+			"The canonical form the signature is over — not the payload, and bound to "+
+				"this soulstream's own key and to this subject, so it cannot be lifted "+
+				"into another one.")
 	}
-	return blockOf("Signed bytes", o.Canonical,
-		"The canonical form the signature is over — not the payload, and bound to "+
-			"this soulstream's own key and to this subject, so it cannot be lifted "+
-			"into another one.")
+	return `<details class="stow"><summary>Signed bytes</summary>` + body + `</details>`
 }
 
-// blockOf is one block of bytes on the dark surface, or an honest sentence
+// blockOf is one titled block of bytes; blockBody is the same block with
+// the title left to the caller, for the one that lives under a fold's own
+// summary.
+func blockOf(heading string, data []byte, about string) string {
+	return fmt.Sprintf(`<h3 class="label">%s</h3>`, esc(heading)) + blockBody(data, about)
+}
+
+// blockBody is one block of bytes on the dark surface, or an honest sentence
 // about why it is not shown. Text is shown as text; anything else says what
 // it is, because a screen full of mojibake tells a person less than one
 // sentence about the bytes does.
-func blockOf(heading string, data []byte, about string) string {
-	head := fmt.Sprintf(`<h3 class="label">%s</h3><p class="note">%s</p>`,
-		esc(heading), esc(about))
+func blockBody(data []byte, about string) string {
+	head := fmt.Sprintf(`<p class="note">%s</p>`, esc(about))
 	switch {
 	case len(data) == 0:
 		return head + `<p class="note">Empty.</p>`
