@@ -28,7 +28,8 @@ func TestTheModuleClaimsItsOwnRoutes(t *testing.T) {
 	}
 	var rt routes
 	m.Mount(&rt)
-	want := []string{"GET /approvals", "POST /act/approval-approve", "POST /act/approval-deny"}
+	want := []string{"GET /approvals", "GET /approvals/live",
+		"POST /act/approval-approve", "POST /act/approval-deny"}
 	if !reflect.DeepEqual(rt.patterns, want) {
 		t.Errorf("the module mounts %v, want %v", rt.patterns, want)
 	}
@@ -103,14 +104,21 @@ func TestTheScreenSaysItsTerms(t *testing.T) {
 	}
 }
 
-// The mark on the spine counts, and reads singular when one waits.
+// The mark on the spine counts, and reads singular when one waits. It is
+// always an element carrying its id — the live tick's second target — and
+// empty when nothing waits, so the tick can count it down to nothing and
+// back up again.
 func TestTheSpineMark(t *testing.T) {
 	if got := spineTally(3); !strings.Contains(got, ">3</span>") ||
-		!strings.Contains(got, "3 decisions wait") {
+		!strings.Contains(got, "3 decisions wait") ||
+		!strings.Contains(got, `id="approvals-tally"`) {
 		t.Errorf("the mark: %s", got)
 	}
 	if got := spineTally(1); !strings.Contains(got, "1 decision waits") {
 		t.Errorf("one waiting decision reads as many: %s", got)
+	}
+	if got := spineTally(0); got != `<span id="approvals-tally" class="tally"></span>` {
+		t.Errorf("a quiet mark is not a patchable empty element: %s", got)
 	}
 }
 

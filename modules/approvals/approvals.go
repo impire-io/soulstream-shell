@@ -15,9 +15,11 @@ package approvals
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/impire-io/soulstream-shell/shell"
 	"github.com/impire-io/soulstream-shell/soulstream"
@@ -63,8 +65,8 @@ func (m *Module) Nav(r *http.Request) []shell.NavEntry {
 	if sess == nil || !m.mayAct(sess) {
 		return nil
 	}
-	mark := ""
-	if pending, err := m.sp.PendingApprovals(); err == nil && len(pending) > 0 {
+	mark := spineTally(0)
+	if pending, err := m.sp.PendingApprovals(); err == nil {
 		mark = spineTally(len(pending))
 	}
 	return []shell.NavEntry{{
@@ -91,9 +93,10 @@ func (m *Module) mayAct(sess *soulstream.Session) bool {
 	return false
 }
 
-// Mount claims the screen and its two acts.
+// Mount claims the screen, its live channel, and its two acts.
 func (m *Module) Mount(rt shell.Router) {
 	rt.HandleFunc("GET /approvals", m.approvals)
+	rt.HandleFunc("GET /approvals/live", m.live)
 	rt.HandleFunc("POST /act/approval-approve", m.actAnswer(true))
 	rt.HandleFunc("POST /act/approval-deny", m.actAnswer(false))
 }
@@ -106,7 +109,10 @@ func topicQuery(topicPath string) string {
 	return "?topic=" + qesc(topicPath)
 }
 
-// approvals is the screen: everything awaiting a decision.
+// approvals is the screen: everything awaiting a decision. It opens its
+// live channel the moment it loads — this is the one sheet where standing
+// still lies: windows run out, new tickets arrive, and a screen left open
+// must keep saying what is actually waiting.
 func (m *Module) approvals(w http.ResponseWriter, r *http.Request) {
 	sess := m.sp.Session(r)
 	if sess == nil {
@@ -115,7 +121,25 @@ func (m *Module) approvals(w http.ResponseWriter, r *http.Request) {
 	}
 	m.sh.Render(w, r, shell.Page{
 		Title: "approvals", Section: sectionApprovals, Live: true,
+		Init: "@get('/approvals/live')",
 		Body: m.sh.Sheet(renderApprovals(m.view(r.Context(), sess))),
+	})
+}
+
+// live re-reads the pending tickets every few seconds and morphs the list
+// and the mark on the spine — the countdowns recompute, arrivals appear,
+// expiries go. The result line is never touched: it belongs to the acts,
+// and a one-shot answer and the stream must never write the same element.
+func (m *Module) live(w http.ResponseWriter, r *http.Request) {
+	sess := m.sp.Session(r)
+	if sess == nil {
+		http.Error(w, "sign in first", http.StatusUnauthorized)
+		return
+	}
+	shell.Stream(w, r, 5*time.Second, func(out io.Writer) {
+		v := m.view(r.Context(), sess)
+		shell.WriteElements(out, renderList(v))
+		shell.WriteElements(out, spineTally(len(v.Tickets)))
 	})
 }
 

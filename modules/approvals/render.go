@@ -37,12 +37,19 @@ type view struct {
 }
 
 // spineTally is the mark on this module's key: how many decisions wait.
+// Always an element, empty when nothing does, and carrying its id either
+// way — it is the live tick's second target, and a mark that only existed
+// while it counted could never be patched back in.
 func spineTally(n int) string {
+	if n == 0 {
+		return `<span id="approvals-tally" class="tally"></span>`
+	}
 	word := "decisions wait"
 	if n == 1 {
 		word = "decision waits"
 	}
-	return fmt.Sprintf(`<span class="tally on" title="%d %s">%d</span>`, n, word, n)
+	return fmt.Sprintf(`<span id="approvals-tally" class="tally on" title="%d %s">%d</span>`,
+		n, word, n)
 }
 
 // renderApprovals is the whole screen's body.
