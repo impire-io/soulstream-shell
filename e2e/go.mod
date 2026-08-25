@@ -4,7 +4,7 @@ go 1.26.2
 
 require (
 	github.com/impire-io/soulstream v0.13.0-rc.10
-	github.com/impire-io/soulstream-core v0.12.1
+	github.com/impire-io/soulstream-core v0.13.0
 	github.com/impire-io/soulstream-identity v0.11.0
 	github.com/impire-io/soulstream-idp v0.8.0
 	github.com/impire-io/soulstream-shell v0.10.0

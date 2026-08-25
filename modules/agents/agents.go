@@ -23,7 +23,9 @@ package agents
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
+	"time"
 
 	"github.com/impire-io/soulstream-shell/shell"
 	"github.com/impire-io/soulstream-shell/soulstream"
@@ -96,6 +98,7 @@ func (m *Module) Link(route string, params map[string]string) (shell.Link, bool)
 // three acts offered from it.
 func (m *Module) Mount(rt shell.Router) {
 	rt.HandleFunc("GET /agents", m.agents)
+	rt.HandleFunc("GET /agents/live", m.live)
 	rt.HandleFunc("GET /agents/revoke-ask", m.askRevoke)
 	rt.HandleFunc("POST /act/agent-add", m.actAdd)
 	rt.HandleFunc("POST /act/agent-credential", m.actCredential)
@@ -141,8 +144,30 @@ func (m *Module) agents(w http.ResponseWriter, r *http.Request) {
 	list, err := ag.List(r.Context())
 	m.sh.Render(w, r, shell.Page{
 		Title: "agents", Section: sectionAgents, Live: true,
+		Init: "@get('/agents/live')",
 		Body: m.sh.Sheet(renderAgents(list, err, m.names(r.Context(), list),
-			r.URL.Query().Get("who"))),
+			r.URL.Query().Get("who"), m.sp.Presence(r.Context()))),
+	})
+}
+
+// live re-reads the roster every few seconds and morphs the table — the
+// Around column is a judgment of the moment, so a screen left open must
+// keep judging: an agent that just started shows in while the person
+// still holds its paste block, and one that stopped goes to left or
+// seen without a reload. The result line is never touched: it belongs
+// to the acts, and a one-shot answer and the stream must never write
+// the same element.
+func (m *Module) live(w http.ResponseWriter, r *http.Request) {
+	ag, err := m.reach(r)
+	if err != nil {
+		http.Error(w, "sign in first", http.StatusUnauthorized)
+		return
+	}
+	who := r.URL.Query().Get("who")
+	shell.Stream(w, r, 5*time.Second, func(out io.Writer) {
+		list, lerr := ag.List(r.Context())
+		shell.WriteElements(out, renderTable(list, lerr, m.names(r.Context(), list), who,
+			m.sp.Presence(r.Context())))
 	})
 }
 
@@ -255,5 +280,6 @@ func (m *Module) actRevoke(w http.ResponseWriter, r *http.Request) {
 // changed still marked.
 func (m *Module) patchList(w http.ResponseWriter, r *http.Request, ag *soulstream.Agents, who string) {
 	list, err := ag.List(r.Context())
-	shell.Patch(w, renderTable(list, err, m.names(r.Context(), list), who))
+	shell.Patch(w, renderTable(list, err, m.names(r.Context(), list), who,
+		m.sp.Presence(r.Context())))
 }

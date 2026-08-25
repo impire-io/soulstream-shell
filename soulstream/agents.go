@@ -33,13 +33,18 @@ import (
 // of the question, and it is the same fact the conversation screen reads to
 // put a voice on the machine channel.
 //
-// WHAT IS NOT HERE. Last-seen. The credential record carries an account, a
-// user, a label and an expiry, and nothing else — by the identity plane's own
-// design, where a new field is the stated condition for reopening that
-// decision. Every use of a credential is an audit line in the deployment's
-// log, not a queryable fact, and this layer will not invent a store to keep
-// one. The screen says when an agent was added, because the record knows
-// that, and says nothing it would have to guess.
+// WHAT IS NOT HERE. A store of this layer's own. The credential record
+// carries an account, a user, a label and an expiry, and nothing else — by
+// the identity plane's own design, where a new field is the stated
+// condition for reopening that decision. Every use of a credential is an
+// audit line in the deployment's log, not a queryable fact, and this layer
+// still will not invent a store to keep one. What changed since that
+// refusal was first written: the realm itself grew a who-is-around face
+// (the presence convention — each running thing renews its own small
+// lease, and silence tells the truth), so a screen can now say when a
+// voice was last around by READING, not by keeping. That reading is
+// Presence (presence.go); it is advisory — courtesy, never correctness —
+// and nothing anywhere gates on it.
 
 // Agent is one machine voice: what the record says about it, joined with
 // whether it can still get in.

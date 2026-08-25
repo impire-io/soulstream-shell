@@ -121,7 +121,8 @@ func renderTable(list []soulstream.Person, err error, who string) string {
 		fmt.Fprintf(&b, `<p class="blank">%s</p>`,
 			esc(refusalWords("Reading the list of people", err)))
 	case len(list) == 0:
-		b.WriteString(`<p class="blank">Nobody can sign in here yet.</p>`)
+		b.WriteString(`<p class="blank">Nobody can sign in here yet. Add the first ` +
+			`person above — they pick a passkey the moment they arrive.</p>`)
 	default:
 		b.WriteString(`<div class="tablewrap"><table><thead><tr>` +
 			`<th>Name</th><th>Sign-in name</th><th>Can sign in</th>` +
@@ -246,7 +247,8 @@ func renderClients(clients []soulstream.Client, err error) string {
 		fmt.Fprintf(&b, `<p class="blank">%s</p>`,
 			esc(refusalWords("Reading the list of apps", err)))
 	case len(clients) == 0:
-		b.WriteString(`<p class="blank">No apps registered yet.</p>`)
+		b.WriteString(`<p class="blank">No apps registered yet. An app is somewhere ` +
+			`else people sign in with their account here — register the first below.</p>`)
 	default:
 		b.WriteString(`<div class="tablewrap"><table><thead><tr>` +
 			`<th>Name</th><th>App id</th><th>Returns people to</th><th>Actions</th>` +
