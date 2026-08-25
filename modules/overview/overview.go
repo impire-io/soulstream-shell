@@ -120,6 +120,7 @@ func (m *Module) home(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	v := m.observe(r.Context(), r.URL.Query().Get("topic"), sess)
+	m.firstSteps(r.Context(), sess, &v)
 	m.sh.Render(w, withTopic(r, v.TopicPath), shell.Page{
 		Title: "home", Section: sectionHome, Live: true,
 		Body: m.sh.Sheet(renderOverview(v)),
@@ -226,7 +227,11 @@ type view struct {
 	AgentsOn              bool
 	AgentsNamed, AgentsIn int
 	AgentsUnread          bool
-	Err                   string
+	// Steps is the first-steps card's derivation — filled for Home only,
+	// recomputed from the realm at every render, kept nowhere (design
+	// 0008 §2: guidance is a reading, never a store).
+	Steps []step
+	Err   string
 }
 
 // observe reads everything both screens show: the conversations, the open

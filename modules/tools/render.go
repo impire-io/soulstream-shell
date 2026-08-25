@@ -70,8 +70,12 @@ func renderList(v view) string {
 	switch {
 	case v.Err != "":
 		fmt.Fprintf(&b, `<p class="blank">%s</p>`, esc(v.Err))
+	case len(v.Tools) == 0 && v.Admin:
+		b.WriteString(`<p class="blank">No tools yet. A tool is a service your assistant ` +
+			`can use for you — add the first with the key above.</p>`)
 	case len(v.Tools) == 0:
-		b.WriteString(`<p class="blank">No tools yet.</p>`)
+		b.WriteString(`<p class="blank">No tools yet. A tool is a service your assistant ` +
+			`can use for you — an administrator adds the first.</p>`)
 	default:
 		b.WriteString(`<div class="tablewrap"><table><thead><tr>` +
 			`<th>Tool</th><th>What it is</th><th>Where</th><th>You</th><th>Actions</th>` +

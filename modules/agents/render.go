@@ -3,6 +3,7 @@ package agents
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/impire-io/soulstream-shell/shell"
 	"github.com/impire-io/soulstream-shell/soulstream"
@@ -26,14 +27,16 @@ const (
 // here looking for — empty when they simply opened the screen. The roster
 // leads; the add-form waits in the slide-over behind its own key, because
 // most visits are about the agents there are.
-func renderAgents(list []soulstream.Agent, err error, names map[string]string, who string) string {
+func renderAgents(list []soulstream.Agent, err error, names map[string]string, who string,
+	signs map[string]soulstream.LifeSign,
+) string {
 	var b strings.Builder
 	b.WriteString(`<h1>Agents</h1>`)
 	b.WriteString(`<p class="lede">The AI assistants that take part here under their ` +
 		`own names. Each gets in with a credential of its own, so what it says ` +
 		`carries its name — and each can be stopped without touching anything else.</p>`)
 	b.WriteString(lookedUpNote(list, err, who))
-	b.WriteString(`<div class="section">` + addKey() + renderTable(list, err, names, who) + `</div>`)
+	b.WriteString(`<div class="section">` + addKey() + renderTable(list, err, names, who, signs) + `</div>`)
 	b.WriteString(resultNote(""))
 	b.WriteString(shell.SlideOver("Add an agent", addPanel()))
 	return b.String()
@@ -90,7 +93,9 @@ func addNote(msg string) string {
 
 // renderTable is the roster itself, and a patch target of its own so an act
 // that changes what is true can hand back what is now true.
-func renderTable(list []soulstream.Agent, err error, names map[string]string, who string) string {
+func renderTable(list []soulstream.Agent, err error, names map[string]string, who string,
+	signs map[string]soulstream.LifeSign,
+) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, `<div id="%s">`, tableID)
 	switch {
@@ -103,10 +108,10 @@ func renderTable(list []soulstream.Agent, err error, names map[string]string, wh
 	default:
 		b.WriteString(`<div class="tablewrap"><table><thead><tr>` +
 			`<th>Name</th><th>Handle</th><th>Vouched for by</th>` +
-			`<th>Can get in</th><th>Added</th><th>Actions</th>` +
+			`<th>Can get in</th><th>Around</th><th>Added</th><th>Actions</th>` +
 			`</tr></thead><tbody>`)
 		for _, a := range list {
-			b.WriteString(agentRow(a, names, a.Handle == who))
+			b.WriteString(agentRow(a, names, a.Handle == who, signs))
 		}
 		b.WriteString(`</tbody></table></div>`)
 	}
@@ -114,10 +119,53 @@ func renderTable(list []soulstream.Agent, err error, names map[string]string, wh
 	return b.String()
 }
 
+// aroundCell is one voice's life sign in the person's words, judged fresh
+// at every render from the realm's own who-is-around reading: in / left
+// {when} / seen {when} — and an honest dash when the realm has never seen
+// it, which never claims silence where nothing was measured. The exact
+// moment rides the hover; the sign is a courtesy and gates nothing.
+func aroundCell(sign soulstream.LifeSign, known bool) string {
+	if !known {
+		return `<td><span class="dim">—</span></td>`
+	}
+	when := sign.When.UTC().Format("2006-01-02 15:04Z")
+	title := "as of " + when
+	if sign.Doing != "" {
+		title = sign.Doing + " · " + title
+	}
+	switch {
+	case sign.Present:
+		return fmt.Sprintf(`<td title="%s"><span class="pill ok"><span class="led ok"></span>in</span></td>`,
+			esc(title))
+	case sign.Left:
+		return fmt.Sprintf(`<td title="%s">left %s</td>`, esc(title), agoWord(sign.When))
+	default:
+		return fmt.Sprintf(`<td title="%s">seen %s</td>`, esc(title), agoWord(sign.When))
+	}
+}
+
+// agoWord says how long ago a moment was, in the row's short words; the
+// exact moment is the hover's to carry.
+func agoWord(when time.Time) string {
+	d := time.Since(when)
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	case d < 48*time.Hour:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+	}
+}
+
 // agentRow is one agent, marked when it is the one somebody came here for.
 // The lamp is the machine channel's, and what it says when somebody hovers
 // it is the record's own fact about the voice, in the record's words.
-func agentRow(a soulstream.Agent, names map[string]string, lookedUp bool) string {
+func agentRow(a soulstream.Agent, names map[string]string, lookedUp bool,
+	signs map[string]soulstream.LifeSign,
+) string {
 	name := a.ShownAs
 	if name == "" {
 		name = a.Handle
@@ -160,14 +208,15 @@ func agentRow(a soulstream.Agent, names map[string]string, lookedUp bool) string
 	if lookedUp {
 		row = `<tr class="on">`
 	}
+	sign, known := signs[a.Handle]
 	// A handle has no word breaks of its own and is let wrap in a narrow
 	// column, so the whole of it also rides in the hover: wrapped across two
 	// lines, it is still one name.
 	return fmt.Sprintf(`%s<td><span class="led machine" title="operated by %s"></span> %s</td>`+
 		`<td class="mono" title="%s">%s</td><td>%s</td>`+
-		`<td>%s</td><td class="mono" title="%s">%s</td><td>%s</td></tr>`,
+		`<td>%s</td>%s<td class="mono" title="%s">%s</td><td>%s</td></tr>`,
 		row, esc(operator), esc(name), esc(a.Handle), esc(a.Handle),
-		opCell, state, esc(addedFull), esc(added), acts.String())
+		opCell, state, aroundCell(sign, known), esc(addedFull), esc(added), acts.String())
 }
 
 // renderCredential is the one answer on this screen carrying a secret. The
@@ -214,6 +263,9 @@ func renderRunIt(c soulstream.Credential, name string) string {
 	b.WriteString(`<p class="act"><button type="button" class="btn ghost" ` +
 		`data-on:click="navigator.clipboard.writeText(document.getElementById('wrap-cmd').value); el.textContent = 'Copied'">` +
 		`Copy the block</button></p>`)
+	fmt.Fprintf(&b, `<p>Once it starts, its row on this screen shows `+
+		`<span class="pill ok">in</span> within moments. Then start a conversation `+
+		`and mention %s — its answer is how you know it is running.</p>`, esc(name))
 	fmt.Fprintf(&b, `<p>Mentions of %s become answers even when nobody is at the keyboard; `+
 		`mentions sent while it was off are answered when it starts. Stop it any time with `+
 		`Ctrl-C — nothing is lost — and taking the credential away above stops it for good. `+

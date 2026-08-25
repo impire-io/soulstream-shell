@@ -176,6 +176,7 @@ func renderOverview(v view) string {
 	b.WriteString(`<h1>Your soulstream at a glance</h1>`)
 	b.WriteString(`<p class="lede">Everything here is read live from your soulstream — ` +
 		`the shell keeps none of it.</p>`)
+	b.WriteString(firstStepsCard(v.Steps))
 	b.WriteString(`<div class="planes">`)
 	b.WriteString(planeCard("cassette-tape", "Storage", storageCard(v)))
 	b.WriteString(planeCard("key", "People &amp; sign-in", signInRow(v)))

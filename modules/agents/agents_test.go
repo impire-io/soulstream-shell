@@ -44,6 +44,7 @@ func TestTheModuleClaimsItsOwnRoutes(t *testing.T) {
 	m.Mount(&rt)
 	want := []string{
 		"GET /agents",
+		"GET /agents/live",
 		"GET /agents/revoke-ask",
 		"POST /act/agent-add",
 		"POST /act/agent-credential",
@@ -58,7 +59,7 @@ func TestTheModuleClaimsItsOwnRoutes(t *testing.T) {
 // lamp — and the lamp says the record's own fact about the voice, not the
 // design's word for the colour.
 func TestEveryRowIsAMachineVoice(t *testing.T) {
-	body := renderTable(agentList(), nil, names(), "")
+	body := renderTable(agentList(), nil, names(), "", nil)
 	if got := strings.Count(body, `class="led machine"`); got != 2 {
 		t.Errorf("machine lamps = %d, want one per row (2)", got)
 	}
@@ -74,7 +75,7 @@ func TestEveryRowIsAMachineVoice(t *testing.T) {
 // things, and the things it said still need a name against them. What
 // changed is what it can do, and only the act that would be a lie is gone.
 func TestAVoiceStaysOnTheScreenAfterItsCredentialIsTakenAway(t *testing.T) {
-	body := renderTable(agentList(), nil, names(), "")
+	body := renderTable(agentList(), nil, names(), "", nil)
 	if !strings.Contains(body, "nightly") {
 		t.Fatal("the agent with no credential is missing from the roster")
 	}
@@ -113,7 +114,7 @@ func TestRevokingStandsBehindAQuestion(t *testing.T) {
 // The screen leads with the roster; the add-form waits in the slide-over
 // behind its own key, with a result line of its own beside the fields.
 func TestTheAddFormWaitsInTheSlideOver(t *testing.T) {
-	body := renderAgents(agentList(), nil, names(), "")
+	body := renderAgents(agentList(), nil, names(), "", nil)
 	table := strings.Index(body, `id="agents-table"`)
 	panel := strings.Index(body, `class="slideover"`)
 	if table < 0 || panel < 0 || panel < table {
@@ -133,7 +134,7 @@ func TestTheAddFormWaitsInTheSlideOver(t *testing.T) {
 // table scrolls inside its own box rather than pushing the screen sideways
 // and clipping its last column off the edge of the frame.
 func TestTheTableScrollsInsideItsOwnBox(t *testing.T) {
-	body := renderTable(agentList(), nil, names(), "")
+	body := renderTable(agentList(), nil, names(), "", nil)
 	if n := strings.Count(body, "<table"); n != 1 {
 		t.Fatalf("the screen serves %d tables, want 1", n)
 	}
@@ -247,7 +248,7 @@ func TestThePasteBlockIsPortableAndWhole(t *testing.T) {
 // when the record offers no name beyond the handle, the handle stands alone
 // rather than beside a copy of itself.
 func TestTheOperatorCellDoesNotSayANameTwice(t *testing.T) {
-	body := renderTable(agentList(), nil, nil, "")
+	body := renderTable(agentList(), nil, nil, "", nil)
 	if strings.Contains(body, "u-daan <span") || strings.Contains(body, "u-daan @u-daan") {
 		t.Errorf("an unnamed operator is printed twice:\n%s", body)
 	}
@@ -311,7 +312,7 @@ func TestTheCredentialScreenLeadsWithTheWrap(t *testing.T) {
 
 // An empty roster is a sentence, not an empty container.
 func TestAnEmptyRosterSaysSo(t *testing.T) {
-	if !strings.Contains(renderTable(nil, nil, nil, ""), "No agents yet.") {
+	if !strings.Contains(renderTable(nil, nil, nil, "", nil), "No agents yet.") {
 		t.Error("an empty roster does not say so")
 	}
 }
@@ -319,7 +320,7 @@ func TestAnEmptyRosterSaysSo(t *testing.T) {
 // The screen answers the question somebody arrived with, including when the
 // answer is no. Most voices on the record are not agents.
 func TestTheScreenAnswersAboutTheVoiceSomebodyCameFor(t *testing.T) {
-	marked := renderTable(agentList(), nil, names(), "scribe")
+	marked := renderTable(agentList(), nil, names(), "scribe", nil)
 	if got := strings.Count(marked, `<tr class="on">`); got != 1 {
 		t.Errorf("marked rows = %d, want exactly the one somebody came for", got)
 	}
@@ -356,7 +357,7 @@ func TestTheFormSaysWhatAddingAnAgentCommitsYouTo(t *testing.T) {
 // is narrow by construction — the screen below is rendered with no
 // credential on it, which is every state but one.
 func TestNothingServedSaysTheRetiredWord(t *testing.T) {
-	body := renderAgents(agentList(), nil, names(), "scribe")
+	body := renderAgents(agentList(), nil, names(), "scribe", nil)
 	for _, banned := range []string{"realm", "fold", "idp", "OIDC", "persona", "sentinel", "token"} {
 		if strings.Contains(strings.ToLower(body), strings.ToLower(banned)) {
 			t.Errorf("the agents screen says %q", banned)
