@@ -81,9 +81,20 @@ type Rig struct {
 	// credentials — the address it tells an agent to dial, and the address a
 	// test connects on when it plays one. Empty in the external-IdP arm.
 	AgentsDial string
+	// Placements is the NAME this deployment declared for the topic
+	// declared agents are placed on, read back so a test can assert
+	// against the declaration rather than against a guess at it. Empty in
+	// the external-IdP arm.
+	Placements string
 
-	cancel context.CancelFunc
-	conns  []*nats.Conn
+	ctx       context.Context
+	shellOpts shellembed.Options
+	cancel    context.CancelFunc
+	// fold is the run of the authorization server this rig started
+	// standing outside the product, so Close can wait for it to finish
+	// writing before the directory under it goes away.
+	fold  <-chan error
+	conns []*nats.Conn
 	// signers is the signing capability this rig holds for each persona it
 	// has admitted — what an operator needs to countersign a claim that they
 	// answer for somebody (see Operated).
@@ -143,6 +154,7 @@ func start(dir string, external bool) (*Rig, error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	var invite string
+	var fold <-chan error
 	if external {
 		// The authorization server this deployment does not run. It starts
 		// first: the identity plane's callout validator discovers the issuer
@@ -150,7 +162,7 @@ func start(dir string, external bool) (*Rig, error) {
 		st.SignInEnabled = false
 		st.MCPAuthIssuer = "http://localhost:" + asPort
 		st.MCPAuthAudience = "soulstream-external"
-		invite, err = startExternalAS(ctx, filepath.Join(dir, "external-as"),
+		invite, fold, err = startExternalAS(ctx, filepath.Join(dir, "external-as"),
 			st.MCPAuthIssuer, "127.0.0.1:"+asPort, st.MCPAuthAudience,
 			ceremony.FoundingPersona, []string{"admin", "realm"})
 		if err != nil {
@@ -204,46 +216,106 @@ func start(dir string, external bool) (*Rig, error) {
 	// agentsDial: answering approvals delivers on the node-standing lane,
 	// and a shell without that standing declares none.
 	guardrailOn := !external
-	ready := make(chan string, 1)
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- shellembed.Run(ctx, shellembed.Options{
-			Listen:       "127.0.0.1:0",
-			NATSURL:      n.URL(),
-			CredsPath:    ceremony.UserCredsPath(dir, "ops"),
-			CredsUser:    "ops",
-			SentinelPath: ceremony.SentinelPath(dir),
-			Realm:        st.Realm,
-			Account:      st.RealmPub,
-			Issuer:       issuer,
-			// The deployment's own declaration, not the rig's: whichever arm
-			// this is, the fact reaching the shell is the one the product
-			// computes for a real soulnode.
-			AdminBase:   st.AdminSurface(),
-			AgentsDial:  agentsDial,
-			GuardrailOn: guardrailOn,
-			Ready:       func(addr string) { ready <- addr },
-		})
-	}()
-	var addr string
-	select {
-	case addr = <-ready:
-	case err := <-errCh:
+	// What this deployment declares about placing agents on itself: the
+	// name of the topic they are placed on, and the name of the signing
+	// role their tools resolve through. Both are the bundled arm's, on the
+	// same terms as the two facts above — the external arm is the shape
+	// where the deployment hands the shell less, and the surface those
+	// facts belong to is not part of that build at all.
+	//
+	// PlacementsName is deliberately the same word the product's own
+	// submit verb resolves against the board, so a placement made from a
+	// screen and one made from the command line land in the same place.
+	placements, capabilityRole := PlacementsName, CapabilityRole
+	if external {
+		placements, capabilityRole = "", ""
+	}
+	opts := shellembed.Options{
+		Listen:       "127.0.0.1:0",
+		NATSURL:      n.URL(),
+		CredsPath:    ceremony.UserCredsPath(dir, "ops"),
+		CredsUser:    "ops",
+		SentinelPath: ceremony.SentinelPath(dir),
+		Realm:        st.Realm,
+		Account:      st.RealmPub,
+		Issuer:       issuer,
+		// The deployment's own declaration, not the rig's: whichever arm
+		// this is, the fact reaching the shell is the one the product
+		// computes for a real soulnode.
+		AdminBase:       st.AdminSurface(),
+		AgentsDial:      agentsDial,
+		GuardrailOn:     guardrailOn,
+		PlacementsTopic: placements,
+		CapabilityRole:  capabilityRole,
+	}
+	addr, err := serveShell(ctx, opts)
+	if err != nil {
 		cancel()
 		n.Stop()
-		return nil, fmt.Errorf("rig: shell: %w", err)
-	case <-time.After(20 * time.Second):
-		cancel()
-		n.Stop()
-		return nil, errors.New("rig: the shell did not become ready")
+		return nil, err
 	}
 	return &Rig{
 		Dir: dir, State: st, Node: n, Token: token,
 		ShellURL: "http://" + addr, Issuer: issuer,
 		Invite: invite, AdminBase: st.AdminSurface(), AgentsDial: agentsDial,
-		cancel:  cancel,
-		signers: map[string]identity.Signer{},
+		Placements: placements,
+		ctx:        ctx,
+		fold:       fold,
+		shellOpts:  opts,
+		cancel:     cancel,
+		signers:    map[string]identity.Signer{},
 	}, nil
+}
+
+// PlacementsName and CapabilityRole are what a soulnode deployment
+// declares about running declared agents itself: the topic name
+// submissions land on, and the one signing role its founding declares for
+// an agent's tools. They are spelled here rather than imported because the
+// product's published tag does not export them yet — the pin this gate
+// rides is the consumer's position, and a gate that reaches past it stops
+// measuring what a consumer gets. When the product publishes them, these
+// two lines become the import.
+const (
+	PlacementsName = "placements"
+	CapabilityRole = "agent"
+)
+
+// serveShell runs one shell plane and waits for it to bind.
+func serveShell(ctx context.Context, opts shellembed.Options) (string, error) {
+	ready := make(chan string, 1)
+	errCh := make(chan error, 1)
+	opts.Ready = func(addr string) { ready <- addr }
+	go func() { errCh <- shellembed.Run(ctx, opts) }()
+	select {
+	case addr := <-ready:
+		return addr, nil
+	case err := <-errCh:
+		return "", fmt.Errorf("rig: shell: %w", err)
+	case <-time.After(20 * time.Second):
+		return "", errors.New("rig: the shell did not become ready")
+	}
+}
+
+// SecondShell composes another shell plane against the same node: a
+// surface that never witnessed anything the first one did, on the same
+// declaration. What it shows is therefore read from the record and from
+// nowhere else — the no-store claim, measured rather than promised.
+//
+// It drains with the rig, like everything else the rig started.
+func (r *Rig) SecondShell() (string, error) {
+	addr, err := serveShell(r.ctx, r.shellOpts)
+	if err != nil {
+		return "", err
+	}
+	return "http://" + addr, nil
+}
+
+// SignInTo walks the ceremony against another shell this rig started — the
+// second surface, mostly — and returns a client holding that shell's own
+// session.
+func (r *Rig) SignInTo(shellURL string, auth *authtest.Authenticator, username string,
+) (*http.Client, string, error) {
+	return signInTo(shellURL, r.Issuer, auth, username)
 }
 
 // Issuer is an authorization server and nothing else: the whole of what a
@@ -263,6 +335,7 @@ type Issuer struct {
 	Invite string
 
 	cancel context.CancelFunc
+	fold   <-chan error
 }
 
 // StartIssuer runs one, seeding the one person who will sign in.
@@ -273,17 +346,21 @@ func StartIssuer(dir, username string) (*Issuer, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	url := "http://localhost:" + port
-	invite, err := startExternalAS(ctx, dir, url, "127.0.0.1:"+port,
+	invite, fold, err := startExternalAS(ctx, dir, url, "127.0.0.1:"+port,
 		"soulstream-shell-outside", username, nil)
 	if err != nil {
 		cancel()
 		return nil, err
 	}
-	return &Issuer{URL: url, Invite: invite, cancel: cancel}, nil
+	return &Issuer{URL: url, Invite: invite, cancel: cancel, fold: fold}, nil
 }
 
-// Close drains it.
-func (i *Issuer) Close() { i.cancel() }
+// Close drains it, and waits: the store it keeps is in a directory the test
+// framework deletes the moment the test returns.
+func (i *Issuer) Close() {
+	i.cancel()
+	drained(i.fold)
+}
 
 // Enroll spends the invite on a passkey for the seeded person.
 func (i *Issuer) Enroll(auth *authtest.Authenticator, username string) error {
@@ -307,11 +384,16 @@ func (i *Issuer) SignInTo(shellURL string, auth *authtest.Authenticator, usernam
 // groups are deliberately that plane's own, admin included: the only
 // difference between those two arms is the shape of the deployment, never
 // the standing of the person signing in.
+// It also hands back the channel its run ends on, so whoever started it can
+// wait for it to finish writing. The store it keeps is inside a directory
+// the test framework removes the moment the test returns, and a server
+// still flushing into a directory being deleted is a failure that has
+// nothing to do with what was being measured.
 func startExternalAS(ctx context.Context, stateDir, issuer, listen, audience, username string,
 	roles []string,
-) (string, error) {
+) (string, <-chan error, error) {
 	if err := os.MkdirAll(stateDir, 0o700); err != nil {
-		return "", fmt.Errorf("rig: external AS state: %w", err)
+		return "", nil, fmt.Errorf("rig: external AS state: %w", err)
 	}
 	ready := make(chan string, 1)
 	errCh := make(chan error, 1)
@@ -330,15 +412,28 @@ func startExternalAS(ctx context.Context, stateDir, issuer, listen, audience, us
 	select {
 	case <-ready:
 	case err := <-errCh:
-		return "", fmt.Errorf("rig: external AS: %w", err)
+		return "", nil, fmt.Errorf("rig: external AS: %w", err)
 	case <-time.After(20 * time.Second):
-		return "", errors.New("rig: the external authorization server did not become ready")
+		return "", nil, errors.New("rig: the external authorization server did not become ready")
 	}
 	select {
 	case token := <-invites:
-		return token, nil
+		return token, errCh, nil
 	default:
-		return "", errors.New("rig: the external authorization server minted no invite")
+		return "", nil, errors.New("rig: the external authorization server minted no invite")
+	}
+}
+
+// drained waits for a run to finish after its context was cancelled. It is
+// bounded: a server that will not stop must not hang the suite, and the
+// wait is manners rather than a measurement.
+func drained(done <-chan error) {
+	if done == nil {
+		return
+	}
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
 	}
 }
 
@@ -349,6 +444,7 @@ func (r *Rig) Close() {
 		nc.Close()
 	}
 	r.Node.Stop()
+	drained(r.fold)
 }
 
 // Owner returns a realm client writing as the founding persona, signed with

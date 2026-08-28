@@ -4,7 +4,7 @@ go 1.26.2
 
 require (
 	github.com/impire-io/soulstream v0.13.0-rc.10
-	github.com/impire-io/soulstream-core v0.13.0
+	github.com/impire-io/soulstream-core v0.14.0-rc.1
 	github.com/impire-io/soulstream-identity v0.11.0
 	github.com/impire-io/soulstream-idp v0.8.0
 	github.com/impire-io/soulstream-shell v0.10.0
@@ -36,7 +36,7 @@ require (
 	github.com/gowebpki/jcs v1.0.1 // indirect
 	github.com/impire-io/soulstream-archivist v0.4.1 // indirect
 	github.com/impire-io/soulstream-mcp v0.1.0 // indirect
-	github.com/impire-io/soulstream-workloads v0.7.0 // indirect
+	github.com/impire-io/soulstream-workloads v0.8.0-rc.3 // indirect
 	github.com/klauspost/compress v1.19.1 // indirect
 	github.com/minio/highwayhash v1.0.4 // indirect
 	github.com/modelcontextprotocol/go-sdk v1.6.1 // indirect

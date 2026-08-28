@@ -1,6 +1,7 @@
 // Package purity holds the standing check that the shell is what it claims
 // to be: a frame that imports no module, and nothing of the component its
-// modules read.
+// modules read — and, beside it, the check that what the whole component
+// costs is only ever what was named openly.
 //
 // It is mechanical on purpose. "The shell is agnostic" is exactly the kind
 // of claim that rots by eye — one convenient import, and the frame quietly
@@ -16,6 +17,16 @@ import (
 	"strings"
 	"testing"
 )
+
+// The workloads packages this component may reach, and only these: the
+// declaration's own parser and validator, and the placement plane's submit
+// and read (hq design soulstream-shell 0009 §5, the one new dependency
+// named openly). What those two pull in behind them is their business; what
+// this component reaches for is this component's, and it is this.
+var workloadsAllowed = map[string]bool{
+	"github.com/impire-io/soulstream-workloads/declaration": true,
+	"github.com/impire-io/soulstream-workloads/fleet":       true,
+}
 
 const (
 	// module is this repo's own module path.
@@ -102,6 +113,56 @@ func TestTheShellImportsNoModuleAndNoComponent(t *testing.T) {
 	// readable rather than merely green.
 	t.Logf("the shell's non-stdlib import graph (%d):\n\t%s",
 		len(carried), strings.Join(carried, "\n\t"))
+}
+
+// The other bar this component keeps: a dependency is a thing somebody
+// argued for, so the packages it reaches for are the ones that were argued
+// for and no others. Measured on the import edges this repo's own packages
+// write — what those reach in turn is theirs to decide, and pinning it here
+// would be pinning somebody else's design.
+func TestTheComponentReachesOnlyTheWorkloadsPackagesItNamed(t *testing.T) {
+	cmd := exec.Command("go", "list", "-f",
+		"{{.ImportPath}}{{range .Imports}} {{.}}{{end}}", "./...")
+	cmd.Dir = "../.."
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("go list ./...: %v\n%s", err, exitOutput(err))
+	}
+	var bad []string
+	reached := map[string]bool{}
+	pkgs := 0
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		pkgs++
+		for _, imported := range fields[1:] {
+			if !strings.HasPrefix(imported, "github.com/impire-io/soulstream-workloads") {
+				continue
+			}
+			reached[imported] = true
+			if !workloadsAllowed[imported] {
+				bad = append(bad, fields[0]+" imports "+imported)
+			}
+		}
+	}
+	if pkgs == 0 {
+		t.Fatal("go list ./... returned nothing — the check would pass vacuously")
+	}
+	if len(bad) > 0 {
+		t.Fatalf("this component reaches past the dependency it named:\n\t%s",
+			strings.Join(bad, "\n\t"))
+	}
+	// The control: a check on a dependency nobody uses proves nothing, so
+	// both named packages must actually be reached.
+	for want := range workloadsAllowed {
+		if !reached[want] {
+			t.Fatalf("nothing here imports %s — the check cannot fire, so its verdict "+
+				"on the rest means nothing", want)
+		}
+	}
+	t.Logf("the component reaches %d workloads package(s) across %d packages", len(reached), pkgs)
 }
 
 // The positive control. A check that cannot fail proves nothing, so the
