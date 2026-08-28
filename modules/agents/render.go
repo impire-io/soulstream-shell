@@ -24,11 +24,17 @@ const (
 )
 
 // renderAgents is the whole screen's body. who is the voice somebody came
-// here looking for — empty when they simply opened the screen. The roster
-// leads; the add-form waits in the slide-over behind its own key, because
+// here looking for — empty when they simply opened the screen. The rosters
+// lead; the forms wait in the slide-over behind their own keys, because
 // most visits are about the agents there are.
+//
+// There are two lanes and they are different in one way that matters: the
+// first hands a person a block to run an agent on a machine of their own,
+// the second places it on this soulstream, where it keeps answering with
+// nobody's laptop open. A deployment that does not run agents itself has
+// only the first, and the second is not drawn at all.
 func renderAgents(list []soulstream.Agent, err error, names map[string]string, who string,
-	signs map[string]soulstream.LifeSign,
+	signs map[string]soulstream.LifeSign, dv declareView,
 ) string {
 	var b strings.Builder
 	b.WriteString(`<h1>Agents</h1>`)
@@ -36,16 +42,52 @@ func renderAgents(list []soulstream.Agent, err error, names map[string]string, w
 		`own names. Each gets in with a credential of its own, so what it says ` +
 		`carries its name — and each can be stopped without touching anything else.</p>`)
 	b.WriteString(lookedUpNote(list, err, who))
-	b.WriteString(`<div class="section">` + addKey() + renderTable(list, err, names, who, signs) + `</div>`)
+	b.WriteString(`<div class="section">` + actKeys(dv))
+	if dv.On {
+		b.WriteString(`<h2>Running on your machines</h2>`)
+	}
+	b.WriteString(renderTable(list, err, names, who, signs) + `</div>`)
+	if dv.On {
+		b.WriteString(`<div class="section"><h2>Declared agents</h2>`)
+		b.WriteString(`<p class="lede">Agents this soulstream runs itself. You say what ` +
+			`one is for and what wakes it; it answers from here until you say otherwise.</p>`)
+		b.WriteString(renderDeclared(dv.List, dv.Err, dv.Mark) + `</div>`)
+		b.WriteString(modelsList(dv))
+	}
 	b.WriteString(resultNote(""))
-	b.WriteString(shell.SlideOver("Add an agent", addPanel()))
+	b.WriteString(shell.SlideOver("Add an agent", slideBody(dv)))
 	return b.String()
+}
+
+// actKeys pulls the slide-over out — at the form the key names, when this
+// deployment offers more than one.
+func actKeys(dv declareView) string {
+	if !dv.On {
+		return addKey()
+	}
+	return `<p class="act">` +
+		`<button type="button" class="btn" data-on:click="$panel = true; $make = 'yours'">` +
+		`Add agent</button> ` +
+		`<button type="button" class="btn" data-on:click="$panel = true; $make = 'here'">` +
+		`Declare agent</button></p>`
 }
 
 // addKey pulls the slide-over out.
 func addKey() string {
 	return `<p class="act"><button type="button" class="btn" data-on:click="$panel = true">` +
 		`Add agent</button></p>`
+}
+
+// slideBody is what the one slide-over holds. A deployment with one act has
+// exactly the form it always had; a deployment with two has both, each
+// behind the key that named it, on a page-local signal of the panel's own.
+func slideBody(dv declareView) string {
+	if !dv.On {
+		return addPanel()
+	}
+	return `<div data-signals="{make:'yours'}">` +
+		`<div data-show="$make == 'yours'">` + addPanel() + `</div>` +
+		declarePanel(dv) + `</div>`
 }
 
 // lookedUpNote answers the question somebody arrived with. Most voices on

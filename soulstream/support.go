@@ -71,6 +71,17 @@ type Config struct {
 	// §4). Optional, on the same terms as the two above: no probe, no
 	// shell-side configuration, just the deployment's own word.
 	GuardrailOn bool
+	// PlacementsTopic is the NAME of the topic this deployment places
+	// declared agents on, and its way of saying it serves agents as
+	// infrastructure at all. Optional, on the same terms as the facts
+	// above: declared empty, the declare lane is not part of this build.
+	PlacementsTopic string
+	// CapabilityRole is the name of the signing role a declared agent's
+	// tools resolve through — declared by the deployment's founding, never
+	// derived here. Optional: declared empty, an agent is declared without
+	// tools, which is the whole of what this surface can honestly offer
+	// when nothing has told it what the role is called.
+	CapabilityRole string
 }
 
 // Support is the layer itself: one read lane for the surface, and a session
