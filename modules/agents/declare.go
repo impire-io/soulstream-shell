@@ -262,8 +262,7 @@ func (m *Module) actDeclare(w http.ResponseWriter, r *http.Request) {
 		shell.Patch(w, declareNote(err.Error()))
 		return
 	}
-	id, err := sess.Declare(r.Context(), d)
-	if err != nil {
+	if _, err := sess.Declare(r.Context(), d); err != nil {
 		shell.Patch(w, declareNote(err.Error()))
 		return
 	}
@@ -274,12 +273,11 @@ func (m *Module) actDeclare(w http.ResponseWriter, r *http.Request) {
 	shell.Patch(w, resultNote(fmt.Sprintf(
 		"%s is declared. Nothing here holds it now — close this screen and it still "+
 			"arrives. Its line below says where it stands.", d.Persona)))
-	m.patchDeclared(w, r, id)
+	m.patchDeclared(w, r)
 }
 
-// patchDeclared hands back the placed agents as they now stand, with the
-// one just placed marked.
-func (m *Module) patchDeclared(w http.ResponseWriter, r *http.Request, mark string) {
+// patchDeclared hands back the placed agents as they now stand.
+func (m *Module) patchDeclared(w http.ResponseWriter, r *http.Request) {
 	list, err := m.sp.Declared(r.Context())
-	shell.Patch(w, renderDeclared(list, err, mark))
+	shell.Patch(w, renderDeclared(list, err))
 }

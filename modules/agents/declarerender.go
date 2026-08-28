@@ -36,9 +36,6 @@ type declareView struct {
 	// reading them, said rather than blanked.
 	List []soulstream.Declared
 	Err  error
-	// Mark is the placement just made, marked on the table that comes back
-	// with the act.
-	Mark string
 	// Board is the conversations a declared agent can be given a home in
 	// and pointed at.
 	Board []topic.BoardEntry
@@ -55,7 +52,11 @@ type declareView struct {
 // renderDeclared is the table of agents this deployment runs itself, and a
 // patch target of its own so the act that places one — and the live channel
 // that watches it arrive — can hand back what is now true.
-func renderDeclared(list []soulstream.Declared, err error, mark string) string {
+//
+// No row is marked. The act that places an agent names it in the result
+// line, and a highlight the next tick would take away again reads as a
+// fault rather than as an answer.
+func renderDeclared(list []soulstream.Declared, err error) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, `<div id="%s">`, declaredID)
 	switch {
@@ -71,7 +72,7 @@ func renderDeclared(list []soulstream.Declared, err error, mark string) string {
 			`<th>Name</th><th>Wakes on</th><th>Thinks with</th><th>State</th><th>Declared</th>` +
 			`</tr></thead><tbody>`)
 		for _, d := range list {
-			b.WriteString(declaredRow(d, d.ItemID == mark))
+			b.WriteString(declaredRow(d))
 		}
 		b.WriteString(`</tbody></table></div>`)
 		b.WriteString(waitingNote(list))
@@ -83,7 +84,7 @@ func renderDeclared(list []soulstream.Declared, err error, mark string) string {
 // declaredRow is one placed agent. The declaration itself rides a fold
 // under the row's own name: what was asked for is worth reading, and it is
 // worth reading only when somebody asks.
-func declaredRow(d soulstream.Declared, marked bool) string {
+func declaredRow(d soulstream.Declared) string {
 	model := `<span class="dim">the assistant already set up here</span>`
 	if d.Model != "" {
 		model = fmt.Sprintf(`<span class="mono">%s</span>`, esc(d.Model))
@@ -94,13 +95,9 @@ func declaredRow(d soulstream.Declared, marked bool) string {
 		declared = d.Opened.Format("2006-01-02")
 		declaredFull = d.Opened.UTC().Format("2006-01-02 15:04Z")
 	}
-	row := "<tr>"
-	if marked {
-		row = `<tr class="on">`
-	}
-	return fmt.Sprintf(`%s<td><span class="led machine"></span> %s%s</td>`+
+	return fmt.Sprintf(`<tr><td><span class="led machine"></span> %s%s</td>`+
 		`<td>%s</td><td>%s</td><td>%s</td><td class="mono" title="%s">%s</td></tr>`,
-		row, esc(d.Name), declarationFold(d), wakeCell(d.Wakes), model,
+		esc(d.Name), declarationFold(d), wakeCell(d.Wakes), model,
 		stateCell(d), esc(declaredFull), esc(declared))
 }
 
@@ -152,18 +149,18 @@ func wakeWord(kind string) string {
 // the note under the table says in full.
 func stateCell(d soulstream.Declared) string {
 	switch d.State {
-	case soulstream.StateClaimed:
+	case topic.WorkClaimed:
 		if d.Owner != "" {
 			return fmt.Sprintf(`<span class="pill ok"><span class="led ok"></span>claimed by %s</span>`,
 				esc(d.Owner))
 		}
 		return `<span class="pill ok"><span class="led ok"></span>claimed</span>`
-	case soulstream.StateDone:
+	case topic.WorkDone:
 		return `<span class="pill">finished</span>`
-	case soulstream.StateOpen:
+	case topic.WorkOpen:
 		return `<span class="pill warn">declared</span>`
 	default:
-		return fmt.Sprintf(`<span class="pill">%s</span>`, esc(d.State))
+		return fmt.Sprintf(`<span class="pill">%s</span>`, esc(string(d.State)))
 	}
 }
 
@@ -172,7 +169,7 @@ func stateCell(d soulstream.Declared) string {
 // a spinner and never an error.
 func waitingNote(list []soulstream.Declared) string {
 	for _, d := range list {
-		if d.State == soulstream.StateOpen {
+		if d.State == topic.WorkOpen {
 			return `<p class="note">declared; nothing serves agents here yet — ` +
 				`the deployment enables the dispatcher plane</p>`
 		}

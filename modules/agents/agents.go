@@ -175,7 +175,7 @@ func (m *Module) live(w http.ResponseWriter, r *http.Request) {
 		// result line still nobody's but the acts'.
 		if m.placing() {
 			declared, derr := m.sp.Declared(r.Context())
-			shell.WriteElements(out, renderDeclared(declared, derr, ""))
+			shell.WriteElements(out, renderDeclared(declared, derr))
 		}
 	})
 }

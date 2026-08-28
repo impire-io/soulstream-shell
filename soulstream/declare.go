@@ -62,9 +62,10 @@ type Declared struct {
 	Wakes  []Wake
 	Model  string
 	Tools  []string
-	// State is the placement's own word: open, claimed, done. Owner is the
+	// State is the placement's own status, carried as the record spells it
+	// — translated where it reaches a screen and nowhere else. Owner is the
 	// node whose claim the log settled on, "" while nobody has claimed it.
-	State string
+	State topic.WorkStatus
 	Owner string
 	// Opened is when the placement was submitted.
 	Opened time.Time
@@ -73,14 +74,6 @@ type Declared struct {
 	// carries a second schema.
 	JSON string
 }
-
-// The placement states, in the record's own words. They reach a screen
-// translated, never raw.
-const (
-	StateOpen    = "open"
-	StateClaimed = "claimed"
-	StateDone    = "done"
-)
 
 // Declared lists every agent placed on this deployment, newest last, read
 // from the placement topic's own log. A deployment that declares no
@@ -125,7 +118,7 @@ var ErrNoPlacements = errors.New("this deployment places no agents")
 func declaredFrom(item topic.WorkItem, d declaration.Declaration) Declared {
 	dec := Declared{
 		ItemID: item.ID, Name: d.Persona, Home: d.Topic,
-		State: string(item.Status), Owner: item.Owner, Opened: item.Timestamp,
+		State: item.Status, Owner: item.Owner, Opened: item.Timestamp,
 	}
 	if d.Inference != nil {
 		dec.Model = d.Inference.Model
