@@ -17,9 +17,15 @@ Founding articles, held by the standing e2e gate:
 
 - **Pure consumer.** The shell is built exclusively on public, tagged
   component surfaces — soulstream's realm and topic packages,
-  soulidentity's client, any OIDC authorization server (the bundled
-  soulstream-idp by default). The e2e module's path sits outside this
-  namespace, so an `internal/` import cannot compile.
+  soulidentity's client, soulstream-workloads' `declaration` and `fleet`
+  (the declaration's own parser and validator, and the placement plane's
+  submit and read: the wire format has exactly one definition and it is
+  not this repo's), any OIDC authorization server (the bundled
+  soulstream-idp by default). Those are the whole of it, and the check is
+  mechanical — [`internal/purity`](internal/purity) reads the import
+  edges this repo writes and fails on a workloads package nobody argued
+  for. The e2e module's path sits outside this namespace, so an
+  `internal/` import cannot compile.
 - **Custodies nothing.** Sessions live in memory; credentials never
   reach the browser; the store of record stays the realm's. The e2e
   scans for credential-shaped leaks with a positive control.
@@ -54,17 +60,19 @@ A pure shell, and modules beside it:
   everything the shell refuses to hold lives: bearer → sentinel + callout →
   an admission that acts as the person, the clients, the persona directory,
   the mention tray.
-- [`modules/overview`](modules/overview),
-  [`modules/conversations`](modules/conversations) and
-  [`modules/admin`](modules/admin) — the human surfaces, each registering
-  through the one contract and importing none of the others (measured off
-  the import graph in the gate). The third is the one that is not always
-  there: a deployment whose people sign in against an authorization server
-  it does not run has nobody here to administer, so that module is not part
-  of the build at all. Where it is, a name in the conversation's People
-  panel is a way into that person's sign-in — asked for through the frame,
-  by slug and route, never by import; where it is not, the same name is
-  plain text.
+- [`modules/`](modules) — the human surfaces (overview, conversations,
+  tools, approvals, admin, agents, storage), each registering through the
+  one contract and importing none of the others (measured off the import
+  graph in the gate). Several are not always there: a deployment whose
+  people sign in against an authorization server it does not run has
+  nobody here to administer, one that mints no agent credentials has no
+  agents screen, and one that places no declared agents keeps that lane of
+  the agents screen off — in every case the module or the lane is not part
+  of the build at all, and the deployment's own declaration is the whole
+  of how it knows. Where the admin surface is, a name in the
+  conversation's People panel is a way into that person's sign-in — asked
+  for through the frame, by slug and route, never by import; where it is
+  not, the same name is plain text.
 - [`embed/`](embed) — composition: the one place the pieces meet, and the
   only one that knows both that this is a shell and that this is
   Soulstream.
