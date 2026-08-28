@@ -223,10 +223,11 @@ func start(dir string, external bool) (*Rig, error) {
 	// where the deployment hands the shell less, and the surface those
 	// facts belong to is not part of that build at all.
 	//
-	// PlacementsName is deliberately the same word the product's own
-	// submit verb resolves against the board, so a placement made from a
-	// screen and one made from the command line land in the same place.
-	placements, capabilityRole := PlacementsName, CapabilityRole
+	// Both values are the product's own published constants — the same
+	// words its submit verb resolves against the board and its founding
+	// declares — so a placement made from a screen and one made from the
+	// command line land in the same place, by construction.
+	placements, capabilityRole := ceremony.DefaultPlacements, ceremony.AgentRole
 	if external {
 		placements, capabilityRole = "", ""
 	}
@@ -266,19 +267,6 @@ func start(dir string, external bool) (*Rig, error) {
 		signers:    map[string]identity.Signer{},
 	}, nil
 }
-
-// PlacementsName and CapabilityRole are what a soulnode deployment
-// declares about running declared agents itself: the topic name
-// submissions land on, and the one signing role its founding declares for
-// an agent's tools. They are spelled here rather than imported because the
-// product's published tag does not export them yet — the pin this gate
-// rides is the consumer's position, and a gate that reaches past it stops
-// measuring what a consumer gets. When the product publishes them, these
-// two lines become the import.
-const (
-	PlacementsName = "placements"
-	CapabilityRole = "agent"
-)
 
 // serveShell runs one shell plane and waits for it to bind.
 func serveShell(ctx context.Context, opts shellembed.Options) (string, error) {

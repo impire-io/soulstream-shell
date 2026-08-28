@@ -6,7 +6,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.20.0
 	github.com/impire-io/soulstream-core v0.14.0-rc.1
 	github.com/impire-io/soulstream-identity v0.11.0
-	github.com/impire-io/soulstream-workloads v0.8.0-rc.3
+	github.com/impire-io/soulstream-workloads v0.8.0-rc.4
 	github.com/nats-io/nats.go v1.52.0
 	golang.org/x/oauth2 v0.36.0
 )

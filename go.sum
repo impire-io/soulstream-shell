@@ -23,8 +23,8 @@ github.com/impire-io/soulstream-core v0.14.0-rc.1 h1:QQa/U4iHiVQUBjVBgT8E6XsIaT1
 github.com/impire-io/soulstream-core v0.14.0-rc.1/go.mod h1:0W6OHY8TDKz6+g2MfoADvlFD/ZoRbe6IG+wkNx92qKE=
 github.com/impire-io/soulstream-identity v0.11.0 h1:eHH8Ip93je+gGCNzaFv4FXdPpZRxR4rTQ5vYopv66Wk=
 github.com/impire-io/soulstream-identity v0.11.0/go.mod h1:6sY1vb8OwzSFtLZyhJe4OmB0ZqaexyiFT6en+BlxErI=
-github.com/impire-io/soulstream-workloads v0.8.0-rc.3 h1:0D9VzL0yOctTYJ7eA51OtueIG9AlVRuGUObVWnTlxO8=
-github.com/impire-io/soulstream-workloads v0.8.0-rc.3/go.mod h1:oESbt8ZQQAcoPs8wf1XT9DBPaVFw6HxSuBllRK3Xhpw=
+github.com/impire-io/soulstream-workloads v0.8.0-rc.4 h1:rH501YkzY2SzKCsyp42BXVKHmikxLbO4srYFucZ/pTU=
+github.com/impire-io/soulstream-workloads v0.8.0-rc.4/go.mod h1:oESbt8ZQQAcoPs8wf1XT9DBPaVFw6HxSuBllRK3Xhpw=
 github.com/klauspost/compress v1.19.1 h1:VsB4HPswih7mmZ8WleSFQ75c/Ui1M4trX5oAsJnhSlk=
 github.com/klauspost/compress v1.19.1/go.mod h1:cwPg85FWrGar70rWktvGQj8/hthj3wpl0PGDogxkrSQ=
 github.com/minio/highwayhash v1.0.4 h1:asJizugGgchQod2ja9NJlGOWq4s7KsAWr5XUc9Clgl4=

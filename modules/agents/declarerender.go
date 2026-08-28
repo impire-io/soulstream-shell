@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/impire-io/soulstream-core/topic"
+	"github.com/impire-io/soulstream-workloads/declaration"
 
 	"github.com/impire-io/soulstream-shell/soulstream"
 )
@@ -266,7 +267,8 @@ func declarePanel(v declareView) string {
 		`type="number" min="0" value="%d"></label>`+
 		`<label class="field">Within<input name="budget_per" autocomplete="off" `+
 		`spellcheck="false" value="%s"></label>`+
-		`</div>`, defaultMaxHops, defaultWindowMax, defaultWindowPer)
+		`</div>`, declaration.DefaultBudget.MaxHops,
+		declaration.DefaultBudget.Window.Max, declaration.DefaultBudget.Window.Per)
 
 	b.WriteString(`<div class="acts">` +
 		`<button class="btn" type="submit">Declare agent</button>` +

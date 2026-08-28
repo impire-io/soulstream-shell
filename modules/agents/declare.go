@@ -25,29 +25,6 @@ import (
 // upstream's own sentence, printed unchanged: a shell that rewords a
 // refusal is a shell that will one day reword it wrongly.
 
-// declaredArtifact is what the declaration's required artifact field
-// carries for an agent the deployment serves through its wake engine.
-//
-// The field is required by the declaration's own validation and means
-// nothing here: an engine-served agent runs the deployment's harness and
-// never the declared executable (workloads design 0007 §9 names this as an
-// open, "required by Validate, meaningless for engine-served agents").
-// Until that is settled upstream, every such declaration carries this same
-// placeholder — the command line's own declarations do too. It is written
-// once, here, and shown in the JSON view rather than hidden, because the
-// document on screen has to be the document that would be submitted.
-const declaredArtifact = "file:///dev/null"
-
-// The budget the form offers when a person has said nothing about limits.
-// They are the wake engine's own defaults, restated here because the engine
-// exports no way to ask for them — a number a screen shows must be a number
-// somebody can read, so it is written down rather than left blank.
-const (
-	defaultMaxHops   = 4
-	defaultWindowMax = 8
-	defaultWindowPer = "10m"
-)
-
 // declareRoutes is what this lane claims, mounted with the rest.
 func (m *Module) mountDeclare(rt shell.Router) {
 	rt.HandleFunc("POST /agents/declare-json", m.declareJSON)
@@ -97,12 +74,14 @@ func (m *Module) declareRead(r *http.Request) declareView {
 // It shapes and never judges. Whether the result is a declaration this
 // realm will accept is decided by Validate, whose words this screen prints.
 func declarationFrom(f url.Values, capabilityRole string) declaration.Declaration {
+	// No artifact is declared: an agent placed here is served by the
+	// deployment's own harness, and the declaration's validation knows an
+	// engine-served agent needs none.
 	d := declaration.Declaration{
 		Role:      declaration.RoleAgent,
 		Lifecycle: declaration.LifecycleService,
 		Persona:   strings.TrimSpace(f.Get("name")),
 		Topic:     strings.TrimSpace(f.Get("home")),
-		Artifact:  declaredArtifact,
 	}
 	d.Wake = wakeFrom(f)
 

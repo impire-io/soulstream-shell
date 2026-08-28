@@ -100,7 +100,7 @@ func TestTheFormEmitsTheDocumentTheCommandLineTakes(t *testing.T) {
 	// And it says the things a person filled in, in the record's own field
 	// names — the point of showing it at all.
 	for _, want := range []string{
-		`"persona": "scribe"`, `"topic": "t-ab12"`, `"artifact": "file:///dev/null"`,
+		`"persona": "scribe"`, `"topic": "t-ab12"`,
 		`"kind": "mention"`, `"kind": "topic"`, `"kind": "schedule"`,
 		`"pattern": "@every 24h"`, `"ttl": "48h"`,
 		`"model": "house-brain"`, `"role": "agent"`, `"how-to-take-minutes"`,
@@ -109,6 +109,12 @@ func TestTheFormEmitsTheDocumentTheCommandLineTakes(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("the document does not carry %s:\n%s", want, body)
 		}
+	}
+	// And it carries no artifact: an agent placed here runs the
+	// deployment's harness, and a field nobody wrote must not appear on
+	// the document a person reads back.
+	if strings.Contains(body, "artifact") {
+		t.Errorf("the document carries an artifact nobody declared:\n%s", body)
 	}
 }
 

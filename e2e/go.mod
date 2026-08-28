@@ -3,11 +3,12 @@ module soulstream-shell.invalid/e2e
 go 1.26.2
 
 require (
-	github.com/impire-io/soulstream v0.13.0-rc.10
+	github.com/impire-io/soulstream v0.14.0-rc.3
 	github.com/impire-io/soulstream-core v0.14.0-rc.1
-	github.com/impire-io/soulstream-identity v0.11.0
-	github.com/impire-io/soulstream-idp v0.8.0
-	github.com/impire-io/soulstream-shell v0.10.0
+	github.com/impire-io/soulstream-identity v0.12.0
+	github.com/impire-io/soulstream-idp v0.8.1
+	github.com/impire-io/soulstream-shell v0.11.0-rc.3
+	github.com/impire-io/soulstream-workloads v0.8.0-rc.4
 	github.com/nats-io/nats.go v1.52.0
 	soulstream-shell.invalid/moduleprobe v0.0.0
 )
@@ -35,15 +36,15 @@ require (
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/gowebpki/jcs v1.0.1 // indirect
 	github.com/impire-io/soulstream-archivist v0.4.1 // indirect
+	github.com/impire-io/soulstream-inference v0.1.0 // indirect
 	github.com/impire-io/soulstream-mcp v0.1.0 // indirect
-	github.com/impire-io/soulstream-workloads v0.8.0-rc.3 // indirect
-	github.com/klauspost/compress v1.19.1 // indirect
+	github.com/klauspost/compress v1.19.2 // indirect
 	github.com/minio/highwayhash v1.0.4 // indirect
 	github.com/modelcontextprotocol/go-sdk v1.6.1 // indirect
 	github.com/muhlemmer/gu v0.3.1 // indirect
 	github.com/muhlemmer/httpforwarded v0.1.0 // indirect
 	github.com/nats-io/jwt/v2 v2.8.2 // indirect
-	github.com/nats-io/nats-server/v2 v2.14.4 // indirect
+	github.com/nats-io/nats-server/v2 v2.14.6 // indirect
 	github.com/nats-io/nkeys v0.4.16 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
@@ -62,12 +63,12 @@ require (
 	go.opentelemetry.io/otel/metric v1.44.0 // indirect
 	go.opentelemetry.io/otel/trace v1.44.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.54.0 // indirect
+	golang.org/x/crypto v0.55.0 // indirect
 	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948 // indirect
 	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.40.0 // indirect
+	golang.org/x/text v0.41.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240826202546-f6391c0de4c7 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240826202546-f6391c0de4c7 // indirect
