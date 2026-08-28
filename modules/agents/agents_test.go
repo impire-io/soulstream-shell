@@ -49,6 +49,8 @@ func TestTheModuleClaimsItsOwnRoutes(t *testing.T) {
 		"POST /act/agent-add",
 		"POST /act/agent-credential",
 		"POST /act/agent-revoke",
+		"POST /agents/declare-json",
+		"POST /act/agent-declare",
 	}
 	if !reflect.DeepEqual(rt.patterns, want) {
 		t.Errorf("claimed %v, want %v", rt.patterns, want)
@@ -114,7 +116,7 @@ func TestRevokingStandsBehindAQuestion(t *testing.T) {
 // The screen leads with the roster; the add-form waits in the slide-over
 // behind its own key, with a result line of its own beside the fields.
 func TestTheAddFormWaitsInTheSlideOver(t *testing.T) {
-	body := renderAgents(agentList(), nil, names(), "", nil)
+	body := renderAgents(agentList(), nil, names(), "", nil, declareView{})
 	table := strings.Index(body, `id="agents-table"`)
 	panel := strings.Index(body, `class="slideover"`)
 	if table < 0 || panel < 0 || panel < table {
@@ -351,16 +353,64 @@ func TestTheFormSaysWhatAddingAnAgentCommitsYouTo(t *testing.T) {
 // The words on this screen are the ones a person uses. Component bynames
 // never reach a product surface.
 //
-// The emitted configuration is exempt and only it: those variable names
-// belong to soulstream-core, which reads them and no others, so the screen
-// spells them that program's way or the agent does not start. The exemption
-// is narrow by construction — the screen below is rendered with no
-// credential on it, which is every state but one.
+// Two things are exempt and only they, both for the same reason: they are
+// documents another program reads, not sentences a person reads. The
+// emitted configuration spells the five variable names soulstream-core
+// reads and no others, or the agent does not start. The declaration blocks
+// spell the field names the declaration package parses and no others, or
+// the document a person copies to the command line is not the document the
+// command line takes.
+//
+// The exemption is narrow by construction and proven so: the screen is
+// rendered with no credential on it (every state but one), and the
+// declaration blocks are cut out by the attribute that marks them, with a
+// control that has to fire or the cut proves nothing.
 func TestNothingServedSaysTheRetiredWord(t *testing.T) {
-	body := renderAgents(agentList(), nil, names(), "scribe", nil)
-	for _, banned := range []string{"realm", "fold", "idp", "OIDC", "persona", "sentinel", "token"} {
-		if strings.Contains(strings.ToLower(body), strings.ToLower(banned)) {
-			t.Errorf("the agents screen says %q", banned)
+	banned := []string{"realm", "fold", "idp", "OIDC", "persona", "sentinel", "token"}
+	check := func(what, body string) {
+		t.Helper()
+		for _, word := range banned {
+			if strings.Contains(strings.ToLower(body), strings.ToLower(word)) {
+				t.Errorf("%s says %q", what, word)
+			}
 		}
+	}
+	check("the agents screen", renderAgents(agentList(), nil, names(), "scribe", nil, declareView{}))
+
+	// The same screen with the declare lane on: everything a person reads
+	// keeps the same words, and only the documents are exempt.
+	full := renderAgents(agentList(), nil, names(), "scribe", nil, fullDeclareView())
+	prose, cut := withoutDeclarations(full)
+	if cut == 0 {
+		t.Fatal("nothing was cut out — the exemption cannot be narrow if it caught nothing")
+	}
+	check("the declare lane", prose)
+	// The control: the cut is what makes the check pass, so the words must
+	// really be in what was cut.
+	if !strings.Contains(strings.ToLower(full), "persona") {
+		t.Fatal("the declaration blocks carry none of the record's own words — " +
+			"the exemption is measuring nothing")
+	}
+}
+
+// withoutDeclarations removes every block marked as a document another
+// program reads, and says how many it removed.
+func withoutDeclarations(body string) (string, int) {
+	var b strings.Builder
+	rest, cut := body, 0
+	for {
+		i := strings.Index(rest, "data-declaration>")
+		if i < 0 {
+			b.WriteString(rest)
+			return b.String(), cut
+		}
+		b.WriteString(rest[:i])
+		rest = rest[i+len("data-declaration>"):]
+		j := strings.Index(rest, "</textarea>")
+		if j < 0 {
+			return b.String(), cut
+		}
+		rest = rest[j:]
+		cut++
 	}
 }

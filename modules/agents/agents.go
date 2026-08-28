@@ -103,6 +103,7 @@ func (m *Module) Mount(rt shell.Router) {
 	rt.HandleFunc("POST /act/agent-add", m.actAdd)
 	rt.HandleFunc("POST /act/agent-credential", m.actCredential)
 	rt.HandleFunc("POST /act/agent-revoke", m.actRevoke)
+	m.mountDeclare(rt)
 }
 
 // topicQuery carries the open conversation across screens.
@@ -146,7 +147,7 @@ func (m *Module) agents(w http.ResponseWriter, r *http.Request) {
 		Title: "agents", Section: sectionAgents, Live: true,
 		Init: "@get('/agents/live')",
 		Body: m.sh.Sheet(renderAgents(list, err, m.names(r.Context(), list),
-			r.URL.Query().Get("who"), m.sp.Presence(r.Context()))),
+			r.URL.Query().Get("who"), m.sp.Presence(r.Context()), m.declareRead(r))),
 	})
 }
 
@@ -168,6 +169,14 @@ func (m *Module) live(w http.ResponseWriter, r *http.Request) {
 		list, lerr := ag.List(r.Context())
 		shell.WriteElements(out, renderTable(list, lerr, m.names(r.Context(), list), who,
 			m.sp.Presence(r.Context())))
+		// The declared lane rides the same channel: a placement is open
+		// until some machine takes it up, and the person who just declared
+		// it is watching that happen. One stream, two tables, and the
+		// result line still nobody's but the acts'.
+		if m.placing() {
+			declared, derr := m.sp.Declared(r.Context())
+			shell.WriteElements(out, renderDeclared(declared, derr))
+		}
 	})
 }
 

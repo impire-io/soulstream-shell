@@ -70,6 +70,23 @@ type Options struct {
 	// build. Left false, that module is nowhere: no key, no route, 404
 	// like any path nobody claimed.
 	GuardrailOn bool
+	// PlacementsTopic is the NAME of the topic this deployment places
+	// declared agents on — the whole of how the agents surface knows this
+	// deployment serves agents itself rather than only handing people a
+	// block to run one on their own machine. Left empty, that lane is not
+	// drawn and the act behind it is not offered: honest absence, the same
+	// terms AdminBase and AgentsDial ride.
+	//
+	// It is a name and not a path on purpose: the same name the
+	// deployment's own submit verb resolves against the board, so both
+	// paths land a placement in the same place.
+	PlacementsTopic string
+	// CapabilityRole is the name of the signing role a declared agent's
+	// tools resolve through — the one the deployment's founding declared.
+	// A declaration carries names, never grants, and this name is the one
+	// the shell cannot read off anything. Left empty, agents are declared
+	// without tools and the picker is not offered.
+	CapabilityRole string
 	// Ready, when set, receives the bound listen address.
 	Ready func(addr string)
 }
@@ -116,6 +133,9 @@ func Run(ctx context.Context, o Options) error {
 		AdminBase:    o.AdminBase,
 		AgentsDial:   o.AgentsDial,
 		GuardrailOn:  o.GuardrailOn,
+
+		PlacementsTopic: o.PlacementsTopic,
+		CapabilityRole:  o.CapabilityRole,
 	})
 	if err != nil {
 		return err
