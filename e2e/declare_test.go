@@ -236,6 +236,35 @@ func TestDeclareGate(t *testing.T) {
 	if got := declarationOnPage(t, elsewhere); got != shown {
 		t.Fatalf("the rebuilt document is not the one submitted:\n%s\n---\n%s", got, shown)
 	}
+
+	// A home left as "a new one": the act starts a conversation named
+	// after the agent before placing it — the same start-on-first-use the
+	// placements topic gets, so a board with nothing to offer is never a
+	// dead end.
+	madeHome := postForm(t, back, r.ShellURL+"/act/agent-declare", url.Values{
+		"name": {"greeter"}, "wake_mention": {"on"}})
+	if !strings.Contains(madeHome, "a new conversation named after it — its home") {
+		t.Fatalf("declaring without a home did not say it made one:\n%s", madeHome)
+	}
+	rc, nc, err := r.Reader(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer nc.Close()
+	entries, err := topic.Board(ctx, rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, e := range entries {
+		if e.Announcement.Name == "greeter" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("no conversation named after the agent arrived on the board")
+	}
 }
 
 // The other arm: a deployment that places no agents has no such lane, and

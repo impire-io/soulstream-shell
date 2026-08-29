@@ -173,6 +173,10 @@ func TestUpstreamRefusalsArriveInTheirOwnWords(t *testing.T) {
 			f.Set("name", "")
 			return f
 		}},
+		// The empty home remains invalid as a DOCUMENT — the act fills it
+		// (a new conversation named after the agent) before validating, so
+		// the pure form's refusal here is the one-codec truth, not a wall
+		// a person meets.
 		{"no home", func(f url.Values) url.Values {
 			f.Set("home", "")
 			return f
@@ -380,18 +384,29 @@ func TestBothFormsShareTheOneSlideOver(t *testing.T) {
 	}
 }
 
-// The pickers offer the conversations there are. An archived one is kept
-// for reading, not for putting an agent in.
+// The pickers offer the conversations there are — and, for the home, the
+// one there is not: the first choice is a new conversation started at
+// declare time and named after the agent, so a fresh realm's empty board
+// is never a dead end. An archived one is kept for reading, not for
+// putting an agent in.
 func TestThePickersOfferTheLivingConversations(t *testing.T) {
-	sel := conversationSelect(fullDeclareView(), "home", "")
+	sel := conversationSelect(fullDeclareView(), "home", "a new one, named after it")
 	if !strings.Contains(sel, `<option value="t-ab12">planning</option>`) {
 		t.Errorf("the picker does not offer the conversation there is:\n%s", sel)
 	}
 	if strings.Contains(sel, "t-cd34") {
 		t.Errorf("the picker offers an archived conversation:\n%s", sel)
 	}
-	if !strings.Contains(sel, `<select name="home" required>`) {
-		t.Errorf("the home a required field takes is not required:\n%s", sel)
+	if !strings.Contains(sel, `<option value="">a new one, named after it</option>`) {
+		t.Errorf("an empty board is a dead end — no way to a new home:\n%s", sel)
+	}
+	if strings.Contains(sel, "required") {
+		t.Errorf("a home that can be a new one must not require a pick:\n%s", sel)
+	}
+	// And the form serves the home picker in exactly that shape.
+	if form := declarePanel(fullDeclareView()); !strings.Contains(form,
+		`<option value="">a new one, named after it</option>`) {
+		t.Errorf("the declare form's home picker offers no new home:\n%s", form)
 	}
 	optional := conversationSelect(fullDeclareView(), "wake_conversation", "— optional")
 	if !strings.Contains(optional, `<option value="">— optional</option>`) {

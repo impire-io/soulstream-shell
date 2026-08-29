@@ -213,7 +213,12 @@ func declarePanel(v declareView) string {
 	b.WriteString(`<div class="fields">`)
 	b.WriteString(`<label class="field">Name<input name="name" required autocomplete="off" ` +
 		`spellcheck="false" placeholder="lowercase, no spaces"></label>`)
-	b.WriteString(`<label class="field">Home conversation` + conversationSelect(v, "home", "") +
+	// The home offers what there is AND the way there is not: a fresh
+	// realm has no conversation to pick, and a select with nothing to
+	// offer is a lane with nowhere to land — so the first choice is a new
+	// conversation, started at declare time and named after the agent.
+	b.WriteString(`<label class="field">Home conversation` +
+		conversationSelect(v, "home", "a new one, named after it") +
 		`</label>`)
 	b.WriteString(`</div></div>`)
 

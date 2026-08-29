@@ -211,6 +211,14 @@ func (m *Module) declareJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	shell.Patch(w, declarationView(body))
+	// A home left as "a new one" is filled at declare time, so the
+	// document shown here does not carry it yet — said plainly rather
+	// than letting the validator refuse a gap the act closes itself.
+	if d.Topic == "" && d.Persona != "" {
+		shell.Patch(w, declareNote("Its home conversation is started when you declare — "+
+			"a new one named after it; the document then carries that conversation."))
+		return
+	}
 	// The refusal, if there is one, in the words of the package that
 	// refuses — never this screen's paraphrase of them.
 	if err := d.Validate(); err != nil {
@@ -235,6 +243,23 @@ func (m *Module) actDeclare(w http.ResponseWriter, r *http.Request) {
 		shell.Patch(w, declareNote(bad))
 		return
 	}
+	// A home left as "a new one": started here, named after the agent,
+	// before the document is judged — the same start-on-first-use the
+	// placements topic gets, because a select with nothing to offer is a
+	// lane with nowhere to land. The document that is validated and
+	// submitted carries the real path, so the one-codec claim holds.
+	madeHome := false
+	if d.Topic == "" && d.Persona != "" {
+		h, err := topic.StartTopic(r.Context(), sess.Client(), topic.StartTopicInput{
+			Name:          d.Persona,
+			SubjectMatter: "the home of " + d.Persona,
+		})
+		if err != nil {
+			shell.Patch(w, declareNote("Starting its home conversation failed: "+err.Error()))
+			return
+		}
+		d.Topic, madeHome = h.Path(), true
+	}
 	// Validated here as well as inside the submit, so the refusal answers
 	// beside the fields it is about rather than on the screen behind them.
 	if err := d.Validate(); err != nil {
@@ -249,9 +274,14 @@ func (m *Module) actDeclare(w http.ResponseWriter, r *http.Request) {
 	// than behind the form they just finished with.
 	shell.PatchSignals(w, `{panel: false}`)
 	shell.Patch(w, declareNote(""))
-	shell.Patch(w, resultNote(fmt.Sprintf(
-		"%s is declared. Nothing here holds it now — close this screen and it still "+
-			"arrives. Its line below says where it stands.", d.Persona)))
+	said := "%s is declared. Nothing here holds it now — close this screen and it still " +
+		"arrives. Its line below says where it stands."
+	if madeHome {
+		said = "%s is declared, in a new conversation named after it — its home. " +
+			"Nothing here holds it now — close this screen and it still arrives. " +
+			"Its line below says where it stands."
+	}
+	shell.Patch(w, resultNote(fmt.Sprintf(said, d.Persona)))
 	m.patchDeclared(w, r)
 }
 
