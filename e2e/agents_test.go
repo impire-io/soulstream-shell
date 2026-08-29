@@ -129,10 +129,12 @@ func TestAgentsGate(t *testing.T) {
 	}
 	me := who[1]
 
-	// The screen is on the rail and starts empty.
+	// The screen is on the rail and starts empty. The key is asserted
+	// rather than the panel's name, which differs when the declare lane
+	// shares the panel.
 	screen := get(t, cl, r.ShellURL+"/agents")
 	for _, want := range []string{"<h1>Agents</h1>", "No agents yet.",
-		`class="ir on" href="/agents`, "Add an agent"} {
+		`class="ir on" href="/agents`, ">Add agent</button>"} {
 		if !strings.Contains(screen, want) {
 			t.Fatalf("the agents screen is missing %q: %s", want, screen)
 		}
