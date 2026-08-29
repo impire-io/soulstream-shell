@@ -114,7 +114,15 @@ func reservePort() (string, error) {
 // sign-in plane running: the node, then the shell on the ops read lane the
 // soulnode plane hands it. A failure leaves nothing running.
 func Start(dir string) (*Rig, error) {
-	return start(dir, false)
+	return start(dir, false, false)
+}
+
+// StartThinking founds the bundled arm with the serving half of the
+// thinking house on: the inference plane running one stand-in instance
+// in this process, and the fact reaching the shell the one the product
+// computes for a real soulnode — the config's own word, never a probe.
+func StartThinking(dir string) (*Rig, error) {
+	return start(dir, false, true)
 }
 
 // StartExternalIdP founds the same realm in the other deployment shape: the
@@ -126,13 +134,13 @@ func Start(dir string) (*Rig, error) {
 // It is the shape a deployment takes when its people already live
 // somewhere: the node holds the record, somebody else holds the people.
 func StartExternalIdP(dir string) (*Rig, error) {
-	return start(dir, true)
+	return start(dir, true, false)
 }
 
 // start stands up one arm. The only thing the two arms decide differently
 // is where the authorization server comes from; everything the shell is
 // handed is read back off the deployment's own state either way.
-func start(dir string, external bool) (*Rig, error) {
+func start(dir string, external, thinking bool) (*Rig, error) {
 	asPort, err := reservePort()
 	if err != nil {
 		return nil, fmt.Errorf("rig: reserve sign-in port: %w", err)
@@ -151,6 +159,16 @@ func start(dir string, external bool) (*Rig, error) {
 	// switches on with public-door mode (the shell plane's soulnode wiring
 	// does this by default — the finding is recorded).
 	st.MCPPublicURL = "http://127.0.0.1:8666"
+	if thinking {
+		// The serving half only: one stand-in instance behind the plane's
+		// own door, on a listener of its own so parallel rigs never fight.
+		// No secret anywhere — the stand-in is the adapter that takes none.
+		st.InferenceEnabled = true
+		st.InferenceListen = "127.0.0.1:0"
+		st.InferenceInstances = []ceremony.InferenceInstance{{
+			Adapter: "standin", Model: "standin-1", Capability: "chat",
+		}}
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	var invite string
@@ -248,6 +266,7 @@ func start(dir string, external bool) (*Rig, error) {
 		GuardrailOn:     guardrailOn,
 		PlacementsTopic: placements,
 		CapabilityRole:  capabilityRole,
+		InferenceOn:     st.InferenceEnabled,
 	}
 	addr, err := serveShell(ctx, opts)
 	if err != nil {

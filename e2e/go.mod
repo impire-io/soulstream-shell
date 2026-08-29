@@ -7,7 +7,7 @@ require (
 	github.com/impire-io/soulstream-core v0.14.0-rc.1
 	github.com/impire-io/soulstream-identity v0.12.0
 	github.com/impire-io/soulstream-idp v0.8.1
-	github.com/impire-io/soulstream-shell v0.11.0-rc.3
+	github.com/impire-io/soulstream-shell v0.11.0-rc.4
 	github.com/impire-io/soulstream-workloads v0.8.0-rc.4
 	github.com/nats-io/nats.go v1.52.0
 	soulstream-shell.invalid/moduleprobe v0.0.0
@@ -91,3 +91,12 @@ replace github.com/impire-io/soulstream-idp => ../../soulstream-idp
 // nobody here owns, never tagged and never published — it is only ever the
 // working tree beside this one.
 replace soulstream-shell.invalid/moduleprobe => ./moduleprobe
+
+// TEMPORARY — remove when soulstream-inference ships a tag carrying the
+// catalogue package and soulstream ships built on it (with the shell's
+// InferenceOn fact). The models arm of the gate measures the one-codec
+// claim and the declared fact, neither of which is on a published tag
+// yet; without these pins the gate would not compile.
+replace github.com/impire-io/soulstream => ../../soulstream
+
+replace github.com/impire-io/soulstream-inference => ../../soulstream-inference

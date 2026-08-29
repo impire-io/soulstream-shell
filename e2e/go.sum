@@ -52,16 +52,12 @@ github.com/gorilla/securecookie v1.1.2 h1:YCIWL56dvtr73r6715mJs5ZvhtnY73hBvEF8kX
 github.com/gorilla/securecookie v1.1.2/go.mod h1:NfCASbcHqRSY+3a8tlWJwsQap2VX5pwzwo4h3eOamfo=
 github.com/gowebpki/jcs v1.0.1 h1:Qjzg8EOkrOTuWP7DqQ1FbYtcpEbeTzUoTN9bptp8FOU=
 github.com/gowebpki/jcs v1.0.1/go.mod h1:CID1cNZ+sHp1CCpAR8mPf6QRtagFBgPJE0FCUQ6+BrI=
-github.com/impire-io/soulstream v0.14.0-rc.3 h1:SIejq5t8O5hnML+u3dGNcsFwICG5vD0ImDdlZCBa2Bw=
-github.com/impire-io/soulstream v0.14.0-rc.3/go.mod h1:h3JlCoOCN7Q+huYHuEmChaPr3gX1+4zz/nCdkREQ0lw=
 github.com/impire-io/soulstream-archivist v0.4.1 h1:YOUasXQfH8T2mUP+63nMG1eRl+zvTuq1/XrULi990BY=
 github.com/impire-io/soulstream-archivist v0.4.1/go.mod h1:oAoy/viCEZl2AjpfCNZyjvLD+oSb2u65EIyrBfovq8M=
 github.com/impire-io/soulstream-core v0.14.0-rc.1 h1:QQa/U4iHiVQUBjVBgT8E6XsIaT1sLMNuwUlI8+Xt6Io=
 github.com/impire-io/soulstream-core v0.14.0-rc.1/go.mod h1:0W6OHY8TDKz6+g2MfoADvlFD/ZoRbe6IG+wkNx92qKE=
 github.com/impire-io/soulstream-identity v0.12.0 h1:/LfGQhZY7qWlRtYpCDLrk2JbpkE88Xg65VkpfCt9ZUI=
 github.com/impire-io/soulstream-identity v0.12.0/go.mod h1:Lz5cia9xUKGy0kdAHg7R2Tz4C+ZAGJufXk49oRlJ6ok=
-github.com/impire-io/soulstream-inference v0.1.0 h1:mvyPws9aiswv60RAW6QwNKgleoyWSJGsy30UjLupVBQ=
-github.com/impire-io/soulstream-inference v0.1.0/go.mod h1:S2pF86IVu9LfpBK4ouZNfK/LEpFi+GABJTW3OtYDHwI=
 github.com/impire-io/soulstream-mcp v0.1.0 h1:mRiva+bhSertb1VKevhuec6WPKHPQbur83KIEss3Gwc=
 github.com/impire-io/soulstream-mcp v0.1.0/go.mod h1:7NzUwvEhPC2DUxoL7HOvrPRtr8joSiqiblsJixvseFI=
 github.com/impire-io/soulstream-workloads v0.8.0-rc.4 h1:rH501YkzY2SzKCsyp42BXVKHmikxLbO4srYFucZ/pTU=

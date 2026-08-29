@@ -29,6 +29,7 @@ import (
 
 	"github.com/impire-io/soulstream-core/topic"
 	"github.com/impire-io/soulstream-idp/authtest"
+	infercat "github.com/impire-io/soulstream-inference/catalogue"
 	"github.com/impire-io/soulstream-workloads/declaration"
 	"github.com/impire-io/soulstream-workloads/fleet"
 	"github.com/impire-io/soulstream/ceremony"
@@ -39,11 +40,6 @@ import (
 // The declaration block the screen shows, as a test reads it back.
 var declarationRe = regexp.MustCompile(
 	`(?s)<textarea readonly rows="\d+" data-declaration>(.*?)</textarea>`)
-
-// catalogueBucket is where this realm's model names live — the product's
-// own bucket (soulstream spec 014 FR-009), written here the way the
-// deployment writes it and read by the shell as names alone.
-const catalogueBucket = "soulstream-inference-catalogue"
 
 const (
 	declaredName  = "minutes"
@@ -276,8 +272,9 @@ func TestDeclareAbsentArm(t *testing.T) {
 }
 
 // nameModel puts one name in this realm's model catalogue, the way the
-// deployment's own `model set` does: a key in the realm KV, the shell
-// reading names alone.
+// deployment's own `model set` does: the published contract's bucket and
+// codec, one definition — the spelled constant this file once carried is
+// retired at its source (design 0010, upstream ask #1).
 func nameModel(ctx context.Context, t *testing.T, r *rig.Rig, name string) {
 	t.Helper()
 	rc, nc, err := r.Reader(ctx)
@@ -285,19 +282,16 @@ func nameModel(ctx context.Context, t *testing.T, r *rig.Rig, name string) {
 		t.Fatal(err)
 	}
 	defer nc.Close()
-	kv, err := rc.JetStream().CreateKeyValue(ctx, jetstream.KeyValueConfig{
-		Bucket: catalogueBucket, Description: "virtual model names", History: 1,
-	})
-	if err != nil && !errors.Is(err, jetstream.ErrBucketExists) {
-		t.Fatalf("naming a model: %v", err)
-	}
-	if kv == nil {
-		if kv, err = rc.JetStream().KeyValue(ctx, catalogueBucket); err != nil {
+	kv, err := rc.JetStream().CreateKeyValue(ctx, infercat.Config())
+	if err != nil {
+		if !errors.Is(err, jetstream.ErrBucketExists) {
+			t.Fatalf("naming a model: %v", err)
+		}
+		if kv, err = rc.JetStream().KeyValue(ctx, infercat.Bucket); err != nil {
 			t.Fatalf("naming a model: %v", err)
 		}
 	}
-	body, _ := json.Marshal(map[string]string{"capability": "chat"})
-	if _, err := kv.Put(ctx, name, body); err != nil {
+	if err := infercat.Set(ctx, kv, name, infercat.Entry{Capability: "chat"}); err != nil {
 		t.Fatalf("naming a model: %v", err)
 	}
 }
