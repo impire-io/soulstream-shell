@@ -14,6 +14,7 @@ import (
 
 	"github.com/impire-io/soulstream-core/toolcatalog"
 
+	"github.com/impire-io/soulstream-shell/shell"
 	"github.com/impire-io/soulstream-shell/soulstream"
 )
 
@@ -133,31 +134,39 @@ func (m *Module) firstSteps(ctx context.Context, sess *soulstream.Session, v *vi
 // firstStepsCard renders the steps — or nothing at all, which is the
 // card's whole retirement plan: when every listed step is done, there is
 // no card, and no state anywhere remembers there ever was one.
+//
+// The card counts itself quietly ("2 of 4 done") instead of explaining
+// itself: a done step is a filled dot and a muted word, a pending one is
+// a hollow dot and a way there, with its longer sentence riding the
+// hover the way raw detail always does.
 func firstStepsCard(steps []step) string {
-	remaining := false
+	done := 0
 	for _, s := range steps {
-		if !s.Done {
-			remaining = true
-			break
+		if s.Done {
+			done++
 		}
 	}
-	if !remaining {
+	if len(steps) == 0 || done == len(steps) {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString(`<div class="card raised"><h2>First steps</h2>`)
-	b.WriteString(`<p class="lede">A few steps turn an empty soulstream into a working one. ` +
-		`Each disappears into a quiet done as the house fills up — and when everything ` +
-		`is done, so is this card.</p>`)
-	b.WriteString(`<ol class="steps">`)
+	b.WriteString(`<div class="card firststeps"><div class="fs-head"><h2>First steps</h2>`)
+	fmt.Fprintf(&b, `<span class="fs-count">%d of %d done</span></div>`, done, len(steps))
+	b.WriteString(`<ol>`)
 	for _, s := range steps {
 		if s.Done {
-			fmt.Fprintf(&b, `<li class="off"><span class="pill ok">done</span> %s</li>`,
-				esc(s.Title))
+			fmt.Fprintf(&b, `<li class="off"><span class="fs-dot" title="done">%s</span>%s</li>`,
+				shell.Icon("check"), esc(s.Title))
 			continue
 		}
-		fmt.Fprintf(&b, `<li><a href="%s">%s</a> — %s</li>`,
-			esc(s.Href), esc(s.Title), esc(s.Detail))
+		// A step whose act lives on this screen points into the slide-over,
+		// so the door has to open the panel it leads to.
+		open := ""
+		if strings.HasPrefix(s.Href, "#") {
+			open = ` data-on:click="$panel = true"`
+		}
+		fmt.Fprintf(&b, `<li><span class="fs-dot"></span><a href="%s" title="%s"%s>%s</a></li>`,
+			esc(s.Href), esc(s.Detail), open, esc(s.Title))
 	}
 	b.WriteString(`</ol></div>`)
 	return b.String()

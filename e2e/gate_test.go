@@ -447,10 +447,16 @@ func TestShellGate(t *testing.T) {
 		}
 	}
 	thread := elementsIn(frameFor(t, patchFrames(t, live), `id="dash"`))
-	for _, want := range []string{seededTurn, "verified", `class="msg human"`} {
+	for _, want := range []string{seededTurn, `class="msg human"`} {
 		if !strings.Contains(thread, want) {
 			t.Fatalf("the conversation is missing %q:\n%s", want, thread)
 		}
+	}
+	// A verified message says nothing — silence is the earned normal (the
+	// calm pass); the earned verdict is asserted by name on the storage
+	// screen below, where the record answers for itself.
+	if strings.Contains(thread, "verified") || strings.Contains(thread, "unsigned") {
+		t.Fatalf("the conversation shouts a verdict the record earned quietly:\n%s", thread)
 	}
 	// The details beside the conversation are the stream's third target:
 	// who is in here, read off the record, and nothing waiting yet.
@@ -484,7 +490,7 @@ func TestShellGate(t *testing.T) {
 	// house at a glance, and a way into every conversation.
 	overview := get(t, cl, r.ShellURL+"/home")
 	for _, want := range []string{"Your soulstream at a glance", "Storage", "Conversations",
-		"helm-gate", `class="row" href="/?topic=`, `class="ir on" href="/home`} {
+		"helm-gate", `<a href="/?topic=`, `class="ir on" href="/home`} {
 		if !strings.Contains(overview, want) {
 			t.Fatalf("the overview is missing %q: %s", want, overview)
 		}
@@ -537,7 +543,7 @@ func TestShellGate(t *testing.T) {
 		`class="ir on" href="/storage`, "What to look at",
 		realm.StreamName, realm.NotifyStreamName,
 		topic.OpsSubjectPrefix + path, topic.TypeWorkOpen,
-		`<span class="verdict`,
+		`<span class="verdict ok">verified</span>`,
 		// The sentence the screen must never get wrong.
 		"your own sign-in", "not only the parts about you",
 	} {
@@ -588,9 +594,9 @@ func TestShellGate(t *testing.T) {
 	}
 
 	// The way in from the readout that raised the question: the overview's
-	// storage card points here, asked for through the frame by a module that
-	// imports none of this one.
-	if !strings.Contains(get(t, cl, r.ShellURL+"/home"), `<a href="/storage">Look inside</a>`) {
+	// storage tile IS the way here whole (the calm pass), asked for through
+	// the frame by a module that imports none of this one.
+	if !strings.Contains(get(t, cl, r.ShellURL+"/home"), `<a class="card tile" href="/storage">`) {
 		t.Fatal("the storage readout offers no way into the store it measures")
 	}
 

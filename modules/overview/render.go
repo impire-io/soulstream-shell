@@ -144,81 +144,150 @@ func renderPlanes(v view) string {
 	return b.String()
 }
 
-// agentsCard is the way from the front door to an agent of your own — on
+// tile is one glance card: an icon and a label, one value, one quiet
+// note. Every tile is the same shape on purpose — the calm of the glance
+// is four instruments reading the same way. A tile with somewhere to go
+// is the way there whole; the instruments themselves (the level ladder,
+// the readout line) stay on the system-status screen.
+func tile(href, icon, label, value, note string, warn bool) string {
+	cls := "card tile"
+	if warn {
+		cls += " warn"
+	}
+	inner := fmt.Sprintf(`<div class="t-head">%s<span>%s</span></div><div class="t-value">%s</div>`,
+		shell.Icon(icon), label, value)
+	if note != "" {
+		inner += fmt.Sprintf(`<div class="t-note">%s</div>`, note)
+	}
+	if href != "" {
+		return fmt.Sprintf(`<a class="%s" href="%s">%s</a>`, cls, href, inner)
+	}
+	return fmt.Sprintf(`<div class="%s">%s</div>`, cls, inner)
+}
+
+// storageTile is the store at a glance. The honesty rules hold in the
+// quiet register: an unroofed store is unmeasured and the note says so.
+func storageTile(v view) string {
+	value := fmt.Sprintf(`%d ops · %s`, v.StreamMsg, esc(shell.SizeWords(v.StreamBytes)))
+	note := "keeping · no budget set"
+	if v.StreamRoof > 0 {
+		note = fmt.Sprintf("keeping · %.0f%% of %s",
+			float64(v.StreamBytes)/float64(v.StreamRoof)*100,
+			esc(shell.SizeWords(uint64(v.StreamRoof))))
+	}
+	return tile(v.Store.Href, "cassette-tape", "Storage", value, note, false)
+}
+
+// signInTile is the fold at a glance.
+func signInTile(v view) string {
+	if !v.FoldOK {
+		return tile("", "key", "People &amp; sign-in", "unreachable", "passkeys", true)
+	}
+	return tile("", "key", "People &amp; sign-in", "serving", "passkeys", false)
+}
+
+// talkingTile counts the conversations, and how many are going on.
+func talkingTile(v view) string {
+	if len(v.Board) == 0 {
+		return tile("", "messages-square", "Talking", "none yet", "", false)
+	}
+	rooms := "conversation"
+	if len(v.Board) != 1 {
+		rooms = "conversations"
+	}
+	on := 0
+	for _, e := range v.Board {
+		if e.Lifecycle == topic.Active {
+			on++
+		}
+	}
+	note := "all quiet"
+	if on > 0 {
+		note = fmt.Sprintf("%d going on", on)
+	}
+	return tile("", "messages-square", "Talking",
+		fmt.Sprintf("%d %s", len(v.Board), rooms), note, false)
+}
+
+// agentsTile is the way from the front door to an agent of your own — on
 // deployments that issue agent credentials at all, which is a declared fact
 // read through the support layer: this module knows nothing of the agents
 // screen it links to beyond the deployment's own word that it is there.
 // Empty roster, the pointer; standing roster, the counts; unreadable, the
 // honest word rather than a zero nobody measured.
-func agentsCard(v view) string {
+func agentsTile(v view) string {
 	if !v.AgentsOn {
 		return ""
 	}
-	var body string
 	switch {
 	case v.AgentsUnread:
-		body = `<div class="row"><span class="pill warn">unreadable right now</span></div>`
+		return tile("/agents", "radio", "Agents", "unreadable right now", "", true)
 	case v.AgentsNamed == 0:
-		body = `<div class="row"><span class="mono">none yet</span></div>` +
-			`<p class="hint"><a href="/agents">Set one up</a> — your assistant gets a name ` +
-			`of its own and answers mentions for you.</p>`
+		return tile("/agents", "radio", "Agents", "none yet", "set one up — it answers for you", false)
 	default:
-		body = fmt.Sprintf(`<div class="row"><span class="mono">%d named · %d can get in</span></div>`+
-			`<p class="hint"><a href="/agents">Manage them</a></p>`, v.AgentsNamed, v.AgentsIn)
+		return tile("/agents", "radio", "Agents",
+			fmt.Sprintf("%d named", v.AgentsNamed),
+			fmt.Sprintf("%d can get in", v.AgentsIn), false)
 	}
-	return planeCard("radio", "Agents", body)
 }
 
 // renderOverview is the Home screen's body: what the house is doing, and
-// the way into every conversation from anywhere.
+// the way into every conversation from anywhere. One thing leads per
+// section, and the start form waits in the slide-over — creation is a
+// deliberate act with a surface of its own, here as on every sheet.
 func renderOverview(v view) string {
 	var b strings.Builder
 	b.WriteString(`<h1>Your soulstream at a glance</h1>`)
 	b.WriteString(`<p class="lede">Everything here is read live from your soulstream — ` +
 		`the shell keeps none of it.</p>`)
 	b.WriteString(firstStepsCard(v.Steps))
-	b.WriteString(`<div class="planes">`)
-	b.WriteString(planeCard("cassette-tape", "Storage", storageCard(v)))
-	b.WriteString(planeCard("key", "People &amp; sign-in", signInRow(v)))
-	rooms := "conversation"
-	if len(v.Board) != 1 {
-		rooms = "conversations"
-	}
-	b.WriteString(planeCard("messages-square", "Talking",
-		fmt.Sprintf(`<div class="row"><span class="mono">%d %s</span></div>`,
-			len(v.Board), rooms)))
-	b.WriteString(agentsCard(v))
+	b.WriteString(`<div class="tiles">`)
+	b.WriteString(storageTile(v))
+	b.WriteString(signInTile(v))
+	b.WriteString(talkingTile(v))
+	b.WriteString(agentsTile(v))
 	b.WriteString(`</div>`)
 
-	b.WriteString(`<h2 class="section label">Conversations</h2>`)
+	b.WriteString(`<div class="sec-head"><h2>Conversations</h2>` +
+		`<button type="button" class="btn" data-on:click="$panel = true">` +
+		string(shell.Icon("plus")) + `Start a conversation</button></div>`)
 	if v.Err != "" {
 		fmt.Fprintf(&b, `<p class="blank">%s</p>`, esc(v.Err))
 		return b.String()
 	}
-	b.WriteString(startCard())
 	if len(v.Board) == 0 {
-		b.WriteString(`<p class="blank">No conversations yet. Start one above.</p>`)
+		b.WriteString(`<p class="blank">No conversations yet. Start one with the key above.</p>`)
+		b.WriteString(startOver())
 		return b.String()
 	}
-	b.WriteString(`<div class="rows">`)
-	var archived []int
+	var live, archived []int
 	for i := len(v.Board) - 1; i >= 0; i-- {
 		if v.Board[i].Lifecycle == topic.Archived {
 			archived = append(archived, i)
 			continue
 		}
-		b.WriteString(boardRow(v, v.Board[i]))
+		live = append(live, i)
 	}
-	b.WriteString(`</div>`)
+	b.WriteString(boardTable(v, live))
 	if len(archived) > 0 {
-		fmt.Fprintf(&b, `<details class="archfold"><summary>Archived (%d)</summary><div class="rows">`,
+		fmt.Fprintf(&b, `<details class="archfold"><summary>Archived (%d)</summary>`,
 			len(archived))
-		for _, i := range archived {
-			b.WriteString(boardRow(v, v.Board[i]))
-		}
-		b.WriteString(`</div></details>`)
+		b.WriteString(boardTable(v, archived))
+		b.WriteString(`</details>`)
 	}
+	b.WriteString(startOver())
 	return b.String()
+}
+
+// boardTable lists conversations the quiet way: a name that goes there,
+// what it is about, and its standing as a lowercase word.
+func boardTable(v view, idx []int) string {
+	var rows strings.Builder
+	for _, i := range idx {
+		rows.WriteString(boardRow(v, v.Board[i]))
+	}
+	return `<div class="tablewrap convs"><table><thead><tr><th>Name</th><th>About</th>` +
+		`<th>State</th></tr></thead><tbody>` + rows.String() + `</tbody></table></div>`
 }
 
 // boardRow is one conversation on the Home list.
@@ -227,10 +296,20 @@ func boardRow(v view, e topic.BoardEntry) string {
 	if name == "" {
 		name = e.Path
 	}
-	return fmt.Sprintf(`<a class="row" href="/?topic=%s"><span class="name">%s</span>`+
-		`<span class="what">%s</span>%s<span class="state">%s</span></a>`,
-		qesc(e.Path), esc(name), esc(e.Announcement.SubjectMatter),
-		soulstream.UnreadMark(v.Unread[e.Path]), stateWords(e.Lifecycle))
+	return fmt.Sprintf(`<tr><td><a href="/?topic=%s">%s</a>%s</td>`+
+		`<td class="what">%s</td><td>%s</td></tr>`,
+		qesc(e.Path), esc(name), soulstream.UnreadMark(v.Unread[e.Path]),
+		esc(e.Announcement.SubjectMatter), statePill(e.Lifecycle))
+}
+
+// statePill is a lifecycle word as a quiet chip — the going-on one is
+// the live tone; everything else rests in ink.
+func statePill(l topic.Lifecycle) string {
+	cls := "pill"
+	if l == topic.Active {
+		cls = "pill live"
+	}
+	return fmt.Sprintf(`<span class="%s">%s</span>`, cls, stateWords(l))
 }
 
 // stateWords is a conversation's standing in a person's own word — the
@@ -254,21 +333,22 @@ func stateWords(l topic.Lifecycle) string {
 	}
 }
 
-// startCard is where a conversation begins on Home — the same act the
-// conversations screen offers, in the card shape this screen already
-// speaks. Two surfaces, one act: the record does not care which door a
-// conversation came in by.
-func startCard() string {
-	return `<div class="card"><h2>Start a conversation</h2>` +
-		`<p class="lede">It opens the moment you name it; the first message brings it to life.</p>` +
-		`<form id="convo-start" data-on:submit="@post('/act/conversation-start', {contentType:'form'})">` +
-		`<div class="fields">` +
-		`<label class="field">Name` +
-		`<input name="name" required autocomplete="off" placeholder="what to call it"></label>` +
-		`<label class="field">What it’s about` +
-		`<input name="about" autocomplete="off" placeholder="one line — optional"></label>` +
-		`</div>` +
-		`<button class="btn" type="submit">Start</button>` +
-		`<div id="convo-start-note" class="note"></div>` +
-		`</form></div>`
+// startOver is where a conversation begins on Home — the same act the
+// conversations screen offers, waiting in the sheet's slide-over the way
+// creation does on every list screen: the table leads, and starting is a
+// deliberate act with a surface of its own. Two surfaces, one act: the
+// record does not care which door a conversation came in by.
+func startOver() string {
+	return shell.SlideOver("Start a conversation",
+		`<p class="lede">It opens the moment you name it; the first message brings it to life.</p>`+
+			`<form id="convo-start" data-on:submit="@post('/act/conversation-start', {contentType:'form'})">`+
+			`<div class="fields">`+
+			`<label class="field">Name`+
+			`<input name="name" required autocomplete="off" placeholder="what to call it"></label>`+
+			`<label class="field">What it’s about`+
+			`<input name="about" autocomplete="off" placeholder="one line — optional"></label>`+
+			`</div>`+
+			`<button class="btn" type="submit">Start</button>`+
+			`<div id="convo-start-note" class="note"></div>`+
+			`</form>`)
 }

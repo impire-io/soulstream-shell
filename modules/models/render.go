@@ -42,16 +42,16 @@ type view struct {
 // about where the names point today.
 func renderModels(v view) string {
 	var b strings.Builder
-	b.WriteString(`<h1>Models</h1>`)
-	b.WriteString(`<p class="lede">The model names agents think through. A name is not a model — ` +
-		`it points at one, and changing where it points moves every agent naming it, with ` +
-		`nothing restarted.</p>`)
 	key := ""
 	if v.Admin {
 		key = `<p class="act"><button type="button" class="btn" data-on:click="$panel = true">` +
 			`Name a model</button></p>`
 	}
-	b.WriteString(`<div class="section">` + key + renderList(v) + `</div>`)
+	b.WriteString(`<div class="page-head"><div class="ph-words"><h1>Models</h1>` +
+		`<p class="lede">The model names agents think through. A name is not a model — ` +
+		`it points at one, and changing where it points moves every agent naming it, with ` +
+		`nothing restarted.</p></div>` + key + `</div>`)
+	b.WriteString(`<div class="section">` + renderList(v) + `</div>`)
 	b.WriteString(resultNote(""))
 	b.WriteString(`<div class="section">` + renderServing(v))
 	if v.Admin {

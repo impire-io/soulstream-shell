@@ -37,12 +37,13 @@ func renderAgents(list []soulstream.Agent, err error, names map[string]string, w
 	signs map[string]soulstream.LifeSign, dv declareView,
 ) string {
 	var b strings.Builder
-	b.WriteString(`<h1>Agents</h1>`)
-	b.WriteString(`<p class="lede">The AI assistants that take part here under their ` +
+	b.WriteString(`<div class="page-head"><div class="ph-words"><h1>Agents</h1>` +
+		`<p class="lede">The AI assistants that take part here under their ` +
 		`own names. Each gets in with a credential of its own, so what it says ` +
-		`carries its name — and each can be stopped without touching anything else.</p>`)
+		`carries its name — and each can be stopped without touching anything else.</p></div>` +
+		actKeys(dv) + `</div>`)
 	b.WriteString(lookedUpNote(list, err, who))
-	b.WriteString(`<div class="section">` + actKeys(dv))
+	b.WriteString(`<div class="section">`)
 	if dv.On {
 		b.WriteString(`<h2>Running on your machines</h2>`)
 	}
@@ -60,7 +61,8 @@ func renderAgents(list []soulstream.Agent, err error, names map[string]string, w
 }
 
 // actKeys pulls the slide-over out — at the form the key names, when this
-// deployment offers more than one.
+// deployment offers more than one. One accent per view (the calm pass):
+// the first key is the filled one, its sibling the quiet key beside it.
 func actKeys(dv declareView) string {
 	if !dv.On {
 		return addKey()
@@ -68,7 +70,7 @@ func actKeys(dv declareView) string {
 	return `<p class="act">` +
 		`<button type="button" class="btn" data-on:click="$panel = true; $make = 'yours'">` +
 		`Add agent</button> ` +
-		`<button type="button" class="btn" data-on:click="$panel = true; $make = 'here'">` +
+		`<button type="button" class="btn ghost" data-on:click="$panel = true; $make = 'here'">` +
 		`Declare agent</button></p>`
 }
 

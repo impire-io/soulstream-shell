@@ -43,11 +43,11 @@ type view struct {
 // somebody new is a deliberate act with a surface of its own.
 func renderPeople(v view) string {
 	var b strings.Builder
-	b.WriteString(`<h1>People &amp; sign-in</h1>`)
-	b.WriteString(`<p class="lede">Everyone who can sign in here, read live from the ` +
-		`sign-in service — the shell keeps none of it.</p>`)
+	b.WriteString(`<div class="page-head"><div class="ph-words"><h1>People &amp; sign-in</h1>` +
+		`<p class="lede">Everyone who can sign in here, read live from the ` +
+		`sign-in service — the shell keeps none of it.</p></div>` + addKey() + `</div>`)
 	b.WriteString(lookedUpNote(v.People, v.Err, v.Who))
-	b.WriteString(`<div class="section">` + addKey() + renderTable(v.People, v.Err, v.Who) + `</div>`)
+	b.WriteString(`<div class="section">` + renderTable(v.People, v.Err, v.Who) + `</div>`)
 	b.WriteString(`<div class="section">` + renderClientsSection(v.Clients, v.ClientsErr) + `</div>`)
 	b.WriteString(resultNote(""))
 	b.WriteString(shell.SlideOver("Add a person", addPanel(v.Groups)))

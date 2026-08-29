@@ -39,19 +39,19 @@ type view struct {
 // are about the tools there are.
 func renderTools(v view) string {
 	var b strings.Builder
-	b.WriteString(`<h1>Tools</h1>`)
-	b.WriteString(`<p class="lede">What this soulstream can reach — services elsewhere you ` +
-		`connect your own account to, and tools running here. Agents can use them too, ` +
-		`always as the person they act for.</p>`)
-	if v.Msg != "" {
-		fmt.Fprintf(&b, `<p class="note">%s</p>`, esc(v.Msg))
-	}
 	key := ""
 	if v.Admin {
 		key = `<p class="act"><button type="button" class="btn" data-on:click="$panel = true">` +
 			`Add tool</button></p>`
 	}
-	b.WriteString(`<div class="section">` + key + renderList(v) + `</div>`)
+	b.WriteString(`<div class="page-head"><div class="ph-words"><h1>Tools</h1>` +
+		`<p class="lede">What this soulstream can reach — services elsewhere you ` +
+		`connect your own account to, and tools running here. Agents can use them too, ` +
+		`always as the person they act for.</p></div>` + key + `</div>`)
+	if v.Msg != "" {
+		fmt.Fprintf(&b, `<p class="note">%s</p>`, esc(v.Msg))
+	}
+	b.WriteString(`<div class="section">` + renderList(v) + `</div>`)
 	b.WriteString(resultNote(""))
 	if v.Admin {
 		b.WriteString(shell.SlideOver("Add a tool", addPanel()))

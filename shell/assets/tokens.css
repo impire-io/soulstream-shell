@@ -402,25 +402,26 @@ border-bottom:var(--border-width) solid var(--border-hairline)}
 .thread-head .where{font:var(--type-data);font-size:var(--text-xs);color:var(--text-faint)}
 .msgs{display:flex;flex-direction:column;gap:var(--space-6);padding-block:var(--space-8) var(--space-9)}
 
-/* A message is a white card: hairline edge, 10px radius, a short shadow —
-   never a tinted cloud.
+/* A message is words on the paper — no card, no cloud: the byline says
+   who and when, the text says what, and the air between messages does
+   the separating (the calm pass: a conversation is reading, not a wall
+   of panels).
 
    Two things are said at once and they are kept strictly apart. WHOSE it
    is is said by ALIGNMENT and nothing else: your own sit right, everyone
    else's sit left, and no colour anywhere carries it. WHO ANSWERS for a
    voice is said in words — the byline and its dot: the operated voice
    carries the teal dot (the accent is the agent's), a voice that answers
-   for itself carries the unlit one. The card's edge stays out of it. */
-.msg{display:flex;flex-direction:column;align-items:flex-start;--edge:var(--border-hairline)}
+   for itself carries the unlit one. */
+.msg{display:flex;flex-direction:column;align-items:flex-start}
 .msg.mine{align-items:flex-end}
-.bubble{max-width:min(62ch,80%);padding:var(--space-5) var(--space-6);
-background:var(--surface-card);
-border:var(--border-width) solid var(--edge);
-border-radius:var(--radius-lg);box-shadow:var(--shadow-card)}
-/* A message with your name in it: the card's hairline hardens to ink.
-   It is findable scrolling back and quiet enough to read past — weight,
-   not colour. */
-.msg.mentions{--edge:var(--border-ink)}
+.bubble{max-width:min(62ch,80%)}
+.msg.mine>.bubble{text-align:left}
+/* A message with your name in it: an ink edge at its shoulder. It is
+   findable scrolling back and quiet enough to read past — weight, not
+   colour. */
+.msg.mentions>.bubble{border-left:var(--border-width-thick) solid var(--border-ink);
+padding-left:var(--space-5)}
 
 .byline{display:flex;align-items:center;gap:var(--space-4);margin-bottom:var(--space-3)}
 .byline .led{flex:none;width:7px;height:7px}
@@ -434,19 +435,24 @@ color:var(--text-secondary)}
 .mtoken.human{color:var(--text-link)}
 .mtoken.machine{color:var(--text-link)}
 
-/* The quiet row under a message. It steps a shade darker on hover rather
-   than fading up from a lower opacity — the canon bans opacity as a state. */
-.bubble .under{display:flex;align-items:center;gap:var(--space-5);margin-top:var(--space-4);
-color:var(--text-faint);transition:color var(--dur-fast) var(--ease)}
+/* The quiet row under a message — and quiet means absent until wanted:
+   a verified message carries no verdict at all (silence is the earned
+   normal; the exceptions speak), and Reply waits for the pointer or the
+   keyboard rather than standing under every message. Visibility, not
+   opacity — the canon bans opacity as a state, and a hidden control
+   still answers focus. */
+.bubble .under{display:flex;align-items:center;gap:var(--space-5);margin-top:var(--space-3);
+min-height:14px;color:var(--text-faint);transition:color var(--dur-fast) var(--ease)}
 .msg:hover>.bubble .under,.bubble:focus-within .under{color:var(--text-muted)}
 .verdict{font:var(--type-label);letter-spacing:var(--tracking-wide);text-transform:uppercase;
 color:inherit}
 .verdict.ok{color:var(--green-600)}
 .verdict.warn{color:var(--warn-600)}
-/* Reply is a control on the card, not a link out of it: it takes the row's
-   own ink and moves teal under the pointer, the way the canon moves links. */
+/* Reply is a control on the message, not a link out of it. */
 .reply-btn{padding:0;background:none;border:0;font:var(--type-label);
-letter-spacing:var(--tracking-wide);text-transform:uppercase;color:inherit;cursor:pointer}
+letter-spacing:var(--tracking-wide);text-transform:uppercase;color:inherit;cursor:pointer;
+visibility:hidden}
+.msg:hover .reply-btn,.bubble:focus-within .reply-btn,.reply-btn:focus-visible{visibility:visible}
 .reply-btn:hover{color:var(--text-link)}
 
 /* Answers hang off the message they answer — on that message's own side, so
@@ -458,7 +464,6 @@ border-left:var(--border-width-thick) solid var(--border-hairline)}
 border-right:var(--border-width-thick) solid var(--border-hairline)}
 .replies>.msg{align-items:flex-start}
 .msg.mine>.replies>.msg{align-items:flex-end}
-.replies .bubble{box-shadow:var(--shadow-key)}
 .replies .byline .name::before{content:"↳ ";color:var(--text-faint)}
 
 /* Anything the room did rather than said: a stamped strip and one plain
@@ -467,7 +472,8 @@ border-right:var(--border-width-thick) solid var(--border-hairline)}
 .sysline{align-self:center;display:flex;align-items:baseline;gap:var(--space-4);
 padding:var(--space-2) 0;color:var(--text-muted)}
 .sysline .what{font:var(--type-body);font-size:var(--text-sm)}
-.blank{padding:var(--space-12) 0;text-align:center;color:var(--text-muted)}
+.blank{padding:var(--space-12) 0;text-align:center;color:var(--text-muted);
+max-width:52ch;margin-inline:auto}
 
 /* --- The composer ----------------------------------------------------
    Docked at the foot of the conversation and centred on the same measure —
@@ -560,6 +566,21 @@ color:var(--text-muted);cursor:pointer;transition:var(--transition-control)}
 .sheet{flex:1;min-height:0;overflow-y:auto}
 .sheet-in{max-width:var(--content-max);margin:0 auto;padding:var(--space-9) var(--space-8) var(--space-11)}
 .sheet h1{margin:0 0 var(--space-4)}
+/* The page head (the calm pass): the name and its one sentence at the
+   left, the screen's one act at the right — creation stands beside the
+   title, not in the reading's way. */
+.page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-8);
+flex-wrap:wrap;margin-bottom:var(--space-9)}
+.page-head .ph-words{max-width:560px;min-width:0}
+.page-head .lede{margin-bottom:0}
+.page-head .act{margin:0;flex:none;padding-top:var(--space-2)}
+/* A row's acts are quiet links, not bordered keys (the calm pass): the
+   table reads first and the ways to act on a row wait at its end. The
+   ask a destructive key stands behind is unchanged — only the dress. */
+.tablewrap .btn.ghost{background:none;border:0;padding:0;color:var(--text-link);
+font:var(--type-ui);font-size:var(--text-sm)}
+.tablewrap .btn.ghost:hover,.tablewrap .btn.ghost:active{background:none;
+color:var(--teal-500);text-decoration:underline;text-underline-offset:3px}
 .sheet .section{margin:var(--space-10) 0 var(--space-6)}
 .sheet .planes{margin-top:var(--space-8)}
 .sheet .act{margin-top:var(--space-8)}
@@ -573,6 +594,44 @@ a.row:hover{background:var(--surface-inset);color:var(--text-body)}
 .row .what{flex:1;min-width:0;font:var(--type-body);font-size:var(--text-sm);color:var(--text-muted);
 overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .row .state{font:var(--type-ui);font-size:var(--text-xs);color:var(--text-faint)}
+
+/* --- The glance ------------------------------------------------------
+   Home's calm register: the first-steps card counts itself quietly, the
+   house reads as four uniform tiles (an icon and a label, one value, one
+   note — the instruments stay on the status screen), and a section head
+   holds the one act the section offers. */
+.firststeps .fs-head{display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-5)}
+.firststeps .fs-count{font:var(--type-ui);font-size:var(--text-xs);color:var(--text-faint)}
+.firststeps ol{list-style:none;margin:var(--space-6) 0 0;padding:0;display:flex;
+flex-direction:column;gap:var(--space-4)}
+.firststeps li{display:flex;align-items:center;gap:var(--space-4)}
+.firststeps li.off{color:var(--text-muted)}
+.fs-dot{width:18px;height:18px;border-radius:var(--radius-pill);flex:none;display:inline-flex;
+align-items:center;justify-content:center;background:var(--surface-well);color:var(--text-faint)}
+.fs-dot svg{width:11px;height:11px}
+li.off .fs-dot{background:var(--accent);color:var(--text-inverse)}
+.tiles{display:grid;gap:var(--space-6);margin:var(--space-8) 0 var(--space-9);
+grid-template-columns:repeat(auto-fit,minmax(min(210px,100%),1fr))}
+a.card{border-bottom:var(--border-width) solid var(--border-hairline);color:var(--text-body)}
+a.card.tile:hover{border-color:var(--border-strong);color:var(--text-body)}
+.tile{padding:var(--space-7)}
+.tile .t-head{display:flex;align-items:center;gap:var(--space-4);margin-bottom:var(--space-5);
+font:var(--type-ui);font-size:var(--text-sm);color:var(--text-secondary)}
+.tile .t-head svg{width:18px;height:18px;flex:none}
+.tile .t-value{font:var(--type-ui);font-size:19px;letter-spacing:var(--tracking-tight);
+color:var(--text-body)}
+.tile.warn .t-value{color:var(--warn-600)}
+.tile .t-note{margin-top:var(--space-2);font:var(--type-ui);font-size:var(--text-xs);
+color:var(--text-muted)}
+.sec-head{display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-5);
+margin:var(--space-9) 0 var(--space-5)}
+.sec-head h2{font:var(--type-heading);font-size:17px}
+/* A lifecycle word on a row: the going-on chip is the live one. */
+.pill.live{color:var(--teal-700);border-color:var(--teal-200);background:var(--teal-50)}
+/* The conversations table: names read as ink, the mark rides beside. */
+.convs td a{color:var(--text-body);border-bottom-color:var(--border-strong)}
+.convs td a:hover{border-bottom-color:var(--border-ink)}
+.convs td .tally.on{margin-left:var(--space-3)}
 
 /* --- The slide-over --------------------------------------------------
    Where a sheet page's own side panel lives: the add-form a list screen

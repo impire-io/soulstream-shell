@@ -54,35 +54,38 @@ func TestFirstHourGate(t *testing.T) {
 	}
 	cl := signIn(t, r, auth)
 
-	// A fresh house: the card leads with every step pending, each a door.
+	// A fresh house: the card leads with every step pending, each a door —
+	// the longer sentence on the hover, the on-screen act's door opening
+	// the slide-over it leads into (the calm pass).
 	home := get(t, cl, r.ShellURL+"/home")
 	for _, want := range []string{"First steps",
-		`<a href="/agents">Set up your assistant</a>`,
-		`<a href="#convo-start">Start a conversation</a>`,
-		`<a href="/tools">Connect a tool</a>`,
-		`<a href="/people">Invite someone</a>`} {
+		`<a href="/agents" title="`, `>Set up your assistant</a>`,
+		`<a href="#convo-start" title="`, `>Start a conversation</a>`,
+		`<a href="/tools" title="`, `>Connect a tool</a>`,
+		`<a href="/people" title="`, `>Invite someone</a>`} {
 		if !strings.Contains(home, want) {
 			t.Fatalf("a fresh home is missing %q:\n%s", want, home)
 		}
 	}
 
 	// Each act flips exactly its own step on the next render — derived
-	// from the realm, with no store anywhere that could disagree.
+	// from the realm, with no store anywhere that could disagree. A done
+	// step is the filled dot beside its muted words.
 	postForm(t, cl, r.ShellURL+"/act/agent-add",
 		url.Values{"handle": {"scribe"}, "shown": {"Scribe"}})
-	home = pollHome(t, cl, r.ShellURL, "done</span> Set up your assistant", true)
-	if !strings.Contains(home, `<a href="#convo-start">Start a conversation</a>`) {
+	home = pollHome(t, cl, r.ShellURL, `</span>Set up your assistant</li>`, true)
+	if !strings.Contains(home, `>Start a conversation</a>`) {
 		t.Fatal("an unrelated step flipped with the agent's")
 	}
 
 	postForm(t, cl, r.ShellURL+"/act/conversation-start",
 		url.Values{"name": {"hello"}, "about": {"the first one"}})
-	pollHome(t, cl, r.ShellURL, "done</span> Start a conversation", true)
+	pollHome(t, cl, r.ShellURL, `</span>Start a conversation</li>`, true)
 
 	postForm(t, cl, r.ShellURL+"/act/tool-add", url.Values{
 		"name": {"notes"}, "kind": {"workload"}, "persona": {"notes-tool"},
 		"endpoint": {"http://127.0.0.1:9999/mcp"}, "description": {"the notes tool"}})
-	pollHome(t, cl, r.ShellURL, "done</span> Connect a tool", true)
+	pollHome(t, cl, r.ShellURL, `</span>Connect a tool</li>`, true)
 
 	postForm(t, cl, r.ShellURL+"/act/person-add",
 		url.Values{"username": {"librarian"}, "shown": {"Librarian"}, "groups": {"realm"}})

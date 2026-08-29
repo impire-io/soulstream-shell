@@ -38,12 +38,17 @@ func nameOf(v view, persona string) string {
 // never from anything the browser said.
 func mine(v view, author string) bool { return v.Me != "" && author == v.Me }
 
-// sigMark is the earned signature verdict, kept quiet: present on every
-// message, loud on none.
+// sigMark is the earned signature verdict, and silence is the earned
+// normal (the calm pass): a verified message says nothing, because on a
+// working realm that is every message and a word repeated under all of
+// them is noise, not assurance. The exceptions are the news and they
+// speak — unsigned, unknown key, anything else the record earned. The
+// storage explorer still shows every verdict by name; this surface is
+// for reading, and the record is one screen away.
 func sigMark(s topic.SigStatus) string {
 	switch s {
 	case topic.SigVerified:
-		return `<span class="verdict ok">verified</span>`
+		return ""
 	case topic.SigUnsigned:
 		return `<span class="verdict">unsigned</span>`
 	case topic.SigUnknownKey:

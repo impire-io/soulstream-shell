@@ -104,9 +104,12 @@ func TestAScreenSaysWhichConversationItSettledOn(t *testing.T) {
 // The house readout is the segmented ladder, and it reads against the scale
 // the store declares for itself. A store with no declared roof has no scale,
 // and the instrument says so rather than inventing a ceiling to look empty
-// against: an unroofed store is not 0% full, it is unmeasured.
+// against: an unroofed store is not 0% full, it is unmeasured. The
+// instrument lives on the system-status screen; Home's glance says the
+// same facts as one quiet line (the calm pass — the tile is a reading,
+// the status screen is the instrument panel).
 func TestTheStorageReadoutIsAMeterAgainstADeclaredScale(t *testing.T) {
-	roofed := renderOverview(view{StreamMsg: 400, StreamBytes: 512 << 20, StreamRoof: 1 << 30})
+	roofed := renderPlanes(view{StreamMsg: 400, StreamBytes: 512 << 20, StreamRoof: 1 << 30})
 	if n := strings.Count(roofed, `<span class="seg`); n != vuSegments {
 		t.Errorf("the ladder has %d segments, want %d", n, vuSegments)
 	}
@@ -120,7 +123,7 @@ func TestTheStorageReadoutIsAMeterAgainstADeclaredScale(t *testing.T) {
 			t.Errorf("the storage readout is missing %q:\n%s", want, roofed)
 		}
 	}
-	bare := renderOverview(view{StreamMsg: 400, StreamBytes: 512 << 20})
+	bare := renderPlanes(view{StreamMsg: 400, StreamBytes: 512 << 20})
 	if strings.Contains(bare, " lit") {
 		t.Errorf("a store with no declared budget still reads a level:\n%s", bare)
 	}
@@ -134,6 +137,19 @@ func TestTheStorageReadoutIsAMeterAgainstADeclaredScale(t *testing.T) {
 	if strings.Contains(bare, "<progress") || strings.Contains(roofed, "<progress") {
 		t.Error("the house readout is a progress bar")
 	}
+	// Home carries no instrument — the glance says the facts in words,
+	// honesty intact: the unroofed store reads as unmeasured, the roofed
+	// one against its own scale.
+	home := renderOverview(view{StreamMsg: 400, StreamBytes: 512 << 20})
+	if strings.Contains(home, `class="vu"`) {
+		t.Errorf("the glance carries the instrument:\n%s", home)
+	}
+	if !strings.Contains(home, "no budget set") {
+		t.Errorf("the glance does not say the store is unmeasured:\n%s", home)
+	}
+	if got := renderOverview(view{StreamMsg: 400, StreamBytes: 512 << 20, StreamRoof: 1 << 30}); !strings.Contains(got, "50% of 1.0 GB") {
+		t.Errorf("the glance does not read against the declared scale:\n%s", got)
+	}
 }
 
 // The overview is a way into every conversation and a look at the house.
@@ -144,13 +160,16 @@ func TestOverviewOpensOntoTheConversations(t *testing.T) {
 	})
 	for _, want := range []string{
 		"Storage", "People &amp; sign-in", "12 ops",
-		`<a class="row" href="/?topic=home%2Fkitchen">`,
-		`<a class="row" href="/?topic=home%2Fattic">`,
+		`class="tiles"`,
+		`<a href="/?topic=home%2Fkitchen">`,
+		`<a href="/?topic=home%2Fattic">`,
 		"2 conversations",
 		// Where a conversation begins on this screen: the same act the
-		// conversations screen offers, posted to by path.
+		// conversations screen offers, posted to by path — waiting in the
+		// slide-over, behind the section's one key.
 		"Start a conversation", `@post('/act/conversation-start'`,
 		`id="convo-start"`, `id="convo-start-note"`,
+		`data-on:click="$panel = true"`, `class="slideover"`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the overview is missing %q:\n%s", want, got)
@@ -170,7 +189,7 @@ func TestTheOverviewFoldsTheArchivedAway(t *testing.T) {
 	got := renderOverview(view{Board: b})
 	for _, want := range []string{
 		`<details class="archfold"><summary>Archived (1)</summary>`,
-		`<a class="row" href="/?topic=home%2Fcellar">`,
+		`<a href="/?topic=home%2Fcellar">`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the overview is missing %q:\n%s", want, got)
@@ -228,24 +247,24 @@ func TestNothingServedSaysTheRetiredWord(t *testing.T) {
 // The overview points the way to an agent of your own — on deployments that
 // issue agent credentials at all. No agents yet is a pointer, a standing
 // roster is its counts, an unreadable roster says so, and a deployment that
-// issues nothing shows no card to a screen it does not have.
+// issues nothing shows no tile for a screen it does not have.
 func TestTheOverviewPointsAtTheAgentsScreen(t *testing.T) {
-	if got := agentsCard(view{}); got != "" {
-		t.Errorf("a deployment with no agents surface grew a card:\n%s", got)
+	if got := agentsTile(view{}); got != "" {
+		t.Errorf("a deployment with no agents surface grew a tile:\n%s", got)
 	}
-	empty := agentsCard(view{AgentsOn: true})
-	for _, want := range []string{`href="/agents"`, "Set one up", "none yet"} {
+	empty := agentsTile(view{AgentsOn: true})
+	for _, want := range []string{`href="/agents"`, "set one up", "none yet"} {
 		if !strings.Contains(empty, want) {
-			t.Errorf("the empty-roster card does not carry %q:\n%s", want, empty)
+			t.Errorf("the empty-roster tile does not carry %q:\n%s", want, empty)
 		}
 	}
-	standing := agentsCard(view{AgentsOn: true, AgentsNamed: 2, AgentsIn: 1})
+	standing := agentsTile(view{AgentsOn: true, AgentsNamed: 2, AgentsIn: 1})
 	for _, want := range []string{"2 named", "1 can get in", `href="/agents"`} {
 		if !strings.Contains(standing, want) {
-			t.Errorf("the standing-roster card does not carry %q:\n%s", want, standing)
+			t.Errorf("the standing-roster tile does not carry %q:\n%s", want, standing)
 		}
 	}
-	unread := agentsCard(view{AgentsOn: true, AgentsUnread: true})
+	unread := agentsTile(view{AgentsOn: true, AgentsUnread: true})
 	if !strings.Contains(unread, "unreadable") || strings.Contains(unread, "none yet") {
 		t.Errorf("an unreadable roster is not reported honestly:\n%s", unread)
 	}

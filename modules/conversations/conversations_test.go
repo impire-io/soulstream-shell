@@ -428,14 +428,16 @@ func TestTheMentionMarkTakesNoChannelColour(t *testing.T) {
 	}
 	// The second canon carries no channel edge at all — who answers for a
 	// voice rides the byline's dot and its words (design soul-hq/0011 §4) —
-	// so the mark is the one thing that moves a card's outline, and it
-	// hardens to ink rather than borrowing any colour.
+	// and the calm pass unboxed the messages besides, so the mark is the
+	// one edge a message can carry: an ink line at its shoulder, weight
+	// rather than colour.
 	css := tokens(t)
 	if strings.Contains(css, "--chan:") {
 		t.Error("the token source still draws a channel edge — colour carries identity again")
 	}
-	if !strings.Contains(css, ".msg.mentions{--edge:var(--border-ink)}") {
-		t.Error("the token source does not harden a mentioned card's outline to ink")
+	if !strings.Contains(css,
+		".msg.mentions>.bubble{border-left:var(--border-width-thick) solid var(--border-ink)") {
+		t.Error("the token source does not mark a mentioned message with the ink edge")
 	}
 }
 
@@ -495,18 +497,22 @@ func TestThePickerSaysWhichChannelANameIs(t *testing.T) {
 	}
 }
 
-// The verdict on every message is the one the record earned, and it is
-// there without shouting.
+// The verdict a message earned is there when it is news, and silent when
+// it is the earned normal (the calm pass): a verified message says
+// nothing — on a working realm that is every message, and a word under
+// all of them is noise — while the exceptions speak by name. The record's
+// own screen (storage) still names every verdict; this surface is for
+// reading.
 func TestSignatureVerdictIsShownOnEveryMessage(t *testing.T) {
 	got := renderThread(meView())
-	if n := strings.Count(got, `class="verdict`); n != 3 {
-		t.Fatalf("%d messages carry a verdict, want 3:\n%s", n, got)
+	if strings.Contains(got, "verified") {
+		t.Errorf("the earned normal still says itself under a message:\n%s", got)
 	}
-	for _, want := range []string{`<span class="verdict ok">verified</span>`,
-		`<span class="verdict">unsigned</span>`} {
-		if !strings.Contains(got, want) {
-			t.Errorf("missing verdict %s:\n%s", want, got)
-		}
+	if n := strings.Count(got, `class="verdict`); n != 1 {
+		t.Fatalf("%d messages carry a spoken verdict, want 1 (the unsigned one):\n%s", n, got)
+	}
+	if !strings.Contains(got, `<span class="verdict">unsigned</span>`) {
+		t.Errorf("the exception does not speak:\n%s", got)
 	}
 	if strings.Contains(got, `class="pill ok">verified`) {
 		t.Error("the verdict still shouts like a status pill")
