@@ -3,12 +3,12 @@ module soulstream-shell.invalid/e2e
 go 1.26.2
 
 require (
-	github.com/impire-io/soulstream v0.14.0-rc.3
+	github.com/impire-io/soulstream v0.14.0-rc.5
 	github.com/impire-io/soulstream-core v0.14.0-rc.1
 	github.com/impire-io/soulstream-identity v0.12.0
 	github.com/impire-io/soulstream-idp v0.8.1
 	github.com/impire-io/soulstream-inference v0.2.0
-	github.com/impire-io/soulstream-shell v0.11.0-rc.4
+	github.com/impire-io/soulstream-shell v0.11.0-rc.5
 	github.com/impire-io/soulstream-workloads v0.8.0-rc.4
 	github.com/nats-io/nats.go v1.52.0
 	soulstream-shell.invalid/moduleprobe v0.0.0
@@ -91,12 +91,3 @@ replace github.com/impire-io/soulstream-idp => ../../soulstream-idp
 // nobody here owns, never tagged and never published — it is only ever the
 // working tree beside this one.
 replace soulstream-shell.invalid/moduleprobe => ./moduleprobe
-
-// TEMPORARY — remove when soulstream ships a tag built on the catalogue
-// contract (inference v0.2.0) and carrying the shell's InferenceOn fact.
-// The models arm of the gate calls the rewired node.CatalogueSet and
-// rides the rig's thinking arm, neither of which is on a published
-// soulstream tag yet; without this pin the gate would not compile.
-// (The inference replace this block once carried dropped when v0.2.0
-// shipped the catalogue package.)
-replace github.com/impire-io/soulstream => ../../soulstream

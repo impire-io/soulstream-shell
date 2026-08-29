@@ -52,6 +52,8 @@ github.com/gorilla/securecookie v1.1.2 h1:YCIWL56dvtr73r6715mJs5ZvhtnY73hBvEF8kX
 github.com/gorilla/securecookie v1.1.2/go.mod h1:NfCASbcHqRSY+3a8tlWJwsQap2VX5pwzwo4h3eOamfo=
 github.com/gowebpki/jcs v1.0.1 h1:Qjzg8EOkrOTuWP7DqQ1FbYtcpEbeTzUoTN9bptp8FOU=
 github.com/gowebpki/jcs v1.0.1/go.mod h1:CID1cNZ+sHp1CCpAR8mPf6QRtagFBgPJE0FCUQ6+BrI=
+github.com/impire-io/soulstream v0.14.0-rc.5 h1:0wiuViJCPEcqUkeNcvr6Ho+DFtJaJeeBLj6LgHXdm3k=
+github.com/impire-io/soulstream v0.14.0-rc.5/go.mod h1:8i49TrhmqUMKKqvmxE8sg2oYJ0gtRO6pTYqla9yZXKg=
 github.com/impire-io/soulstream-archivist v0.4.1 h1:YOUasXQfH8T2mUP+63nMG1eRl+zvTuq1/XrULi990BY=
 github.com/impire-io/soulstream-archivist v0.4.1/go.mod h1:oAoy/viCEZl2AjpfCNZyjvLD+oSb2u65EIyrBfovq8M=
 github.com/impire-io/soulstream-core v0.14.0-rc.1 h1:QQa/U4iHiVQUBjVBgT8E6XsIaT1sLMNuwUlI8+Xt6Io=
