@@ -16,6 +16,7 @@ import (
 	"github.com/impire-io/soulstream-shell/modules/agents"
 	"github.com/impire-io/soulstream-shell/modules/approvals"
 	"github.com/impire-io/soulstream-shell/modules/conversations"
+	"github.com/impire-io/soulstream-shell/modules/models"
 	"github.com/impire-io/soulstream-shell/modules/overview"
 	"github.com/impire-io/soulstream-shell/modules/storage"
 	"github.com/impire-io/soulstream-shell/modules/tools"
@@ -87,6 +88,12 @@ type Options struct {
 	// the shell cannot read off anything. Left empty, agents are declared
 	// without tools and the picker is not offered.
 	CapabilityRole string
+	// InferenceOn says this deployment serves models itself. It shapes the
+	// models screen's words, never its reading: what serves is discovered
+	// live, so an instance run beside the deployment still shows — but a
+	// realm where nothing answers deserves to hear whether that is a
+	// deployment with model serving off or one still warming up.
+	InferenceOn bool
 	// Ready, when set, receives the bound listen address.
 	Ready func(addr string)
 }
@@ -136,6 +143,7 @@ func Run(ctx context.Context, o Options) error {
 
 		PlacementsTopic: o.PlacementsTopic,
 		CapabilityRole:  o.CapabilityRole,
+		InferenceOn:     o.InferenceOn,
 	})
 	if err != nil {
 		return err
@@ -144,12 +152,14 @@ func Run(ctx context.Context, o Options) error {
 
 	// The order is the order of the rail: the house first, then the room,
 	// then the people who may come into it, then the machines they answer
-	// for — and last, at the foot beside the readouts, the store itself.
-	// Every one of them is registered the same way and on the same terms —
-	// which of them this deployment actually runs is each module's own
-	// answer, asked once at Run.
+	// for and the model names those machines think through — and last, at
+	// the foot beside the readouts, the store itself. Every one of them is
+	// registered the same way and on the same terms — which of them this
+	// deployment actually runs is each module's own answer, asked once at
+	// Run.
 	sh.Register(overview.New(sh, sp), conversations.New(sh, sp),
 		tools.New(sh, sp), approvals.New(sh, sp),
-		admin.New(sh, sp), agents.New(sh, sp), storage.New(sh, sp))
+		admin.New(sh, sp), agents.New(sh, sp), models.New(sh, sp),
+		storage.New(sh, sp))
 	return sh.Run(ctx)
 }

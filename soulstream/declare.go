@@ -11,6 +11,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 
 	"github.com/impire-io/soulstream-core/topic"
+	infercat "github.com/impire-io/soulstream-inference/catalogue"
 	"github.com/impire-io/soulstream-workloads/declaration"
 	"github.com/impire-io/soulstream-workloads/fleet"
 )
@@ -206,17 +207,17 @@ func (sess *Session) Declare(ctx context.Context, d declaration.Declaration) (st
 	return id, nil
 }
 
-// CatalogueBucket is where this realm's model names live — one key per
-// name. The shell reads the NAMES and nothing else: what a name resolves
-// to is the thinking plane's business, and reading a route the surface
-// cannot use would be reading somebody else's configuration.
-const CatalogueBucket = "soulstream-inference-catalogue"
-
 // ModelNames lists the names agents may be declared to think through,
 // sorted. A realm that has named none lists none — an empty catalogue is
 // an ordinary answer and never an error.
+//
+// The picker reads the NAMES and nothing else: what a name resolves to
+// is the routing's business, and a declaration names, never routes. The
+// models facility reads entries whole because managing the catalogue is
+// exactly whose configuration it is — the amendment design 0010 §2 made
+// precisely, not broadly.
 func (sp *Support) ModelNames(ctx context.Context) ([]string, error) {
-	kv, err := sp.rc.JetStream().KeyValue(ctx, CatalogueBucket)
+	kv, err := sp.rc.JetStream().KeyValue(ctx, infercat.Bucket)
 	if errors.Is(err, jetstream.ErrBucketNotFound) {
 		return nil, nil
 	}

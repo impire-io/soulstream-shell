@@ -82,6 +82,13 @@ type Config struct {
 	// tools, which is the whole of what this surface can honestly offer
 	// when nothing has told it what the role is called.
 	CapabilityRole string
+	// InferenceOn says this deployment serves models itself — the declared
+	// fact the models screen words its empty states by (hq design
+	// soulstream-shell 0010 §5). It shapes words only, never the reading:
+	// what actually serves is discovered, not declared, so an instance
+	// somebody runs beside the deployment still shows. Optional, on the
+	// same no-probe terms as every fact above.
+	InferenceOn bool
 }
 
 // Support is the layer itself: one read lane for the surface, and a session

@@ -28,6 +28,16 @@ var workloadsAllowed = map[string]bool{
 	"github.com/impire-io/soulstream-workloads/fleet":       true,
 }
 
+// The inference packages this component may reach, and only these: the
+// catalogue's published contract — the one codec, so the sheet's entry and
+// the deployment's own are byte-identical — and the resolve-and-collect
+// client whose Resolve is the Serving now reading (hq design
+// soulstream-shell 0010 §5, the one new dependency named openly).
+var inferenceAllowed = map[string]bool{
+	"github.com/impire-io/soulstream-inference/catalogue": true,
+	"github.com/impire-io/soulstream-inference/client":    true,
+}
+
 const (
 	// module is this repo's own module path.
 	module = "github.com/impire-io/soulstream-shell"
@@ -163,6 +173,53 @@ func TestTheComponentReachesOnlyTheWorkloadsPackagesItNamed(t *testing.T) {
 		}
 	}
 	t.Logf("the component reaches %d workloads package(s) across %d packages", len(reached), pkgs)
+}
+
+// The same bar for the other named dependency: the inference packages this
+// component reaches are the ones design 0010 argued for and no others,
+// with the same reached-ness control — a check on a dependency nobody uses
+// proves nothing.
+func TestTheComponentReachesOnlyTheInferencePackagesItNamed(t *testing.T) {
+	cmd := exec.Command("go", "list", "-f",
+		"{{.ImportPath}}{{range .Imports}} {{.}}{{end}}", "./...")
+	cmd.Dir = "../.."
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("go list ./...: %v\n%s", err, exitOutput(err))
+	}
+	var bad []string
+	reached := map[string]bool{}
+	pkgs := 0
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		pkgs++
+		for _, imported := range fields[1:] {
+			if !strings.HasPrefix(imported, "github.com/impire-io/soulstream-inference") {
+				continue
+			}
+			reached[imported] = true
+			if !inferenceAllowed[imported] {
+				bad = append(bad, fields[0]+" imports "+imported)
+			}
+		}
+	}
+	if pkgs == 0 {
+		t.Fatal("go list ./... returned nothing — the check would pass vacuously")
+	}
+	if len(bad) > 0 {
+		t.Fatalf("this component reaches past the dependency it named:\n\t%s",
+			strings.Join(bad, "\n\t"))
+	}
+	for want := range inferenceAllowed {
+		if !reached[want] {
+			t.Fatalf("nothing here imports %s — the check cannot fire, so its verdict "+
+				"on the rest means nothing", want)
+		}
+	}
+	t.Logf("the component reaches %d inference package(s) across %d packages", len(reached), pkgs)
 }
 
 // The positive control. A check that cannot fail proves nothing, so the
