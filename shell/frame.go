@@ -187,6 +187,24 @@ func SlideOver(title, body string) string {
 		Esc(title), Icon("plus"), Esc(title), Icon("chevrons-right"), body)
 }
 
+// Steps is the wizard's road: one dot per step, named, marked off the
+// page-local signal the form drives. Steps are visibility rather than
+// pages — the form stays one and every field submits at the end — so the
+// road is drawn once and the signal moves the marks.
+func Steps(signal string, labels ...string) string {
+	var b strings.Builder
+	b.WriteString(`<div class="steps">`)
+	for i, l := range labels {
+		if i > 0 {
+			b.WriteString(`<span class="sline"></span>`)
+		}
+		fmt.Fprintf(&b, `<span class="sname" data-class:on="%s == %d" data-class:done="%s > %d">`+
+			`<span class="sdot">%d</span>%s</span>`, signal, i, signal, i, i+1, Esc(l))
+	}
+	b.WriteString(`</div>`)
+	return b.String()
+}
+
 // SignIn is what somebody who is not signed in is shown. It is the shell's
 // own screen: sign-in is the shell's own business, and no module is
 // reachable before it.

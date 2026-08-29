@@ -7,6 +7,7 @@ import (
 	"github.com/impire-io/soulstream-core/topic"
 	"github.com/impire-io/soulstream-workloads/declaration"
 
+	"github.com/impire-io/soulstream-shell/shell"
 	"github.com/impire-io/soulstream-shell/soulstream"
 )
 
@@ -193,26 +194,30 @@ func declarationFold(d soulstream.Declared) string {
 // declarePanel is the declare form: the whole of what a person says to put
 // an agent on this deployment, and nothing the record would not carry.
 //
-// It is sections, the way every form on a sheet is: what every agent takes
-// first, then how it wakes, what instructs it, how it thinks, what it may
-// use, and the limits it runs under — the limits visible and editable,
-// because the bound an agent runs inside is a fact a person may read.
+// It is a three-step wizard (the calm pass, the kit's own shape): name
+// it, wake it, instruct it — with the limits an agent starts under
+// folded as the step's advanced matter, prefilled and editable, because
+// the bound an agent runs inside is a fact a person may read. Steps are
+// visibility, not pages: the form stays one and every field submits at
+// the end.
 func declarePanel(v declareView) string {
 	var b strings.Builder
 	b.WriteString(`<div data-show="$make == 'here'">`)
 	b.WriteString(`<p class="lede">This one runs here, on this soulstream. It keeps ` +
 		`answering with nobody&#39;s laptop open, and it stops when you say so.</p>`)
-	b.WriteString(`<form id="agent-declare" ` +
+	b.WriteString(`<form id="agent-declare" data-signals="{dstep:0}" ` +
 		`data-on:submit="@post('/act/agent-declare', {contentType:'form'})">`)
+	b.WriteString(shell.Steps("$dstep", "Name it", "Wake it", "Instruct it"))
 
+	b.WriteString(`<div data-show="$dstep == 0">`)
 	b.WriteString(`<div class="fields">`)
 	b.WriteString(`<label class="field">Name<input name="name" required autocomplete="off" ` +
 		`spellcheck="false" placeholder="lowercase, no spaces"></label>`)
 	b.WriteString(`<label class="field">Home conversation` + conversationSelect(v, "home", "") +
 		`</label>`)
-	b.WriteString(`</div>`)
+	b.WriteString(`</div></div>`)
 
-	b.WriteString(`<h3 class="label">When it wakes</h3>`)
+	b.WriteString(`<div data-show="$dstep == 1">`)
 	b.WriteString(`<div class="fields">` +
 		`<label class="field">Whenever somebody says its name<select name="wake_mention">` +
 		`<option value="on">yes</option><option value="">no</option></select></label>` +
@@ -237,11 +242,11 @@ func declarePanel(v declareView) string {
 		`</div>` +
 		`<p class="note">A schedule catches up on what it missed, up to the time you give. ` +
 		`A message is the one way that can go missing: one arriving while the agent is not ` +
-		`running is gone.</p></details>`)
+		`running is gone.</p></details></div>`)
 
-	b.WriteString(`<h3 class="label">What it is told to do</h3>`)
-	b.WriteString(`<p class="note">A document kept in a conversation. Rewrite it and the ` +
-		`next answer follows the new one — nothing to restart.</p>`)
+	b.WriteString(`<div data-show="$dstep == 2">`)
+	b.WriteString(`<p class="note">What it is told to do lives in a document kept in a ` +
+		`conversation. Rewrite it and the next answer follows the new one — nothing to restart.</p>`)
 	b.WriteString(`<div class="fields">` +
 		`<label class="field">Kept in` + conversationSelect(v, "instr_home", "— optional") +
 		`</label>` +
@@ -257,6 +262,10 @@ func declarePanel(v declareView) string {
 		b.WriteString(toolsField(v))
 	}
 
+	// The limits stay unfolded inside their step — design 0009's own rule,
+	// kept through the calm pass: a bound nobody sees is a bound nobody
+	// knows they are running under. The wizard does the calming; the
+	// numbers stay on the screen.
 	b.WriteString(`<h3 class="label">Limits</h3>`)
 	b.WriteString(`<p class="note">What keeps an agent that sets off other agents from ` +
 		`running away. These are the ones it starts with; change them if you know better.</p>`)
@@ -267,14 +276,23 @@ func declarePanel(v declareView) string {
 		`type="number" min="0" value="%d"></label>`+
 		`<label class="field">Within<input name="budget_per" autocomplete="off" `+
 		`spellcheck="false" value="%s"></label>`+
-		`</div>`, declaration.DefaultBudget.MaxHops,
+		`</div></div>`, declaration.DefaultBudget.MaxHops,
 		declaration.DefaultBudget.Window.Max, declaration.DefaultBudget.Window.Per)
 
-	b.WriteString(`<div class="acts">` +
-		`<button class="btn" type="submit">Declare agent</button>` +
-		`<button class="btn ghost" type="button" ` +
+	b.WriteString(`<div class="wiz-foot">` +
+		`<p class="whisper" data-show="$dstep == 0">Step 1 of 3 — what wakes it comes next.</p>` +
+		`<p class="whisper" data-show="$dstep == 1">Step 2 of 3</p>` +
+		`<p class="whisper" data-show="$dstep == 2">Step 3 of 3 — instructions can change ` +
+		`any time after.</p>` +
+		`<span class="keys">` +
+		`<button class="btn ghost" type="button" data-show="$dstep > 0" ` +
+		`data-on:click="$dstep = $dstep - 1">Back</button>` +
+		`<button class="btn" type="button" data-show="$dstep < 2" ` +
+		`data-on:click="$dstep = $dstep + 1">Next</button>` +
+		`<button class="btn ghost" type="button" data-show="$dstep == 2" ` +
 		`data-on:click="@post('/agents/declare-json', {contentType:'form'})">Show as JSON</button>` +
-		`</div>`)
+		`<button class="btn" type="submit" data-show="$dstep == 2">Declare agent</button>` +
+		`</span></div>`)
 	b.WriteString(declareNote(""))
 	b.WriteString(declarationView(""))
 	b.WriteString(`</form></div>`)

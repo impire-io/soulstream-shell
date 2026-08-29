@@ -150,17 +150,20 @@ func toolRow(t soulstream.Tool, v view) string {
 // room's own names only where the person will meet them elsewhere (the
 // provider's console says "scopes", so this form does too).
 //
-// The form is sections: what every tool takes first, then one section for
-// the chosen kind and none for the other — the Kind select drives a
-// page-local signal, each section stands behind it, and each section's
-// Address input is disabled while hidden so only the living one submits.
+// The form is a two-step wizard (the calm pass, the kit's own shape):
+// what it is first, how it connects second, with the provider's rarely
+// needed addresses folded behind an advanced stow inside the step.
+// Steps are visibility, not pages — the form stays one, the Kind select
+// still drives its page-local signal, and each kind's Address input is
+// disabled while hidden so only the living one submits.
 func addPanel() string {
 	return `<p class="lede">Every tool takes a name; the rest depends on its kind. A ` +
-		`connected service is somewhere else and takes its provider's sign-in details — ` +
-		`the secret is kept by the sign-in service and never shown again. A tool running ` +
-		`here takes the address it serves on.</p>` +
-		`<form id="tool-add" data-signals="{kind:'remote'}" ` +
+		`connected service is somewhere else; a tool running here takes the address ` +
+		`it serves on.</p>` +
+		`<form id="tool-add" data-signals="{kind:'remote',tstep:0}" ` +
 		`data-on:submit="@post('/act/tool-add', {contentType:'form'})">` +
+		shell.Steps("$tstep", "What it is", "How it connects") +
+		`<div data-show="$tstep == 0">` +
 		`<div class="fields">` +
 		`<label class="field">Name<input name="name" required autocomplete="off" spellcheck="false" ` +
 		`placeholder="lowercase, no spaces"></label>` +
@@ -169,30 +172,33 @@ func addPanel() string {
 		`<option value="workload">runs here</option></select></label>` +
 		`<label class="field">Description<input name="description" autocomplete="off" ` +
 		`placeholder="what it does, in one line — optional"></label>` +
-		`</div>` +
+		`</div></div>` +
+		`<div data-show="$tstep == 1">` +
 		`<div data-show="$kind == 'remote'">` +
-		`<h3 class="label">Connected service</h3>` +
-		`<div class="fields">` +
-		`<label class="field">Address<input name="endpoint" data-attr:disabled="$kind != 'remote'" ` +
-		`autocomplete="off" spellcheck="false" ` +
-		`placeholder="https:// — from the service&#39;s documentation"></label>` +
-		`</div>` +
 		`<h3 class="label">Provider sign-in</h3>` +
 		`<p class="note">Copied from the service&#39;s own developer settings — these let ` +
 		`people connect their accounts. Without them the tool is listed, but nobody can ` +
 		`connect yet.</p>` +
 		`<div class="fields">` +
-		`<label class="field">Authorize URL<input name="auth_url" autocomplete="off" spellcheck="false"></label>` +
-		`<label class="field">Token URL<input name="token_url" autocomplete="off" spellcheck="false"></label>` +
-		`<label class="field">Revoke URL<input name="revoke_url" autocomplete="off" spellcheck="false"></label>` +
+		`<label class="field">Address<input name="endpoint" data-attr:disabled="$kind != 'remote'" ` +
+		`autocomplete="off" spellcheck="false" ` +
+		`placeholder="https:// — from the service&#39;s documentation"></label>` +
 		`<label class="field">Client id<input name="client_id" autocomplete="off" spellcheck="false"></label>` +
 		`<label class="field">Client secret<input name="client_secret" type="password" ` +
 		`autocomplete="off"></label>` +
+		`</div>` +
+		`<details class="stow"><summary>Advanced — addresses and scopes</summary>` +
+		`<div class="fields">` +
+		`<label class="field">Authorize URL<input name="auth_url" autocomplete="off" spellcheck="false" ` +
+		`placeholder="usually discovered automatically"></label>` +
+		`<label class="field">Token URL<input name="token_url" autocomplete="off" spellcheck="false" ` +
+		`placeholder="usually discovered automatically"></label>` +
+		`<label class="field">Revoke URL<input name="revoke_url" autocomplete="off" spellcheck="false"></label>` +
 		`<label class="field">Scopes<input name="scopes" autocomplete="off" spellcheck="false" ` +
 		`placeholder="space-separated — from the same settings"></label>` +
 		`<label class="field">Return address<input name="redirect_uri" autocomplete="off" ` +
 		`spellcheck="false" placeholder="this screen&#39;s address, ending in /tools/callback"></label>` +
-		`</div></div>` +
+		`</div></details></div>` +
 		`<div data-show="$kind == 'workload'">` +
 		`<h3 class="label">Runs here</h3>` +
 		`<div class="fields">` +
@@ -201,8 +207,18 @@ func addPanel() string {
 		`placeholder="where it serves on this machine"></label>` +
 		`<label class="field">Runs as<input name="persona" autocomplete="off" ` +
 		`spellcheck="false" placeholder="the name it takes part under"></label>` +
-		`</div></div>` +
-		`<button class="btn" type="submit">Add tool</button>` +
+		`</div></div></div>` +
+		`<div class="wiz-foot">` +
+		`<p class="whisper" data-show="$tstep == 0">How it connects comes next.</p>` +
+		`<p class="whisper" data-show="$tstep == 1 && $kind == 'remote'">The secret is kept ` +
+		`by the sign-in service — never shown again.</p>` +
+		`<span class="keys">` +
+		`<button class="btn ghost" type="button" data-show="$tstep > 0" ` +
+		`data-on:click="$tstep = 0">Back</button>` +
+		`<button class="btn" type="button" data-show="$tstep == 0" ` +
+		`data-on:click="$tstep = 1">Next</button>` +
+		`<button class="btn" type="submit" data-show="$tstep == 1">Add tool</button>` +
+		`</span></div>` +
 		addNote("") + `</form>`
 }
 

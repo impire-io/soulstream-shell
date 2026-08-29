@@ -148,18 +148,22 @@ func TestTheFormAndTheRegister(t *testing.T) {
 	if !strings.Contains(form, `name="client_secret" type="password"`) {
 		t.Errorf("the secret field is not a password input:\n%s", form)
 	}
-	// The form is sections: what every tool takes, then one section per
-	// kind — the Kind select drives the signal, each section stands behind
-	// it, and each section's Address is disabled while hidden so only the
-	// living one submits.
+	// The form is a two-step wizard (the calm pass): what it is, then how
+	// it connects. The step signal moves the visibility; the Kind select
+	// still drives its own signal inside the second step, each kind's
+	// section stands behind it, and each section's Address is disabled
+	// while hidden so only the living one submits. The provider's rarely
+	// needed addresses fold behind the advanced stow inside the step.
 	for _, want := range []string{
-		`data-bind:kind`, `data-signals="{kind:'remote'}"`,
+		`data-bind:kind`, `data-signals="{kind:'remote',tstep:0}"`,
+		`class="steps"`, `data-show="$tstep == 0"`, `data-show="$tstep == 1"`,
 		`data-show="$kind == 'workload'"`, `data-show="$kind == 'remote'"`,
-		`<h3 class="label">Connected service</h3>`,
 		`<h3 class="label">Provider sign-in</h3>`,
 		`<h3 class="label">Runs here</h3>`,
+		`<summary>Advanced — addresses and scopes</summary>`,
 		`data-attr:disabled="$kind != 'remote'"`,
 		`data-attr:disabled="$kind != 'workload'"`,
+		`class="wiz-foot"`, `>Back</button>`, `>Next</button>`,
 	} {
 		if !strings.Contains(form, want) {
 			t.Errorf("the form does not branch on kind (%q missing):\n%s", want, form)

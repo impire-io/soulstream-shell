@@ -668,6 +668,29 @@ color:var(--text-muted);cursor:pointer;transition:var(--transition-control)}
 .slideover.open+.slideover-scrim{display:block;position:absolute;inset:0;z-index:4;
 background:var(--surface-overlay);border:0;cursor:pointer}
 
+/* --- The wizard ------------------------------------------------------
+   The kit's stepped form: numbered dots naming the road, one step's
+   fields at a time, a footer carrying a quiet sentence and the way
+   forward. Steps are visibility, not pages — the form stays one, every
+   field submits at the end, and the advanced folds wait inside their
+   step. The current dot is ink, a passed one takes the accent. */
+.steps{display:flex;align-items:center;gap:var(--space-4);margin:0 0 var(--space-8)}
+.steps .sline{flex:1;height:1px;background:var(--border-hairline)}
+.steps .sname{display:inline-flex;align-items:center;gap:var(--space-3);
+font:var(--type-ui);font-size:var(--text-xs);color:var(--text-faint);white-space:nowrap}
+.steps .sname.on{color:var(--text-body)}
+.steps .sname.done{color:var(--text-muted)}
+.sdot{width:20px;height:20px;border-radius:var(--radius-pill);flex:none;display:inline-flex;
+align-items:center;justify-content:center;font:var(--type-ui);font-size:var(--text-2xs);
+background:var(--surface-well);color:var(--text-muted)}
+.sname.on .sdot{background:var(--border-ink);color:var(--text-inverse)}
+.sname.done .sdot{background:var(--accent);color:var(--text-inverse)}
+.wiz-foot{display:flex;align-items:center;justify-content:space-between;gap:var(--space-5);
+flex-wrap:wrap;margin-top:var(--space-8);padding-top:var(--space-6);
+border-top:var(--border-width) solid var(--border-hairline)}
+.wiz-foot .whisper{font:var(--type-ui);font-size:var(--text-xs);color:var(--text-faint);margin:0}
+.wiz-foot .keys{display:flex;gap:var(--space-4);margin-left:auto}
+
 /* A question a result line asks before a destructive act: the prose reads
    at body size rather than at the note's own register, and the two ways
    out stand under it. */

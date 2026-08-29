@@ -56,7 +56,13 @@ func renderAgents(list []soulstream.Agent, err error, names map[string]string, w
 		b.WriteString(modelsList(dv))
 	}
 	b.WriteString(resultNote(""))
-	b.WriteString(shell.SlideOver("Add an agent", slideBody(dv)))
+	// One panel serves both forms behind their own keys, so its name is
+	// the neutral one both acts answer to.
+	title := "Add an agent"
+	if dv.On {
+		title = "New agent"
+	}
+	b.WriteString(shell.SlideOver(title, slideBody(dv)))
 	return b.String()
 }
 
