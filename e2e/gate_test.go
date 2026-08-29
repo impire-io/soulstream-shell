@@ -1417,7 +1417,7 @@ func TestShellGate(t *testing.T) {
 	if len(icoBody) < 4 || !bytes.Equal(icoBody[:4], []byte{0, 0, 1, 0}) {
 		t.Fatalf("/favicon.ico is not an icon: %x", icoBody[:min(8, len(icoBody))])
 	}
-	font, err := http.Get(r.ShellURL + "/assets/fonts/archivo-400-800.woff2")
+	font, err := http.Get(r.ShellURL + "/assets/fonts/geist-100-900.woff2")
 	if err != nil {
 		t.Fatal(err)
 	}

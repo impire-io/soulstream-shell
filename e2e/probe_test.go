@@ -135,12 +135,12 @@ func TestOutsideModuleGate(t *testing.T) {
 	}
 	// Sign-in lands on the outside module's own screen, because that is
 	// where this deployment said its people belong — and it is a whole
-	// screen: the frame's bar, the frame's rail with this module's key
+	// screen: the frame's sidebar with its wordmark and this module's key
 	// marked on it, the frame's way out, and the module's own body.
 	for _, want := range []string{
 		"<title>probe — outpost</title>",
 		`<span class="wordmark">outpost</span>`, `<span class="strip">console</span>`,
-		`<header class="tbar slim">`, `<nav class="iconrail"`,
+		`<div class="ir-brand">`, `<nav class="iconrail"`,
 		`class="ir on" href="/probe"`, `<span class="lbl">Probe</span>`,
 		`<span class="lbl">Elsewhere</span>`, "Sign out",
 		"<h1>Probe</h1>", "compiled against the exported contract alone",

@@ -9,11 +9,12 @@ import (
 
 // The frame: everything on a screen that is not a module's own.
 //
-// The head and the token source, the ink housing at the top, the spine of
-// sections at the far left, and the sheet a screen that does not stream is
-// laid out on. A module renders what goes beside the spine and nothing
-// else, so the way to every other screen is in the same place on all of
-// them — and so a module never has to know what the others are.
+// The head and the token source, the labeled sidebar at the far left —
+// wordmark at the top, the signed-in name at the foot — and the sheet a
+// screen that does not stream is laid out on. A module renders what goes
+// beside the sidebar and nothing else, so the way to every other screen
+// is in the same place on all of them — and so a module never has to know
+// what the others are.
 
 // pageHead is the head every screen shares: the token source, the icon the
 // browser tab shows, and (for the screens that stream) the runtime itself.
@@ -35,25 +36,23 @@ func (s *Shell) head(title string, live bool) string {
 		Esc(title+" — "+s.opts.Brand.Wordmark), script)
 }
 
-// topbar is the ink housing every signed-in screen hangs from. It says the
-// person's own name; the id behind it is the tooltip, for the once a year
-// somebody needs it.
-func (s *Shell) topbar(ctx context.Context, sess *Session) string {
+// who is the foot of the sidebar: the person's own name beside a live
+// dot, with where this is at the row's end. The id behind the name is
+// the tooltip, for the once a year somebody needs it.
+func (s *Shell) who(ctx context.Context, sess *Session) string {
 	b := s.opts.Brand
 	id := ""
 	if sess != nil {
 		id = sess.Subject
 	}
-	return fmt.Sprintf(`<header class="tbar slim"><span class="wordmark">%s</span>`+
-		`<span class="strip">%s</span><span class="strip shell">%s</span>`+
-		`<span class="spacer"></span><span class="who" title="%s">%s</span>`+
-		`<span class="led"></span></header>`,
-		Esc(b.Wordmark), Esc(b.Strip), Esc(b.Where),
-		Esc(id), Esc(s.screenName(ctx, sess)))
+	return fmt.Sprintf(`<div class="ir-who"><span class="led"></span>`+
+		`<span class="who" title="%s">%s</span><span class="where">%s</span></div>`,
+		Esc(id), Esc(s.screenName(ctx, sess)), Esc(b.Where))
 }
 
-// navLink is one entry on the spine. Collapsed, the label is the hover
-// title and the accessible name both — the icon alone names nothing.
+// navLink is one entry on the sidebar. In narrow rooms the label folds
+// away, so it is the hover title and the accessible name both — the icon
+// alone names nothing.
 func navLink(e NavEntry, active string) string {
 	cls, current := "ir", ""
 	if e.Section == active {
@@ -67,14 +66,16 @@ func navLink(e NavEntry, active string) string {
 		cls, e.Href, Esc(e.Label), current, attrs, Icon(e.Icon), Esc(e.Label), e.Mark)
 }
 
-// rail is the spine itself: a slim column of icons at the far left of every
-// signed-in screen, marked for the screen it is on.
+// rail is the sidebar itself: the wordmark, then every place a person can
+// go with icon and label both, marked for the screen it is on, the
+// signed-in name at the foot.
 //
 // Every entry on it is contributed — the shell holds no list of places a
-// person can go, only the order the modules registered in. The column
-// expands to icons-and-labels on a page-local signal: no round-trip, no
-// stored preference, and nothing a live stream morphs, so an expanded rail
-// survives every tick.
+// person can go, only the order the modules registered in. At full width
+// the labels are simply there; in narrow rooms the sidebar sheds them to
+// a slim icon rail, and its own key brings them back out over the content
+// on a page-local signal: no round-trip, no stored preference, and
+// nothing a live stream morphs, so an opened sidebar survives every tick.
 func (s *Shell) rail(r *http.Request, active string) string {
 	var top, foot []NavEntry
 	for _, m := range s.live {
@@ -86,8 +87,11 @@ func (s *Shell) rail(r *http.Request, active string) string {
 			}
 		}
 	}
+	brand := s.opts.Brand
 	var b strings.Builder
 	b.WriteString(`<nav class="iconrail" aria-label="Sections" data-class:open="$rail">`)
+	fmt.Fprintf(&b, `<div class="ir-brand"><span class="wordmark">%s</span>`+
+		`<span class="strip">%s</span></div>`, Esc(brand.Wordmark), Esc(brand.Strip))
 	fmt.Fprintf(&b, `<button type="button" class="ir toggle" title="Show the labels"`+
 		` aria-label="Show or hide the labels" data-on:click="$rail = !$rail">`+
 		`%s<span class="lbl">Collapse</span></button>`, Icon("chevrons-right"))
@@ -99,8 +103,9 @@ func (s *Shell) rail(r *http.Request, active string) string {
 	for _, e := range foot {
 		b.WriteString(navLink(e, active))
 	}
+	b.WriteString(s.who(r.Context(), s.Session(r)))
 	// Sign out is the shell's own, and it is a form rather than a link: it
-	// is the one thing on the spine that changes something.
+	// is the one thing on the sidebar that changes something.
 	fmt.Fprintf(&b, `<form method="post" action="/logout"><button type="submit" class="ir"`+
 		` title="Sign out">%s<span class="lbl">Sign out</span></button></form>`, Icon("log-out"))
 	b.WriteString(`</div></nav>`)
@@ -148,12 +153,11 @@ func (s *Shell) Render(w http.ResponseWriter, r *http.Request, p Page) {
 	}
 	fmt.Fprintf(w, `%s
 <body class="chat" data-signals="{rail:false,panel:false}"%s>
-%s
 <div class="frame">
 %s
 %s
 </div>%s</body></html>`,
-		s.head(p.Title, p.Live), init, s.topbar(r.Context(), s.Session(r)),
+		s.head(p.Title, p.Live), init,
 		s.rail(r, p.Section), p.Body, p.Tail)
 }
 

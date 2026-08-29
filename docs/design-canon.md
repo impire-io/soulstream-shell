@@ -1,87 +1,90 @@
-# The design canon (vendored 2026-08-14)
+# The design canon (vendored 2026-08-29 — the second canon)
 
-Vendored verbatim from the Soulsystem Design System project's readme
-(the ecosystem's design source of truth — cassette futurism in a light
-key), so builders in this repo hold the contract without leaving it.
-The tokens in `internal/shellserver/assets/tokens.css` implement the
-variables this document names. When this file and the Claude Design
-project disagree, the project wins and this file gets re-vendored.
+Vendored from the New Impire Design System project (the ecosystem's
+design source of truth — paper and ink, one accent; adopted
+visual-for-visual by design soul-hq/02-DESIGN/soulstream-shell/0011),
+so builders in this repo hold the contract without leaving it. The
+tokens in `shell/assets/tokens.css` implement the variables this
+document names. When this file and the Claude Design project disagree,
+the project wins and this file gets re-vendored. "Done when there is
+nothing more to take away."
 
 ---
 
 **Voice.** Plain, technical, slightly deadpan. "You" for the operator;
 "the system" for the AI. Label surfaces by what they do. Sentence case
 for headings and buttons; UPPERCASE only for mono label strips, badges
-and tab labels. All ids, timecodes and ratios in mono. Emoji: never —
-status is carried by LED pips, badges and glyphs. Never say "powered
-by AI", "magic", "effortless", "revolutionary", "just", "simply".
+and column heads. All ids, timecodes and ratios in mono. Emoji: never —
+status is carried by dots, chips and glyphs. Never say "powered by
+AI", "magic", "effortless", "revolutionary", "just", "simply".
 
-**Palette.** A warm, light, plastic world. Seven shell tones carry
-every surface; ink is warm charcoal `#1B1917`, never pure black. Two
-accents at deliberately **equal weight**: amber `#E07B26` = the human
-channel, teal `#1E7A72` = the machine channel — peers; neither may
-outrank the other on a screen. Signal colours only as state, always
-beside a glyph. Max two background tones per screen.
+**Palette.** Paper and ink. Surfaces are warm-cool neutrals — the page
+`#FAFAF7`, cards white, sunken `#F2F2EE` — never more than two
+background tones per screen. Ink is a near-black with a hint of
+blue-graphite (`#161B22` for type and edges, `#0B0E13` at the very
+bottom), never pure black. **One accent**: teal `#1FA88E` — the agent
+inside the brackets — for primary actions, focus rings, active
+markers, live dots; used sparingly, one accent per view. Red
+`#B23A3A`, green `#2F7A4F`, blue `#2F5C9E` and the warm warn tones are
+system signals only, never decoration, always beside a word or glyph.
 
-**The one dark surface.** `--surface-screen` (CRT glass with phosphor
-and scanlines): live output, telemetry, transcript excerpts. Never
-prose.
+**The one dark surface.** `--surface-screen` (brand ink with
+teal-tinted text): raw output, payloads byte for byte, live tails.
+Never prose. No scanlines, no glow — the glass is just dark.
 
-**Type.** Archivo (display bold, `-0.03em`; wordmark lowercase `wdth`
-88) for anything human-readable; JetBrains Mono for data, ids, and
-every label strip (11px uppercase at `0.14em`). Scale: 11 · 12 · 13 ·
-15 · 17 · 20 · 25 · 32 · 42 · 56 · 76.
+**Type.** Geist — a single family, weight range 100–900; thickness is
+the play, never style. Headings are medium (500), tracked tight
+(display `-0.02em`); body is regular at 15/1.5. Geist Mono for data,
+ids, and every label strip (11px uppercase at `0.14em`). Scale: 11 ·
+12 · 13 · 15 · 16 · 18 · 22 · 28 · 36 · 48 · 64.
 
-**Spacing.** 2 · 4 · 6 · 8 · 12 · 16 · 20 · 24 · 32 · 40 · 56 · 72 ·
-96. Cards pad 24, gutters 16, control gaps 12. Rail 248px, content max
-1080px, measure 66ch. Instrument-panel density: dense, never cramped.
+**Spacing.** A 4px base scale: 2 · 4 · 6 · 8 · 12 · 16 · 20 · 24 · 32
+· 40 · 56 · 72 · 96. Cards pad 24, gutters 16, control gaps 12.
+Sidebar 232px, content max 1180px, measure 66ch. Calm density: airy,
+never cramped.
 
-**Backgrounds.** Flat shell colour plus one of three native textures:
-`--texture-grain` (page), `--texture-rib` (header bars, card top
-edges), `--texture-scanline` (CRT only). No gradients as decoration,
+**Backgrounds.** Flat colour. No textures, no gradients as decoration,
 no photography.
 
-**Radii.** Plastic is barely rounded: 2 / 3 / 5 / 8 / 12px. Pills are
-reserved for tags and LED pips — a pill-shaped button reads as
-software, not hardware.
+**Radii.** Small — candor, not pillow: 2 / 4 / 6 / 10 / 12px. Pills
+are reserved for tags, counts and dots — a pill-shaped button reads as
+somebody else's product.
 
-**Cards.** 1px hairline (`#D9D0BE`) or hard ink outline; 5px radius;
-`--shadow-card` = one crisp etch line + a short 6px shadow. Inset
-cards use `--bevel-inset`, no drop shadow. No card floats on a blurred
-cloud.
+**Cards.** White on paper; 1px hairline (`--ink-200`); 10px radius;
+`--shadow-card` is one crisp line and a 2px soft edge. No card floats
+on a blurred cloud.
 
-**Depth.** Crisp white top highlight, hard 2px colour shadow below,
-optional short soft shadow. Inner shadow for anything a finger would
-press; outer for anything that sits on top.
+**Depth.** A border first. Two small shadows exist for what genuinely
+sits on top (panels, drawers, the modal); nothing is bevelled, nothing
+is engraved, nothing travels when pressed.
 
-**Milled lettering.** Text on a coloured key is engraved
-(`--engrave-light` / `--engrave-dark`). Amber keys use `--amber-600`
-under light text — black-on-orange is banned.
+**Hover.** Never opacity — surfaces step one shade darker (`--surface-
+inset`), quiet keys gain the sunken tone, links harden their
+underline. **Press.** The key darkens one more step (`--accent-press`).
+Nothing moves, nothing scales.
 
-**Hover.** Never opacity — surfaces step one shade darker, ghost
-controls gain `--surface-inset`, links move amber. **Press.**
-`translateY(2px)` and the shadow swaps to `--bevel-inset` — the key
-travels into the housing. Nothing scales.
-
-**Animation.** Mechanical and short: 70/120/180/280ms on
-`--ease-mech`. No bounces, no springs. All durations collapse under
+**Animation.** Fast, ease-out, no bounce: 80/140/220/360ms on
+`--ease` (`cubic-bezier(.4,0,.2,1)`). All durations collapse under
 `prefers-reduced-motion`.
 
 **Transparency.** Almost none — the modal scrim only. No frosted
-glass, no backdrop-filter. Protection is a solid capsule, never a fade
+glass, no backdrop-filter. Protection is a solid panel, never a fade
 over content.
 
-**Borders.** Everything has an edge: hairline for quiet separation,
-ink for interactive or structural, etch for the shadow line.
+**Borders.** Everything separable has an edge: hairline (`--ink-200`)
+for quiet separation, the firmer `--ink-300` for controls and selected
+things, ink itself (`--ink-900`) only where a thing must be findable —
+a mention, a quiet key's outline.
 
 **Icons.** Lucide, via the vendored set, monochrome, inheriting text
-colour. Transport vocabulary carries the brand where a meaning exists:
-play, pause, rewind, eject, mic, radio, power. Never emoji, never
-unicode glyphs as icons.
+colour — 24×24 line convention. Never emoji, never unicode glyphs as
+icons.
 
-**The house readout.** The segmented VU **Meter** replaces any
-conventional progress bar — level, load, capacity, parity.
+**The accent's meaning.** Teal is the agent's: live dots, operated
+voices, the one filled key, the active place in the sidebar. Whose a
+message is rides alignment; who answers for a voice rides words and
+its dot — colour never carries identity beyond that one lamp.
 
-**Layout.** The top transport bar is fixed with an ink bottom border;
-rails and side panels sticky. Content left-aligned; centred text only
-in modals and empty states.
+**Layout.** A labeled sidebar on paper at the far left — wordmark at
+the top, the signed-in name at the foot; no top bar. Content
+left-aligned; centred text only in empty states and the sign-in card.

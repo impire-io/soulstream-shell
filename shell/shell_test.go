@@ -380,8 +380,8 @@ func TestALinkResolvesOnlyIntoAModuleThisDeploymentRuns(t *testing.T) {
 }
 
 // The frame says nothing about the product it frames that the product did
-// not hand it. Every word on the sign-in card, the top bar and the foot of
-// a sheet is composed in — which is what lets the same frame carry
+// not hand it. Every word on the sign-in card, the sidebar's foot and the
+// foot of a sheet is composed in — which is what lets the same frame carry
 // something else entirely.
 func TestTheFrameSaysOnlyTheWordsItWasGiven(t *testing.T) {
 	s := newTestShell(t)
@@ -398,9 +398,9 @@ func TestTheFrameSaysOnlyTheWordsItWasGiven(t *testing.T) {
 		}
 	}
 	sess := &Session{Subject: "u-f468aecb", Name: "Daan"}
-	bar := s.topbar(context.Background(), sess)
-	if !strings.Contains(bar, `<span class="strip shell">whereabouts</span>`) {
-		t.Errorf("the top bar does not say where this is:\n%s", bar)
+	bar := s.who(context.Background(), sess)
+	if !strings.Contains(bar, `<span class="where">whereabouts</span>`) {
+		t.Errorf("the sidebar's foot does not say where this is:\n%s", bar)
 	}
 	if !strings.Contains(s.Sheet("body"), `<p class="foot">windmark · strop · the promise made</p>`) {
 		t.Errorf("the sheet does not carry the promise: %s", s.Sheet("body"))
@@ -417,9 +417,9 @@ func TestTheFrameSaysOnlyTheWordsItWasGiven(t *testing.T) {
 // reachable — as a tooltip, never as the thing on screen.
 func TestTheSignedInPersonIsNamedNotNumbered(t *testing.T) {
 	s := newTestShell(t)
-	bar := s.topbar(context.Background(), &Session{Subject: "u-f468aecb", Name: "Daan"})
+	bar := s.who(context.Background(), &Session{Subject: "u-f468aecb", Name: "Daan"})
 	if !strings.Contains(bar, `<span class="who" title="u-f468aecb">Daan</span>`) {
-		t.Errorf("the top bar does not say the person's name:\n%s", bar)
+		t.Errorf("the sidebar's foot does not say the person's name:\n%s", bar)
 	}
 }
 
@@ -473,7 +473,7 @@ func TestAScreenIsAModulesBodyInTheFrame(t *testing.T) {
 		"<title>a screen — windmark</title>",
 		`<script type="module" src="/assets/datastar.js"></script>`,
 		`<body class="chat" data-signals="{rail:false,panel:false}" data-init="@get('/live')">`,
-		`<header class="tbar slim">`, `<nav class="iconrail"`,
+		`<div class="ir-brand"><span class="wordmark">windmark</span>`, `<nav class="iconrail"`,
 		`class="ir on" href="/"`, `<main id="body">what the module said</main>`,
 		"</div>\n<script>page.local()</script>\n</body></html>",
 	} {

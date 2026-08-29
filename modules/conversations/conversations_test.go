@@ -163,10 +163,11 @@ func TestTheFrameCollapsesInHonestSteps(t *testing.T) {
 		{"@media (max-width:1180px)", "the details step aside into a drawer",
 			".details{position:absolute"},
 		{"@media (max-width:1040px)", "the conversations list narrows", "--rail-width:208px"},
-		{"@media (max-width:900px)", "and then tucks in behind the spine",
+		{"@media (max-width:900px)", "and then tucks in behind the sidebar",
 			".rail{position:absolute"},
+		{"@media (max-width:900px)", "which sheds its labels to a slim rail",
+			".iconrail{position:relative;z-index:6;width:var(--spine-slim)"},
 		{"@media (max-width:640px)", "the gutters step down a notch", "--pad-x:var(--space-5)"},
-		{"@media (max-width:560px)", "the bar sheds a strip", ".tbar .strip.shell{display:none}"},
 	}
 	at := -1
 	for _, s := range steps {
@@ -183,16 +184,16 @@ func TestTheFrameCollapsesInHonestSteps(t *testing.T) {
 			t.Errorf("the step where %s does not carry %q", s.what, s.rule)
 		}
 	}
-	// The spine is the one column that never goes: it is the way to
+	// The sidebar is the one column that never goes: it is the way to
 	// everywhere else, and there is no width at which it is worth the room
 	// it costs. Nothing may hide it.
 	if strings.Contains(css, ".iconrail{display:none") {
 		t.Error("the way to every other screen is hidden at some width")
 	}
-	// And the bar never stops saying who is signed in. A long name is cut,
-	// with the whole of it in the hover; no name is dropped.
-	if strings.Contains(css, ".tbar .who{display:none") {
-		t.Error("the bar stops saying who is signed in at some width")
+	// And the foot never stops carrying who is signed in: in a slim rail
+	// the words fold into the open state, but the row itself never goes.
+	if strings.Contains(css, ".ir-who{display:none") {
+		t.Error("the sidebar stops carrying who is signed in at some width")
 	}
 	// And the frame closes on its own edges, so a column that will not fit is
 	// clipped there rather than pushing the document sideways.
@@ -425,16 +426,16 @@ func TestTheMentionMarkTakesNoChannelColour(t *testing.T) {
 	if !strings.Contains(got, `<div class="msg machine mentions" data-op="op-4">`) {
 		t.Errorf("a machine-channel message that says your name lost its channel:\n%s", got)
 	}
-	// The channel moves the card's edge; the mark moves the card's outline.
-	// Two custom properties, on purpose, so neither can be read as the other.
+	// The second canon carries no channel edge at all — who answers for a
+	// voice rides the byline's dot and its words (design soul-hq/0011 §4) —
+	// so the mark is the one thing that moves a card's outline, and it
+	// hardens to ink rather than borrowing any colour.
 	css := tokens(t)
-	for _, want := range []string{
-		"--chan:var(--channel-human)", ".msg.machine{--chan:var(--channel-machine)}",
-		".msg.mentions{--edge:var(--border-strong)}",
-	} {
-		if !strings.Contains(css, want) {
-			t.Errorf("the token source does not hold the channel edge (%q)", want)
-		}
+	if strings.Contains(css, "--chan:") {
+		t.Error("the token source still draws a channel edge — colour carries identity again")
+	}
+	if !strings.Contains(css, ".msg.mentions{--edge:var(--border-ink)}") {
+		t.Error("the token source does not harden a mentioned card's outline to ink")
 	}
 }
 
