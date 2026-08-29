@@ -7,6 +7,7 @@ require (
 	github.com/impire-io/soulstream-core v0.14.0-rc.1
 	github.com/impire-io/soulstream-identity v0.12.0
 	github.com/impire-io/soulstream-idp v0.8.1
+	github.com/impire-io/soulstream-inference v0.2.0
 	github.com/impire-io/soulstream-shell v0.11.0-rc.4
 	github.com/impire-io/soulstream-workloads v0.8.0-rc.4
 	github.com/nats-io/nats.go v1.52.0
@@ -36,7 +37,6 @@ require (
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/gowebpki/jcs v1.0.1 // indirect
 	github.com/impire-io/soulstream-archivist v0.4.1 // indirect
-	github.com/impire-io/soulstream-inference v0.1.0 // indirect
 	github.com/impire-io/soulstream-mcp v0.1.0 // indirect
 	github.com/klauspost/compress v1.19.2 // indirect
 	github.com/minio/highwayhash v1.0.4 // indirect
@@ -92,11 +92,11 @@ replace github.com/impire-io/soulstream-idp => ../../soulstream-idp
 // working tree beside this one.
 replace soulstream-shell.invalid/moduleprobe => ./moduleprobe
 
-// TEMPORARY — remove when soulstream-inference ships a tag carrying the
-// catalogue package and soulstream ships built on it (with the shell's
-// InferenceOn fact). The models arm of the gate measures the one-codec
-// claim and the declared fact, neither of which is on a published tag
-// yet; without these pins the gate would not compile.
+// TEMPORARY — remove when soulstream ships a tag built on the catalogue
+// contract (inference v0.2.0) and carrying the shell's InferenceOn fact.
+// The models arm of the gate calls the rewired node.CatalogueSet and
+// rides the rig's thinking arm, neither of which is on a published
+// soulstream tag yet; without this pin the gate would not compile.
+// (The inference replace this block once carried dropped when v0.2.0
+// shipped the catalogue package.)
 replace github.com/impire-io/soulstream => ../../soulstream
-
-replace github.com/impire-io/soulstream-inference => ../../soulstream-inference

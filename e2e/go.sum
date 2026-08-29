@@ -58,6 +58,8 @@ github.com/impire-io/soulstream-core v0.14.0-rc.1 h1:QQa/U4iHiVQUBjVBgT8E6XsIaT1
 github.com/impire-io/soulstream-core v0.14.0-rc.1/go.mod h1:0W6OHY8TDKz6+g2MfoADvlFD/ZoRbe6IG+wkNx92qKE=
 github.com/impire-io/soulstream-identity v0.12.0 h1:/LfGQhZY7qWlRtYpCDLrk2JbpkE88Xg65VkpfCt9ZUI=
 github.com/impire-io/soulstream-identity v0.12.0/go.mod h1:Lz5cia9xUKGy0kdAHg7R2Tz4C+ZAGJufXk49oRlJ6ok=
+github.com/impire-io/soulstream-inference v0.2.0 h1:25eh9ZmqBmKZpWm/AA5LWIZQVcusHfMawnHYIRmDedY=
+github.com/impire-io/soulstream-inference v0.2.0/go.mod h1:S2pF86IVu9LfpBK4ouZNfK/LEpFi+GABJTW3OtYDHwI=
 github.com/impire-io/soulstream-mcp v0.1.0 h1:mRiva+bhSertb1VKevhuec6WPKHPQbur83KIEss3Gwc=
 github.com/impire-io/soulstream-mcp v0.1.0/go.mod h1:7NzUwvEhPC2DUxoL7HOvrPRtr8joSiqiblsJixvseFI=
 github.com/impire-io/soulstream-workloads v0.8.0-rc.4 h1:rH501YkzY2SzKCsyp42BXVKHmikxLbO4srYFucZ/pTU=
