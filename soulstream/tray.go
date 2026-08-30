@@ -82,6 +82,19 @@ func (sess *Session) Read(path string) {
 	delete(sess.unread, path)
 }
 
+// Waiting is one conversation's share of the tray by itself — for a row
+// that is not a conversation row, like a declared agent's line saying its
+// hidden room holds a message for the reader (hq design 0012 §4, bar 4).
+// Nil-safe: no session, nothing waiting.
+func (sess *Session) Waiting(path string) int {
+	if sess == nil || path == "" {
+		return 0
+	}
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+	return len(sess.unread[path])
+}
+
 // Standing is how many unread messages each conversation on the board
 // holds. A slip pointing somewhere the board does not reach is left out:
 // anyone may drop a slip in anyone's inbox, and a mark that opens onto

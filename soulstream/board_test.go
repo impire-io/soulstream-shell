@@ -31,7 +31,7 @@ func TestLastLiveSkipsTheArchived(t *testing.T) {
 		}, ""},
 		{"no conversations is nowhere", nil, ""},
 	} {
-		if got := LastLive(tc.entries); got != tc.want {
+		if got := LastLive(tc.entries, nil); got != tc.want {
 			t.Errorf("%s: LastLive = %q, want %q", tc.name, got, tc.want)
 		}
 	}

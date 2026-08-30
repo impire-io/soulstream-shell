@@ -2,9 +2,7 @@ package conversations
 
 import (
 	"fmt"
-	"sort"
 	"strings"
-	"time"
 
 	"github.com/impire-io/soulstream-core/topic"
 
@@ -19,82 +17,105 @@ import (
 // Two patch targets belong to the live stream — #conversations and #dash —
 // and the composer owns three of its own, so nothing the stream morphs can
 // touch a half-written message.
+//
+// The messages themselves render through the support layer's one thread
+// rendering (soulstream/threadview.go) — the same bubbles the agent detail
+// shows for an agent's room, defined once (hq design 0012 §4).
 
-// nameOf is the on-screen name for a persona: the realm's own persona
-// directory when it publishes one, else the id the record itself carries.
-// Never nothing — an unnamed voice is still a voice.
-func nameOf(v view, persona string) string {
-	if n := v.Names[persona]; n != "" {
-		return n
+// tv is this view as the shared thread rendering reads it, with this
+// screen's own reply control riding along.
+func (v view) tv() soulstream.ThreadView {
+	path := v.TopicPath
+	return soulstream.ThreadView{
+		Me: v.Me, Names: v.Names, Voices: v.Voices, TopicPath: path,
+		ReplyLink: func(opID string) string { return replyLink(path, opID) },
 	}
-	if persona == "" {
-		return "unattributed"
-	}
-	return persona
 }
+
+// nameOf is the on-screen name for a persona — the shared rendering's rule.
+func nameOf(v view, persona string) string { return soulstream.NameOf(v.tv(), persona) }
 
 // mine reports whether a contribution is the signed-in person's own. The
 // answer comes from the session's principal and the record's author —
 // never from anything the browser said.
 func mine(v view, author string) bool { return v.Me != "" && author == v.Me }
 
-// sigMark is the earned signature verdict, and silence is the earned
-// normal (the calm pass): a verified message says nothing, because on a
-// working realm that is every message and a word repeated under all of
-// them is noise, not assurance. The exceptions are the news and they
-// speak — unsigned, unknown key, anything else the record earned. The
-// storage explorer still shows every verdict by name; this surface is
-// for reading, and the record is one screen away.
-func sigMark(s topic.SigStatus) string {
-	switch s {
-	case topic.SigVerified:
-		return ""
-	case topic.SigUnsigned:
-		return `<span class="verdict">unsigned</span>`
-	case topic.SigUnknownKey:
-		return `<span class="verdict warn">unknown key</span>`
-	default:
-		return `<span class="verdict warn">` + esc(string(s)) + `</span>`
-	}
+// timeline and renderBody are this package's names for the shared thread
+// rendering — kept so the standing tests pin the one behavior from here.
+func timeline(mt *topic.MaterializedTopic) []soulstream.ThreadItem {
+	return soulstream.Timeline(mt)
+}
+
+func renderBody(v view, c *topic.Contribution) string {
+	return soulstream.RenderMessageBody(v.tv(), c)
 }
 
 // renderRail is the left column: the conversations this person can reach,
-// most recently announced first, the open one marked. The archived ones
-// rest under a fold at the foot — still one click away, never gone. The
-// fold's toggle is the person's own: the morph is told to leave the open
-// attribute alone, so the stream re-writing this list once a second never
-// snaps the fold shut. The server serves it open in one case only —
-// when the conversation the person is looking at is itself archived.
+// the most recently active first (hq design 0012 §3), the open one marked.
+// The machinery — agent homes, the placements topic — is not listed here at
+// all: those are rooms of the record's own, reached from the Agents screen.
+// The archived ones rest under a fold at the foot — still one click away,
+// never gone. The fold's toggle is the person's own: the morph is told to
+// leave the open attribute alone, so the stream re-writing this list once a
+// second never snaps the fold shut. The server serves it open in one case
+// only — when the conversation the person is looking at is itself archived.
 func renderRail(v view) string {
 	var b strings.Builder
 	b.WriteString(`<nav id="conversations" class="rail-list">`)
-	if len(v.Board) == 0 {
+	human := soulstream.HumanConversations(v.Board, v.Machinery)
+	if len(human) == 0 {
 		b.WriteString(`<p class="rail-note">No conversations yet. Start one above.</p>`)
 	}
-	var archived []int
-	for i := len(v.Board) - 1; i >= 0; i-- {
-		if v.Board[i].Lifecycle == topic.Archived {
-			archived = append(archived, i)
+	var archived []topic.BoardEntry
+	for _, e := range human {
+		if e.Lifecycle == topic.Archived {
+			archived = append(archived, e)
 			continue
 		}
-		b.WriteString(railRow(v, v.Board[i], "conv"))
+		b.WriteString(railRow(v, e, "conv"))
 	}
 	if len(archived) > 0 {
 		open := ""
-		for _, i := range archived {
-			if v.Board[i].Path == v.TopicPath {
+		for _, e := range archived {
+			if e.Path == v.TopicPath {
 				open = " open"
 			}
 		}
 		fmt.Fprintf(&b, `<details id="rail-archived" class="archfold" data-preserve-attr="open"%s>`+
 			`<summary>Archived (%d)</summary>`, open, len(archived))
-		for _, i := range archived {
-			b.WriteString(railRow(v, v.Board[i], "conv archived"))
+		for _, e := range archived {
+			b.WriteString(railRow(v, e, "conv archived"))
 		}
 		b.WriteString(`</details>`)
 	}
+	b.WriteString(roomsWaiting(v))
 	b.WriteString(`</nav>`)
 	return b.String()
+}
+
+// roomsWaiting is the rail's honest word when a message with this person's
+// name in it landed in a room the rail deliberately does not list (an
+// agent's home): the count still stands on the spine, and this line is
+// where the click lands somewhere real — the agent's own detail. Without a
+// resolvable place to point at, the words stand alone; nothing is hidden
+// silently either way (hq design 0012 §4, bar 4).
+func roomsWaiting(v view) string {
+	n := 0
+	for path := range v.Machinery {
+		n += v.Unread[path]
+	}
+	if n == 0 {
+		return ""
+	}
+	words := "1 message for you in an agent’s room"
+	if n > 1 {
+		words = fmt.Sprintf("%d messages for you in agent rooms", n)
+	}
+	if v.RoomsLink.Href != "" {
+		return fmt.Sprintf(`<a class="conv roomswait unread" href="%s">`+
+			`<span class="name">%s</span></a>`, v.RoomsLink.Href, esc(words))
+	}
+	return fmt.Sprintf(`<p class="rail-note">%s</p>`, esc(words))
 }
 
 // railRow is one conversation in the rail.
@@ -135,212 +156,26 @@ func stateWords(l topic.Lifecycle) string {
 	}
 }
 
-// threadNode is one message with the answers hanging off it.
-type threadNode struct {
-	Msg     *topic.Contribution
-	Replies []*topic.Contribution
-}
-
-// threadItem is one thing on the conversation's timeline: a message with
-// its answers, or something the room did rather than said.
-type threadItem struct {
-	At   time.Time
-	Node *threadNode
-	Work *topic.WorkItem
-}
-
-// rootOf walks an anchor chain up to the message it ultimately answers. An
-// answer to an answer joins its root; an anchor the topic does not hold is
-// its own root, so nothing is ever dropped for being unreachable.
-func rootOf(byID map[string]*topic.Contribution, c *topic.Contribution) *topic.Contribution {
-	for hops := 0; c.Anchor != "" && hops < 32; hops++ {
-		p, ok := byID[c.Anchor]
-		if !ok || p == c {
-			break
-		}
-		c = p
+// roomNote is the honest word over a deep-opened machinery topic: the rail
+// does not list it, but a person who was given its path still reads it —
+// with whose room it is said plainly, and the way to the agent beside it
+// (hq design 0012 §3).
+func roomNote(v view) string {
+	room, ok := v.Machinery[v.TopicPath]
+	if !ok {
+		return ""
 	}
-	return c
-}
-
-// timeline groups a materialised topic into what the chat shows: root
-// messages in time order, every anchored answer under the message it
-// answers, and work marks in their place.
-func timeline(mt *topic.MaterializedTopic) []threadItem {
-	if mt == nil {
-		return nil
+	if len(room.Agents) == 0 {
+		return `<p class="room-note">This is where this deployment places its agents — ` +
+			`the record’s own room, not listed with the conversations.</p>`
 	}
-	byID := make(map[string]*topic.Contribution, len(mt.Contributions))
-	for i := range mt.Contributions {
-		byID[mt.Contributions[i].OpID] = &mt.Contributions[i]
+	name := nameOf(v, room.Agents[0])
+	link := ""
+	if v.RoomLink.Href != "" {
+		link = fmt.Sprintf(` <a href="%s">About %s</a>`, v.RoomLink.Href, esc(name))
 	}
-	nodes := make(map[string]*threadNode, len(mt.Contributions))
-	var items []threadItem
-	for i := range mt.Contributions {
-		c := &mt.Contributions[i]
-		if rootOf(byID, c) != c {
-			continue
-		}
-		n := &threadNode{Msg: c}
-		nodes[c.OpID] = n
-		items = append(items, threadItem{At: c.Timestamp, Node: n})
-	}
-	for i := range mt.Contributions {
-		c := &mt.Contributions[i]
-		root := rootOf(byID, c)
-		if root == c {
-			continue
-		}
-		if n := nodes[root.OpID]; n != nil {
-			n.Replies = append(n.Replies, c)
-		}
-	}
-	for i := range mt.WorkItems {
-		items = append(items, threadItem{At: mt.WorkItems[i].Timestamp, Work: &mt.WorkItems[i]})
-	}
-	sort.SliceStable(items, func(i, j int) bool { return items[i].At.Before(items[j].At) })
-	return items
-}
-
-// workLine is one work mark on the timeline: the status stamped, the event
-// in a sentence that matches it.
-func workLine(v view, w *topic.WorkItem) string {
-	title := w.Title
-	if title == "" {
-		title = "an unnamed piece of work"
-	}
-	what := fmt.Sprintf("%s opened work “%s”", esc(nameOf(v, w.Author)), esc(title))
-	switch w.Status {
-	case topic.WorkClaimed:
-		who := "Someone"
-		if w.Owner != "" {
-			who = nameOf(v, w.Owner)
-		}
-		what = fmt.Sprintf("%s took up “%s”", esc(who), esc(title))
-	case topic.WorkDone:
-		what = fmt.Sprintf("“%s” is finished", esc(title))
-	}
-	return fmt.Sprintf(`<div class="sysline"><span class="strip shell">%s</span>`+
-		`<span class="what">%s</span></div>`, esc(string(w.Status)), what)
-}
-
-// renderMsg is one bubble, with the answers to it (already rendered)
-// hanging underneath.
-//
-// Two things are said about every message and they are kept apart. WHOSE it
-// is is said by which side it sits on and by nothing else: the signed-in
-// person's own sit right and carry no name, everyone else's sit left, named.
-// WHICH CHANNEL it is in is said by the card's own edge and by the pip in
-// its byline — amber for a voice that answers for itself, teal for one
-// somebody else answers for (channel.go). Neither says the other's thing.
-//
-// A message with the reader's name in it is marked, quietly and for good:
-// scrolling back, the ones that were about them are still the ones that were
-// about them. The mark hardens the card's outline rather than borrowing a
-// channel colour, so it can never be mistaken for who spoke.
-func renderMsg(v view, c *topic.Contribution, reply bool, answers string) string {
-	cls := "msg " + channelOf(v, c.Author)
-	if mine(v, c.Author) {
-		cls += " mine"
-	}
-	if reply {
-		cls += " reply"
-	}
-	if mentionsMe(v, c) {
-		cls += " mentions"
-	}
-	// The clock shows the time of day; the day itself rides the hover, for
-	// a conversation read back across more days than one.
-	at := fmt.Sprintf(`<span class="at" title="%s">%s</span>`,
-		c.Timestamp.Format("2006-01-02 15:04"), c.Timestamp.Format("15:04"))
-	byline := fmt.Sprintf(`<div class="byline">%s<span class="name">%s</span>%s</div>`,
-		channelPip(v, c.Author), esc(nameOf(v, c.Author)), at)
-	if mine(v, c.Author) {
-		byline = fmt.Sprintf(`<div class="byline">%s%s</div>`, channelPip(v, c.Author), at)
-	}
-	return fmt.Sprintf(`<div class="%s" data-op="%s"><div class="bubble">%s`+
-		`<p class="body">%s</p><div class="under">%s%s</div></div>%s</div>`,
-		cls, esc(c.OpID), byline, renderBody(v, c), sigMark(c.Sig),
-		replyLink(v.TopicPath, c.OpID), answers)
-}
-
-// mentionToken is one way a tapped persona may have been written, and the
-// channel that persona speaks on — so a name in a sentence carries the same
-// accent as the messages the person it names writes.
-type mentionToken struct {
-	Text    string // lowercased "@…", for matching
-	Channel string
-}
-
-// mentionTokens is what to look for in a body: for every persona the record
-// says the message tapped, the handle it may have been written as and the
-// name this reader is shown for them. Lowercased for matching, longest
-// first, so "@Avery Blake" wins where "@Avery" would also fit.
-func mentionTokens(v view, c *topic.Contribution) []mentionToken {
-	var out []mentionToken
-	seen := map[string]bool{}
-	for _, m := range c.Mentions {
-		for _, form := range []string{m, nameOf(v, m)} {
-			if form == "" {
-				continue
-			}
-			t := "@" + strings.ToLower(form)
-			if seen[t] {
-				continue
-			}
-			seen[t] = true
-			out = append(out, mentionToken{Text: t, Channel: channelOf(v, m)})
-		}
-	}
-	sort.SliceStable(out, func(i, j int) bool { return len(out[i].Text) > len(out[j].Text) })
-	return out
-}
-
-// renderBody is a message as it was written — escaped, never rewritten —
-// with the names that actually tapped somebody marked.
-//
-// What gets marked comes off the record's own mentions field, so the mark
-// means a slip reached that person rather than that the text looks like an
-// address. A name that resolved to nobody stays plain, which is the honest
-// thing for it to be: nothing happened when it was posted.
-func renderBody(v view, c *topic.Contribution) string {
-	tokens := mentionTokens(v, c)
-	if len(tokens) == 0 {
-		return esc(c.Body)
-	}
-	body, lower := c.Body, strings.ToLower(c.Body)
-	var b strings.Builder
-	for i := 0; i < len(body); {
-		if body[i] != '@' {
-			next := strings.IndexByte(body[i:], '@')
-			if next < 0 {
-				b.WriteString(esc(body[i:]))
-				break
-			}
-			b.WriteString(esc(body[i : i+next]))
-			i += next
-			continue
-		}
-		if n, ch := tokenAt(lower, i, tokens); n > 0 {
-			fmt.Fprintf(&b, `<span class="mtoken %s">%s</span>`, ch, esc(body[i:i+n]))
-			i += n
-			continue
-		}
-		b.WriteByte('@')
-		i++
-	}
-	return b.String()
-}
-
-// tokenAt is the length of the mention token starting at i and the channel
-// of the voice it names, or 0 for none.
-func tokenAt(lower string, i int, tokens []mentionToken) (int, string) {
-	for _, t := range tokens {
-		if strings.HasPrefix(lower[i:], t.Text) && endsToken(lower, i+len(t.Text)) {
-			return len(t.Text), t.Channel
-		}
-	}
-	return 0, ""
+	return fmt.Sprintf(`<p class="room-note">This is %s’s own room — its wakes and answers `+
+		`land here, so it is not listed with the conversations.%s</p>`, esc(name), link)
 }
 
 // renderThread is the centre column: one conversation, oldest first.
@@ -363,40 +198,19 @@ func renderThread(v view) string {
 		`<button type="button" class="det-open" title="Who is here and where this stands"`+
 		` data-on:click="$info = !$info">%s<span>Details</span></button></div>`,
 		esc(title), esc(where), shell.Icon("users"))
+	b.WriteString(roomNote(v))
 
 	b.WriteString(`<div class="msgs centred">`)
-	items := timeline(v.Topic)
+	msgs := soulstream.RenderMessages(v.tv(), v.Topic)
 	switch {
 	case v.Err != "":
 		fmt.Fprintf(&b, `<p class="blank">%s</p>`, esc(v.Err))
 	case v.Topic == nil:
 		b.WriteString(`<p class="blank">Pick a conversation on the left.</p>`)
-	case len(items) == 0:
+	case msgs == "":
 		b.WriteString(`<p class="blank">Nothing said here yet — write the first message.</p>`)
 	}
-	for _, it := range items {
-		if it.Work != nil {
-			// A stamped strip for the state, plain words for the event: the
-			// strip is the thing that shouts, and a work title in capitals is a
-			// title nobody wrote. The sentence agrees with the strip — a
-			// claimed item is in somebody's hands, a done one is finished, and
-			// saying "opened" over either would be the strip calling the
-			// sentence a liar.
-			b.WriteString(workLine(v, it.Work))
-			continue
-		}
-		answers := ""
-		if len(it.Node.Replies) > 0 {
-			var r strings.Builder
-			r.WriteString(`<div class="replies">`)
-			for _, rc := range it.Node.Replies {
-				r.WriteString(renderMsg(v, rc, true, ""))
-			}
-			r.WriteString(`</div>`)
-			answers = r.String()
-		}
-		b.WriteString(renderMsg(v, it.Node.Msg, false, answers))
-	}
+	b.WriteString(msgs)
 	b.WriteString(`</div></div>`)
 	return b.String()
 }

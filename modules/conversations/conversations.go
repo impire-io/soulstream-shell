@@ -56,6 +56,15 @@ const (
 	routePerson = "person"
 )
 
+// And where an agent whose room this screen deliberately does not list can
+// be read about — the agents module's detail, asked for through the same
+// facility on the same weak terms: a deployment that runs no agents screen
+// answers nothing, and the words stand without a link.
+const (
+	agentsModule = "agents"
+	routeAgent   = "agent"
+)
+
 // Module is the conversations surface.
 type Module struct {
 	sh *shell.Shell
@@ -146,7 +155,7 @@ func (m *Module) tally(r *http.Request) string {
 	if sess == nil || r.URL.Path == chatPath {
 		return spineTally(0)
 	}
-	board, err := topic.Board(r.Context(), m.sp.Reader())
+	board, err := m.sp.Board(r.Context())
 	if err != nil {
 		return spineTally(0)
 	}
@@ -294,9 +303,21 @@ type view struct {
 	Lookups map[string]shell.Link
 	// Unread is how many messages in each conversation have this person's
 	// name in them and have not been looked at yet — this session's own
-	// tray, kept in memory and never on the record.
-	Unread    map[string]int
+	// tray, kept in memory and never on the record. It is counted over the
+	// WHOLE board, machinery included: a mention in a hidden room still
+	// counts on the spine (hq design 0012 §4, bar 4).
+	Unread map[string]int
+	// Board is every conversation on the record; Machinery says which of
+	// them are the record's own rooms — agent homes, the placements topic —
+	// that the rail deliberately does not list (hq design 0012 §3).
 	Board     []topic.BoardEntry
+	Machinery map[string]soulstream.Room
+	// RoomLink is the way to the agent whose room is open, when the open
+	// conversation is machinery; RoomsLink is the way to the agent whose
+	// hidden room holds a message for the reader. Either may be empty: a
+	// deployment without the agents screen has honest words and no link.
+	RoomLink  shell.Link
+	RoomsLink shell.Link
 	Topic     *topic.MaterializedTopic
 	TopicPath string
 	Err       string
@@ -312,15 +333,16 @@ func (m *Module) observe(ctx context.Context, topicPath string, sess *soulstream
 		v.Me = sess.Persona
 		v.Names[sess.Persona] = sess.ScreenName(ctx)
 	}
-	entries, err := topic.Board(ctx, m.sp.Reader())
+	entries, err := m.sp.Board(ctx)
 	if err != nil {
 		v.Err = fmt.Sprintf("board: %v", err)
 		return v
 	}
 	v.Board = entries
+	v.Machinery = m.sp.Machinery()
 	v.Unread = sess.Standing(entries)
 	if v.TopicPath == "" {
-		v.TopicPath = soulstream.LastLive(entries)
+		v.TopicPath = soulstream.LastLive(entries, v.Machinery)
 	}
 	if v.TopicPath != "" {
 		th := topic.Open(m.sp.Reader(), v.TopicPath)
@@ -342,7 +364,34 @@ func (m *Module) observe(ctx context.Context, topicPath string, sess *soulstream
 	}
 	v.Voices = voices
 	v.Lookups = m.lookups(v.Names, v.TopicPath)
+	m.roomWays(ctx, &v)
 	return v
+}
+
+// roomWays resolves the two agent-ward links a render may need: the way to
+// the agent whose room is open, and the way to the agent whose hidden room
+// holds a message for the reader. Both ride the cross-link facility on its
+// usual weak terms; the agents named get their on-screen names resolved so
+// the words beside the link read like the rest of the room.
+func (m *Module) roomWays(ctx context.Context, v *view) {
+	if room, ok := v.Machinery[v.TopicPath]; ok && len(room.Agents) > 0 {
+		who := room.Agents[0]
+		if v.Names[who] == "" {
+			v.Names[who] = m.sp.Card(ctx, who).Name
+		}
+		if l, ok := m.sh.Link(agentsModule, routeAgent, map[string]string{"who": who}); ok {
+			v.RoomLink = l
+		}
+	}
+	for path, room := range v.Machinery {
+		if v.Unread[path] == 0 || len(room.Agents) == 0 {
+			continue
+		}
+		if l, ok := m.sh.Link(agentsModule, routeAgent, map[string]string{"who": room.Agents[0]}); ok {
+			v.RoomsLink = l
+			return
+		}
+	}
 }
 
 // lookups asks the frame, once per render, where else each person in this

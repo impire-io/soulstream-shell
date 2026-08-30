@@ -4,7 +4,7 @@ go 1.26.2
 
 require (
 	github.com/coreos/go-oidc/v3 v3.20.0
-	github.com/impire-io/soulstream-core v0.14.0-rc.1
+	github.com/impire-io/soulstream-core v0.14.0-rc.2
 	github.com/impire-io/soulstream-identity v0.11.0
 	github.com/impire-io/soulstream-workloads v0.8.0-rc.4
 	github.com/nats-io/nats.go v1.52.0

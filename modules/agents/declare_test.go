@@ -210,7 +210,7 @@ func TestUpstreamRefusalsArriveInTheirOwnWords(t *testing.T) {
 // Criterion 7, this lane's half. An empty list explains what declaring is
 // and points at the act — never an empty box.
 func TestAnEmptyDeclaredListOffersTheAct(t *testing.T) {
-	body := renderDeclared(nil, nil)
+	body := renderDeclared(nil, nil, nil)
 	for _, want := range []string{"None yet", "runs on this soulstream", "Declare the first"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the empty declared list does not carry %q:\n%s", want, body)
@@ -290,7 +290,7 @@ func TestNoProviderSecretIsEverAskedFor(t *testing.T) {
 // honest waiting, never a spinner and never an error. One that has been
 // taken up names what took it.
 func TestAPlacementSaysWhereItStands(t *testing.T) {
-	body := renderDeclared(declaredList(), nil)
+	body := renderDeclared(declaredList(), nil, nil)
 	if !strings.Contains(body,
 		"declared; nothing serves agents here yet — the deployment enables the dispatcher plane") {
 		t.Errorf("a waiting placement does not say why it waits:\n%s", body)
@@ -304,7 +304,7 @@ func TestAPlacementSaysWhereItStands(t *testing.T) {
 		d.State, d.Owner = topic.WorkClaimed, "node-a"
 		claimed = append(claimed, d)
 	}
-	if strings.Contains(renderDeclared(claimed, nil), "nothing serves agents here yet") {
+	if strings.Contains(renderDeclared(claimed, nil, nil), "nothing serves agents here yet") {
 		t.Error("the waiting sentence outlived the wait")
 	}
 }
@@ -313,7 +313,7 @@ func TestAPlacementSaysWhereItStands(t *testing.T) {
 // ecosystem un-places one, and a key that cannot do what it says is worse
 // than no key — the state shows, the act waits for the vocabulary.
 func TestNothingOffersToRetireADeclaredAgent(t *testing.T) {
-	body := renderDeclared(declaredList(), nil)
+	body := renderDeclared(declaredList(), nil, nil)
 	for _, banned := range []string{"Retire", "Stop", "Remove", "Delete", "agent-retire"} {
 		if strings.Contains(body, banned) {
 			t.Errorf("the declared list offers %q, which nothing can perform:\n%s", banned, body)
@@ -327,7 +327,7 @@ func TestNothingOffersToRetireADeclaredAgent(t *testing.T) {
 // kind that can lose a wake is marked on the row rather than only in a
 // hover.
 func TestEveryWakeCarriesTheDeliveryItPromises(t *testing.T) {
-	body := renderDeclared(declaredList(), nil)
+	body := renderDeclared(declaredList(), nil, nil)
 	for _, w := range []declaration.WakeKind{declaration.WakeMention, declaration.WakeSubject} {
 		want := (declaration.WakeEntry{Kind: w}).DeliveryClass()
 		if !strings.Contains(body, esc(want)) {
@@ -348,7 +348,7 @@ func TestEveryWakeCarriesTheDeliveryItPromises(t *testing.T) {
 // The declaration itself rides a fold under the row it belongs to: what was
 // asked for is worth reading, and only when somebody asks.
 func TestWhatWasAskedForIsThereOnDemand(t *testing.T) {
-	body := renderDeclared(declaredList(), nil)
+	body := renderDeclared(declaredList(), nil, nil)
 	if got := strings.Count(body, `<details class="stow"><summary>What was asked for</summary>`); got != 2 {
 		t.Errorf("the declaration is folded under %d rows, want one per row (2)", got)
 	}

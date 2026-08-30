@@ -202,6 +202,10 @@ type view struct {
 	// which this screen shows on the rows it lists.
 	Unread map[string]int
 	Board  []topic.BoardEntry
+	// Machinery says which board entries are the record's own rooms — agent
+	// homes, the placements topic — left off the Home list the way the rail
+	// leaves them off (hq design 0012 §3).
+	Machinery map[string]soulstream.Room
 	// Topic is the open conversation, read for the work it carries.
 	Topic     *topic.MaterializedTopic
 	TopicPath string
@@ -240,15 +244,16 @@ func (m *Module) observe(ctx context.Context, topicPath string,
 	sess *soulstream.Session,
 ) view {
 	v := view{TopicPath: topicPath, Unread: map[string]int{}}
-	entries, err := topic.Board(ctx, m.sp.Reader())
+	entries, err := m.sp.Board(ctx)
 	if err != nil {
 		v.Err = fmt.Sprintf("board: %v", err)
 		return v
 	}
 	v.Board = entries
+	v.Machinery = m.sp.Machinery()
 	v.Unread = sess.Standing(entries)
 	if v.TopicPath == "" {
-		v.TopicPath = soulstream.LastLive(entries)
+		v.TopicPath = soulstream.LastLive(entries, v.Machinery)
 	}
 	if v.TopicPath != "" {
 		if mt, err := topic.Open(m.sp.Reader(), v.TopicPath).Materialise(ctx); err == nil {
@@ -298,9 +303,9 @@ func (m *Module) health(ctx context.Context, v *view) {
 // defaultTopic is the conversation an act falls back to when the screen
 // naming one has gone stale.
 func (m *Module) defaultTopic(ctx context.Context) string {
-	entries, err := topic.Board(ctx, m.sp.Reader())
+	entries, err := m.sp.Board(ctx)
 	if err != nil {
 		return ""
 	}
-	return soulstream.LastLive(entries)
+	return soulstream.LastLive(entries, m.sp.Machinery())
 }

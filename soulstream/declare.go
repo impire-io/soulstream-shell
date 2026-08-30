@@ -156,11 +156,11 @@ func wakeDetail(w declaration.WakeEntry) string {
 }
 
 // placementsPath resolves the declared placement-topic NAME to the path the
-// board holds it under. It never starts the topic: reading must not write,
-// and a realm where nothing has been declared yet is a realm with nothing
-// to read.
+// board holds it under — the watch's snapshot, never a second board read.
+// It never starts the topic: reading must not write, and a realm where
+// nothing has been declared yet is a realm with nothing to read.
 func placementsPath(ctx context.Context, sp *Support, name string) (string, bool, error) {
-	entries, err := topic.Board(ctx, sp.rc)
+	entries, err := sp.Board(ctx)
 	if err != nil {
 		return "", false, fmt.Errorf("reading the conversations: %w", err)
 	}

@@ -49,6 +49,10 @@ type declareView struct {
 	// the signing role they resolve through — no role, no picker.
 	Tools []string
 	Role  string
+	// Unread is the reader's own tray share per declared home: a mention
+	// waiting in a room the conversations rail deliberately does not list
+	// marks the agent's row here instead (hq design 0012 §4, bar 4).
+	Unread map[string]int
 }
 
 // renderDeclared is the table of agents this deployment runs itself, and a
@@ -58,7 +62,7 @@ type declareView struct {
 // No row is marked. The act that places an agent names it in the result
 // line, and a highlight the next tick would take away again reads as a
 // fault rather than as an answer.
-func renderDeclared(list []soulstream.Declared, err error) string {
+func renderDeclared(list []soulstream.Declared, err error, unread map[string]int) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, `<div id="%s">`, declaredID)
 	switch {
@@ -74,7 +78,7 @@ func renderDeclared(list []soulstream.Declared, err error) string {
 			`<th>Name</th><th>Wakes on</th><th>Thinks with</th><th>State</th><th>Declared</th>` +
 			`</tr></thead><tbody>`)
 		for _, d := range list {
-			b.WriteString(declaredRow(d))
+			b.WriteString(declaredRow(d, unread[d.Home]))
 		}
 		b.WriteString(`</tbody></table></div>`)
 		b.WriteString(waitingNote(list))
@@ -83,10 +87,13 @@ func renderDeclared(list []soulstream.Declared, err error) string {
 	return b.String()
 }
 
-// declaredRow is one placed agent. The declaration itself rides a fold
-// under the row's own name: what was asked for is worth reading, and it is
-// worth reading only when somebody asks.
-func declaredRow(d soulstream.Declared) string {
+// declaredRow is one placed agent. The name is the way to its detail — the
+// room behind it — and carries the reader's own waiting mark when a
+// mention landed there: the conversations rail does not list the room, so
+// this row is where the mark leads somewhere (bar 4). The declaration
+// itself rides a fold under the row's own name: what was asked for is
+// worth reading, and it is worth reading only when somebody asks.
+func declaredRow(d soulstream.Declared, unread int) string {
 	model := `<span class="dim">the assistant already set up here</span>`
 	if d.Model != "" {
 		model = fmt.Sprintf(`<span class="mono">%s</span>`, esc(d.Model))
@@ -97,9 +104,10 @@ func declaredRow(d soulstream.Declared) string {
 		declared = d.Opened.Format("2006-01-02")
 		declaredFull = d.Opened.UTC().Format("2006-01-02 15:04Z")
 	}
-	return fmt.Sprintf(`<tr><td><span class="led machine"></span> %s%s</td>`+
+	return fmt.Sprintf(`<tr><td><a href="%s?who=%s"><span class="led machine"></span> %s</a>%s%s</td>`+
 		`<td>%s</td><td>%s</td><td>%s</td><td class="mono" title="%s">%s</td></tr>`,
-		esc(d.Name), declarationFold(d), wakeCell(d.Wakes), model,
+		roomPath, qesc(d.Name), esc(d.Name), soulstream.UnreadMark(unread), declarationFold(d),
+		wakeCell(d.Wakes), model,
 		stateCell(d), esc(declaredFull), esc(declared))
 }
 
