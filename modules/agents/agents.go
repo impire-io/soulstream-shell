@@ -77,15 +77,15 @@ func (m *Module) Nav(r *http.Request) []shell.NavEntry {
 	}}
 }
 
-// Link lands on the list with one voice looked up on it — honestly,
-// including when the voice turns out not to be an agent here, which is the
-// ordinary case for every person on the record.
+// Link lands on the voice's own detail — the room behind the agent (hq
+// design 0012 §4) — honestly, including when the voice turns out not to be
+// an agent here, which the detail answers in words rather than a 404.
 func (m *Module) Link(route string, params map[string]string) (shell.Link, bool) {
 	who := params["who"]
 	if route != routeAgent || who == "" {
 		return shell.Link{}, false
 	}
-	href := "/agents?who=" + qesc(who)
+	href := roomPath + "?who=" + qesc(who)
 	if topicPath := params["topic"]; topicPath != "" {
 		href += "&amp;topic=" + qesc(topicPath)
 	}
@@ -100,6 +100,9 @@ func (m *Module) Mount(rt shell.Router) {
 	rt.HandleFunc("GET /agents", m.agents)
 	rt.HandleFunc("GET /agents/live", m.live)
 	rt.HandleFunc("GET /agents/revoke-ask", m.askRevoke)
+	rt.HandleFunc("GET "+roomPath, m.room)
+	rt.HandleFunc("GET "+roomPath+"/live", m.roomLive)
+	rt.HandleFunc("POST /act/agent-say", m.actSay)
 	rt.HandleFunc("POST /act/agent-add", m.actAdd)
 	rt.HandleFunc("POST /act/agent-credential", m.actCredential)
 	rt.HandleFunc("POST /act/agent-revoke", m.actRevoke)
@@ -175,9 +178,22 @@ func (m *Module) live(w http.ResponseWriter, r *http.Request) {
 		// result line still nobody's but the acts'.
 		if m.placing() {
 			declared, derr := m.sp.Declared(r.Context())
-			shell.WriteElements(out, renderDeclared(declared, derr))
+			shell.WriteElements(out, renderDeclared(declared, derr, m.waiting(r, declared)))
 		}
 	})
+}
+
+// waiting is the reader's own tray share per declared home — the mark that
+// says a hidden room holds a message for them (bar 4).
+func (m *Module) waiting(r *http.Request, list []soulstream.Declared) map[string]int {
+	sess := m.sp.Session(r)
+	out := map[string]int{}
+	for _, d := range list {
+		if n := sess.Waiting(d.Home); n > 0 {
+			out[d.Home] = n
+		}
+	}
+	return out
 }
 
 // names is what to call each operator on screen. The record carries handles;

@@ -255,18 +255,22 @@ func renderOverview(v view) string {
 		fmt.Fprintf(&b, `<p class="blank">%s</p>`, esc(v.Err))
 		return b.String()
 	}
-	if len(v.Board) == 0 {
+	// The people's conversations, most recently active first — the record's
+	// own rooms (agent homes, the placements topic) stay off this list the
+	// way they stay off the rail (hq design 0012 §3).
+	human := soulstream.HumanConversations(v.Board, v.Machinery)
+	if len(human) == 0 {
 		b.WriteString(`<p class="blank">No conversations yet. Start one with the key above.</p>`)
 		b.WriteString(startOver())
 		return b.String()
 	}
-	var live, archived []int
-	for i := len(v.Board) - 1; i >= 0; i-- {
-		if v.Board[i].Lifecycle == topic.Archived {
-			archived = append(archived, i)
+	var live, archived []topic.BoardEntry
+	for _, e := range human {
+		if e.Lifecycle == topic.Archived {
+			archived = append(archived, e)
 			continue
 		}
-		live = append(live, i)
+		live = append(live, e)
 	}
 	b.WriteString(boardTable(v, live))
 	if len(archived) > 0 {
@@ -281,10 +285,10 @@ func renderOverview(v view) string {
 
 // boardTable lists conversations the quiet way: a name that goes there,
 // what it is about, and its standing as a lowercase word.
-func boardTable(v view, idx []int) string {
+func boardTable(v view, entries []topic.BoardEntry) string {
 	var rows strings.Builder
-	for _, i := range idx {
-		rows.WriteString(boardRow(v, v.Board[i]))
+	for _, e := range entries {
+		rows.WriteString(boardRow(v, e))
 	}
 	return `<div class="tablewrap convs"><table><thead><tr><th>Name</th><th>About</th>` +
 		`<th>State</th></tr></thead><tbody>` + rows.String() + `</tbody></table></div>`

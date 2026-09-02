@@ -108,6 +108,13 @@ type Support struct {
 	mu        sync.Mutex
 	keyCache  map[string]string // persona -> public key (directory reads)
 	cardCache map[string]Card   // persona -> directory card (registry reads)
+
+	// The watch (watch.go): the board projection and the placements follow,
+	// guarded by their own lock so a render's snapshot never waits on a
+	// directory read. watchStop ends both with the surface.
+	wmu       sync.Mutex
+	watch     watchState
+	watchStop context.CancelFunc
 }
 
 // sessionKey is this layer's own key on a shell session. It is unexported,
@@ -139,6 +146,13 @@ func Open(ctx context.Context, sh *shell.Shell, cfg Config) (*Support, error) {
 	}
 	sp.dir = siclient.New(sp.nc, cfg.Account, cfg.CredsUser)
 
+	// The watch lives for the surface's whole life, not the opening call's:
+	// its projections are memory rebuilt from the log, and the render tick
+	// reads their snapshots instead of the stream (hq design 0012 §2).
+	wctx, stop := context.WithCancel(context.Background())
+	sp.watchStop = stop
+	go sp.runWatch(wctx)
+
 	sh.Attach(sessionKey{}, sp)
 	return sp, nil
 }
@@ -146,6 +160,9 @@ func Open(ctx context.Context, sh *shell.Shell, cfg Config) (*Support, error) {
 // Close drains the read lane. The sessions go with the shell that holds
 // them.
 func (sp *Support) Close() {
+	if sp.watchStop != nil {
+		sp.watchStop()
+	}
 	if sp.nc != nil {
 		sp.nc.Close()
 	}

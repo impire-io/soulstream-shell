@@ -51,7 +51,8 @@ func (m *Module) declareRead(r *http.Request) declareView {
 	ctx := r.Context()
 	v := declareView{On: true, Role: m.sp.CapabilityRole()}
 	v.List, v.Err = m.sp.Declared(ctx)
-	if entries, err := topic.Board(ctx, m.sp.Reader()); err == nil {
+	v.Unread = m.waiting(r, v.List)
+	if entries, err := m.sp.Board(ctx); err == nil {
 		v.Board = entries
 	}
 	v.Models, v.ModelsErr = m.sp.ModelNames(ctx)
@@ -288,5 +289,5 @@ func (m *Module) actDeclare(w http.ResponseWriter, r *http.Request) {
 // patchDeclared hands back the placed agents as they now stand.
 func (m *Module) patchDeclared(w http.ResponseWriter, r *http.Request) {
 	list, err := m.sp.Declared(r.Context())
-	shell.Patch(w, renderDeclared(list, err))
+	shell.Patch(w, renderDeclared(list, err, m.waiting(r, list)))
 }

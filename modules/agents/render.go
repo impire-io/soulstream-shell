@@ -52,7 +52,7 @@ func renderAgents(list []soulstream.Agent, err error, names map[string]string, w
 		b.WriteString(`<div class="section"><h2>Declared agents</h2>`)
 		b.WriteString(`<p class="lede">Agents this soulstream runs itself. You say what ` +
 			`one is for and what wakes it; it answers from here until you say otherwise.</p>`)
-		b.WriteString(renderDeclared(dv.List, dv.Err) + `</div>`)
+		b.WriteString(renderDeclared(dv.List, dv.Err, dv.Unread) + `</div>`)
 		b.WriteString(modelsList(dv))
 	}
 	b.WriteString(resultNote(""))
@@ -262,10 +262,12 @@ func agentRow(a soulstream.Agent, names map[string]string, lookedUp bool,
 	// A handle has no word breaks of its own and is let wrap in a narrow
 	// column, so the whole of it also rides in the hover: wrapped across two
 	// lines, it is still one name.
-	return fmt.Sprintf(`%s<td><span class="led machine" title="operated by %s"></span> %s</td>`+
+	// The name is the way to the voice's own detail — the same place a
+	// conversation's People panel points at.
+	return fmt.Sprintf(`%s<td><a href="%s?who=%s"><span class="led machine" title="operated by %s"></span> %s</a></td>`+
 		`<td class="mono" title="%s">%s</td><td>%s</td>`+
 		`<td>%s</td>%s<td class="mono" title="%s">%s</td><td>%s</td></tr>`,
-		row, esc(operator), esc(name), esc(a.Handle), esc(a.Handle),
+		row, roomPath, qesc(a.Handle), esc(operator), esc(name), esc(a.Handle), esc(a.Handle),
 		opCell, state, aroundCell(sign, known), esc(addedFull), esc(added), acts.String())
 }
 

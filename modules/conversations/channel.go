@@ -1,6 +1,6 @@
 package conversations
 
-import "fmt"
+import "github.com/impire-io/soulstream-shell/soulstream"
 
 // Channels: which of the two voices something was said in.
 //
@@ -15,12 +15,9 @@ import "fmt"
 //
 // What the persona directory does carry — and what an operator
 // countersigns — is the one question about a voice that can be answered
-// honestly: who answers for it. A persona with no `operated_by` line answers
-// for itself; the directory calls that a principal, and this surface reads
-// it as the human channel. A persona that names an operator is a voice
-// somebody else answers for — an assistant, a scheduled job, a tool session
-// with a name of its own — and this surface reads that as the machine
-// channel.
+// honestly: who answers for it. That reading, and the accent it colours,
+// is defined once in the support layer (soulstream.Voice, threadview.go) —
+// the same fact reaches this screen and the agent detail identically.
 //
 // THE SEAM, NAMED. Operated-by is accountability, not species. A person
 // could publish a card naming an operator and a program could publish none;
@@ -33,54 +30,23 @@ import "fmt"
 // beside the voice, so what the colour is read from is on the screen rather
 // than implied.
 
-// The two channels. They are class names as much as they are concepts: a
-// message card, a mention token and an LED pip all carry the same word.
+// The two channels, as this package's own words for its lists.
 const (
 	channelHuman   = "human"
 	channelMachine = "machine"
 )
 
-// voice is what the directory says about a persona beyond its name.
-type voice struct {
-	// OperatedBy is the persona the directory says answers for this one, ""
-	// when the persona answers for itself.
-	OperatedBy string
-}
-
-// channel is the accent this voice speaks on. The zero voice — a persona
-// with no directory card, or none read yet — is the human channel: no
-// operator claim exists to read, and "answers for itself" is the record's
-// own answer to that, not a guess of ours.
-func (vo voice) channel() string {
-	if vo.OperatedBy != "" {
-		return channelMachine
-	}
-	return channelHuman
-}
-
-// channelOf is the channel a persona speaks on.
-func channelOf(v view, persona string) string { return v.Voices[persona].channel() }
-
-// channelWords is what the pip says when somebody hovers it: the record's
-// own fact about the voice, in the words the record uses for it. Never
-// "human" or "machine" — those are the design's names for the two accents,
-// and the record does not make that claim.
-func channelWords(v view, persona string) string {
-	if op := v.Voices[persona].OperatedBy; op != "" {
-		return "operated by " + nameOf(v, op)
-	}
-	return "answers for itself"
-}
+// voice is the support layer's reading of what the directory says about a
+// persona beyond its name — one definition, both screens.
+type voice = soulstream.Voice
 
 // pipFor is the lamp itself: the same 8px LED at the same weight on both
 // channels, amber or teal, so neither outranks the other on a screen.
-func pipFor(ch, words string) string {
-	return fmt.Sprintf(`<span class="led %s" title="%s"></span>`, ch, esc(words))
-}
+func pipFor(ch, words string) string { return soulstream.PipFor(ch, words) }
 
 // channelPip is the lamp beside a voice, from a whole view.
 func channelPip(v view, persona string) string {
-	return pipFor(channelOf(v, persona), channelWords(v, persona))
+	return soulstream.ChannelPip(v.tv(), persona)
 }
 
 // pip is the lamp for one participant, for the lists that carry participants
